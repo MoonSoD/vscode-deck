@@ -24,24 +24,30 @@ export async function getCommonDir(worktreePath: string): Promise<string> {
     cwd: worktreePath,
   });
   const commonDir = stdout.trim();
-  return path.normalize(path.isAbsolute(commonDir) ? commonDir : path.resolve(worktreePath, commonDir));
+  const absoluteCommonDir = path.isAbsolute(commonDir) ? commonDir : path.resolve(worktreePath, commonDir);
+  return path.normalize(absoluteCommonDir);
 }
 
 export function parsePorcelain(input: string): Worktree[] {
   const out: Worktree[] = [];
   let current: Partial<Worktree> | null = null;
+
+  const pushCurrent = () => {
+    if (!current?.path) return;
+
+    out.push({
+      path: current.path,
+      head: current.head ?? '',
+      branch: current.branch,
+      bare: current.bare ?? false,
+      detached: current.detached ?? false,
+    });
+  };
+
   for (const raw of input.split('\n')) {
     const line = raw.trimEnd();
     if (line === '') {
-      if (current?.path) {
-        out.push({
-          path: current.path,
-          head: current.head ?? '',
-          branch: current.branch,
-          bare: current.bare ?? false,
-          detached: current.detached ?? false,
-        });
-      }
+      pushCurrent();
       current = null;
       continue;
     }
@@ -52,14 +58,6 @@ export function parsePorcelain(input: string): Worktree[] {
     else if (line === 'bare') current.bare = true;
     else if (line === 'detached') current.detached = true;
   }
-  if (current?.path) {
-    out.push({
-      path: current.path,
-      head: current.head ?? '',
-      branch: current.branch,
-      bare: current.bare ?? false,
-      detached: current.detached ?? false,
-    });
-  }
+  pushCurrent();
   return out;
 }

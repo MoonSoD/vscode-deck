@@ -11,23 +11,23 @@ export class WorktreeSwitcher {
   async switchTo(targetPath: string): Promise<void> {
     const currentFolders = vscode.workspace.workspaceFolders ?? [];
     const currentRoots = await this.resolveRoots(currentFolders);
-    const target = {
+    const targetRoot: WorkspaceRoot = {
       path: targetPath,
       commonDir: await getCommonDir(targetPath),
     };
-    const planned = WorkspaceRootPlanner.planSwap(currentRoots, target);
-    if (planned === currentRoots) return;
+    const plannedRoots = WorkspaceRootPlanner.planSwap(currentRoots, targetRoot);
+    if (plannedRoots === currentRoots) return;
 
     if (vscode.workspace.getConfiguration('deck').get<boolean>('autoSaveOnSwitch', true)) {
       await vscode.workspace.saveAll(false);
     }
 
-    await this.saveActiveWorktree(target);
+    await this.saveActiveWorktree(targetRoot);
 
     vscode.workspace.updateWorkspaceFolders(
       0,
       currentFolders.length,
-      ...planned.map((root) => ({
+      ...plannedRoots.map((root) => ({
         uri: vscode.Uri.file(root.path),
         name: root.name ?? path.basename(root.path),
       })),
@@ -45,9 +45,9 @@ export class WorktreeSwitcher {
   }
 
   private async saveActiveWorktree(target: WorkspaceRoot): Promise<void> {
-    const active = this.globalState.get<Record<string, string>>(ACTIVE_WORKTREES_KEY, {});
+    const activeWorktrees = this.globalState.get<Record<string, string>>(ACTIVE_WORKTREES_KEY, {});
     await this.globalState.update(ACTIVE_WORKTREES_KEY, {
-      ...active,
+      ...activeWorktrees,
       [target.commonDir]: target.path,
     });
   }
