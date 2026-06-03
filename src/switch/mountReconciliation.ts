@@ -24,13 +24,9 @@ export class MountReconciler {
     const currentRoots = await this.resolveRoots(currentFolders, registryProjects);
     const recovery = WorkspaceRootPlanner.planRecovery(currentRoots, registryProjects);
 
-    for (const recovered of [...recovery.recovered].sort((a, b) => b.index - a.index)) {
-      const recoveryRoot = recovery.roots[recovered.index];
+    // Persist recovered active worktrees before mutating the workspace.
+    for (const recovered of recovery.recovered) {
       await this.activeWorktrees.set(recovered.commonDir, recovered.recoveryPath);
-      vscode.workspace.updateWorkspaceFolders(recovered.index, 1, {
-        uri: vscode.Uri.file(recoveryRoot.path),
-        name: recoveryRoot.name ?? path.basename(recoveryRoot.path),
-      });
     }
 
     if (recovery.recovered.length > 0) {
@@ -48,15 +44,20 @@ export class MountReconciler {
     const registryRoots = registryProjects
       .map((project) => project.activeRoot)
       .filter((root): root is WorkspaceRoot => root !== undefined);
-    const currentWorkspaceRoots = recovery.roots;
-    const plannedRoots = WorkspaceRootPlanner.planReconcile(currentWorkspaceRoots, registryRoots);
-    if (plannedRoots === currentWorkspaceRoots) return;
+    const finalRoots = WorkspaceRootPlanner.planReconcile(recovery.roots, registryRoots);
 
-    const rootsToAppend = plannedRoots.slice(currentWorkspaceRoots.length);
+    const hasAppends = finalRoots.length > currentFolders.length;
+    if (recovery.recovered.length === 0 && !hasAppends) return;
+
+    // Single atomic mutation: recovered slots are replaced in place, unchanged
+    // slots are no-op URI diffs (so index 0 stays reload-free unless it was the
+    // one recovered), and not-yet-mounted registered roots are appended. VS Code
+    // applies folder changes on the next tick, so issuing more than one
+    // updateWorkspaceFolders call per turn would silently drop all but the first.
     vscode.workspace.updateWorkspaceFolders(
-      currentFolders.length,
       0,
-      ...rootsToAppend.map((root) => ({
+      currentFolders.length,
+      ...finalRoots.map((root) => ({
         uri: vscode.Uri.file(root.path),
         name: root.name ?? path.basename(root.path),
       })),
