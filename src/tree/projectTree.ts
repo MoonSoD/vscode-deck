@@ -47,19 +47,25 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
     return element;
   }
 
-  async getChildren(element?: Node): Promise<Node[]> {
+  getChildren(element?: Node): vscode.ProviderResult<Node[]> {
     if (!element) {
+      // Sync return: any `await` here would yield to the event loop and let
+      // viewsWelcome ("No projects yet") flash on every tree.refresh().
       const projects = vscode.workspace
         .getConfiguration('deck')
         .get<string[]>('projects', []);
       return projects.map((p) => new ProjectNode(p));
     }
     if (element instanceof ProjectNode) {
-      const activeWorktreePath = this.activeWorktrees.get(await getCommonDir(element.projectPath));
-      const worktrees = await listWorktrees(element.projectPath);
-      return worktrees.map((w) => new WorktreeNode(w, activeWorktreePath));
+      return this.getWorktreeChildren(element);
     }
     return [];
+  }
+
+  private async getWorktreeChildren(element: ProjectNode): Promise<Node[]> {
+    const activeWorktreePath = this.activeWorktrees.get(await getCommonDir(element.projectPath));
+    const worktrees = await listWorktrees(element.projectPath);
+    return worktrees.map((w) => new WorktreeNode(w, activeWorktreePath));
   }
 
   async addProject(): Promise<void> {
