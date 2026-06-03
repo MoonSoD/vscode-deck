@@ -93,6 +93,7 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
+    "@ai-hero/sandcastle": "^0.5.12",
     "@types/node": "^20.x",
     "@types/vscode": "^1.95.0",
     "typescript": "^5.7.2",

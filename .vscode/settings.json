@@ -1,3 +1,4 @@
 {
-    "window.title": "${dirty}${activeEditorShort}${separator}vscode-deck${separator}${profileName}${separator}${appName}"
+    "window.title": "${dirty}${activeEditorShort}${separator}vscode-deck${separator}${profileName}${separator}${appName}",
+    "claudeCode.initialPermissionMode": "bypassPermissions"
 }
