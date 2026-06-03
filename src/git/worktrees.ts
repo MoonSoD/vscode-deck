@@ -28,6 +28,19 @@ export async function getCommonDir(worktreePath: string): Promise<string> {
   return path.normalize(absoluteCommonDir);
 }
 
+/**
+ * Like {@link getCommonDir} but returns null instead of throwing when the path
+ * is not a git worktree (or no longer exists). Lets non-git workspace folders
+ * coexist with Deck-managed roots without breaking switching or activation.
+ */
+export async function getCommonDirSafe(worktreePath: string): Promise<string | null> {
+  try {
+    return await getCommonDir(worktreePath);
+  } catch {
+    return null;
+  }
+}
+
 export function parsePorcelain(input: string): Worktree[] {
   const out: Worktree[] = [];
   let current: Partial<Worktree> | null = null;

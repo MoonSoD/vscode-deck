@@ -1,7 +1,8 @@
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { getCommonDir } from '../git/worktrees';
+import { getCommonDirSafe } from '../git/worktrees';
 import { ActiveWorktreeStore } from './activeWorktreeStore';
+import { resolveWorkspaceRoots } from './resolveWorkspaceRoots';
 import { WorkspaceRoot, WorkspaceRootPlanner } from './workspaceRootPlanner';
 
 export class MountReconciler {
@@ -14,7 +15,9 @@ export class MountReconciler {
     if (projectPaths.length === 0) return;
 
     const currentFolders = vscode.workspace.workspaceFolders ?? [];
-    const currentRoots = await this.resolveRoots(currentFolders);
+    const currentRoots = await resolveWorkspaceRoots(
+      currentFolders.map((folder) => ({ path: folder.uri.fsPath, name: folder.name })),
+    );
     const registryRoots = await this.resolveRegistry(projectPaths);
     const plannedRoots = WorkspaceRootPlanner.planReconcile(currentRoots, registryRoots);
     if (plannedRoots === currentRoots) return;
@@ -30,25 +33,19 @@ export class MountReconciler {
     );
   }
 
-  private async resolveRoots(folders: readonly vscode.WorkspaceFolder[]): Promise<WorkspaceRoot[]> {
-    return Promise.all(
-      folders.map(async (folder) => ({
-        path: folder.uri.fsPath,
-        name: folder.name,
-        commonDir: await getCommonDir(folder.uri.fsPath),
-      })),
-    );
-  }
-
   private async resolveRegistry(projectPaths: string[]): Promise<WorkspaceRoot[]> {
-    return Promise.all(
-      projectPaths.map(async (projectPath) => {
-        const commonDir = await getCommonDir(projectPath);
+    const resolved = await Promise.all(
+      projectPaths.map(async (projectPath): Promise<WorkspaceRoot | null> => {
+        const commonDir = await getCommonDirSafe(projectPath);
+        if (commonDir === null) return null;
         return {
           path: this.activeWorktrees.get(commonDir) ?? projectPath,
           commonDir,
         };
       }),
     );
+    // Skip registered projects whose repo can't be resolved (deleted/moved);
+    // graceful handling lives in Recovery (#6), here we just don't crash.
+    return resolved.filter((root): root is WorkspaceRoot => root !== null);
   }
 }
