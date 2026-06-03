@@ -8,16 +8,18 @@ For each branch:
 
 1. Run `git merge <branch> --no-edit`
 2. If there are merge conflicts, resolve them intelligently by reading both sides and choosing the correct resolution
-3. After resolving conflicts, run both toolchains to verify everything works:
+3. After resolving conflicts, install deps then verify:
 
    ```sh
+   npm install
    npm run typecheck && npm run test
-   ( cd src-tauri && cargo check && cargo clippy --all-targets -- -D warnings && cargo test )
    ```
 
-4. If either side fails, fix the issues before proceeding to the next branch
+4. If verification fails, fix the issues before proceeding to the next branch
 
-After all branches are merged, make a single commit summarizing the merge.
+If every merge fast-forwarded cleanly and there were no fixes, do NOT create an empty summary commit. Only commit if the merge produced a real merge commit or you applied fixes.
+
+Do not touch parent PRD issues — leave them open.
 
 # CLOSE ISSUES
 
