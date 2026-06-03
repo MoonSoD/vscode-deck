@@ -1,11 +1,9 @@
 import * as vscode from 'vscode';
 import { ProjectTreeProvider } from './tree/projectTree';
 import { WorktreeSwitcher } from './switch/worktreeSwitcher';
-import { TabSnapshotStore } from './snapshot/tabSnapshotStore';
 
 export function activate(context: vscode.ExtensionContext): void {
-  const snapshots = new TabSnapshotStore(context.globalState);
-  const switcher = new WorktreeSwitcher(snapshots);
+  const switcher = new WorktreeSwitcher(context.globalState);
   const tree = new ProjectTreeProvider();
 
   context.subscriptions.push(

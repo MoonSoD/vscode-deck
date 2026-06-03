@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process';
+import * as path from 'node:path';
 import { promisify } from 'node:util';
 
 const exec = promisify(execFile);
@@ -18,7 +19,15 @@ export async function listWorktrees(projectPath: string): Promise<Worktree[]> {
   return parsePorcelain(stdout);
 }
 
-function parsePorcelain(input: string): Worktree[] {
+export async function getCommonDir(worktreePath: string): Promise<string> {
+  const { stdout } = await exec('git', ['rev-parse', '--git-common-dir'], {
+    cwd: worktreePath,
+  });
+  const commonDir = stdout.trim();
+  return path.normalize(path.isAbsolute(commonDir) ? commonDir : path.resolve(worktreePath, commonDir));
+}
+
+export function parsePorcelain(input: string): Worktree[] {
   const out: Worktree[] = [];
   let current: Partial<Worktree> | null = null;
   for (const raw of input.split('\n')) {

@@ -88,12 +88,14 @@
   "scripts": {
     "vscode:prepublish": "npm run build",
     "build": "tsc -p .",
+    "test": "vitest run",
     "watch": "tsc -w -p .",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@types/node": "^20.x",
     "@types/vscode": "^1.95.0",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "vitest": "^4.1.8"
   }
 }

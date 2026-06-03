@@ -1,45 +1,54 @@
+import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { TabSnapshotStore } from '../snapshot/tabSnapshotStore';
+import { getCommonDir } from '../git/worktrees';
+import { WorkspaceRoot, WorkspaceRootPlanner } from './workspaceRootPlanner';
 
-const ACTIVE_KEY = 'deck.activeWorktree';
+const ACTIVE_WORKTREES_KEY = 'deck.activeWorktrees';
 
 export class WorktreeSwitcher {
-  constructor(private readonly snapshots: TabSnapshotStore) {}
+  constructor(private readonly globalState: vscode.Memento) {}
 
   async switchTo(targetPath: string): Promise<void> {
-    const previous = vscode.workspace.getConfiguration().get<string>(ACTIVE_KEY);
-    if (previous === targetPath) return;
+    const currentFolders = vscode.workspace.workspaceFolders ?? [];
+    const currentRoots = await this.resolveRoots(currentFolders);
+    const target = {
+      path: targetPath,
+      commonDir: await getCommonDir(targetPath),
+    };
+    const planned = WorkspaceRootPlanner.planSwap(currentRoots, target);
+    if (planned === currentRoots) return;
 
     if (vscode.workspace.getConfiguration('deck').get<boolean>('autoSaveOnSwitch', true)) {
       await vscode.workspace.saveAll(false);
     }
 
-    if (previous) {
-      const captured = this.snapshots.capture();
-      await this.snapshots.save(previous, captured);
-    }
+    await this.saveActiveWorktree(target);
 
-    const allTabs = vscode.window.tabGroups.all.flatMap((g) => g.tabs);
-    if (allTabs.length > 0) {
-      await vscode.window.tabGroups.close(allTabs);
-    }
+    vscode.workspace.updateWorkspaceFolders(
+      0,
+      currentFolders.length,
+      ...planned.map((root) => ({
+        uri: vscode.Uri.file(root.path),
+        name: root.name ?? path.basename(root.path),
+      })),
+    );
+  }
 
-    const target = this.snapshots.load(targetPath);
-    for (const t of target) {
-      try {
-        const doc = await vscode.workspace.openTextDocument(vscode.Uri.parse(t.uri));
-        await vscode.window.showTextDocument(doc, {
-          viewColumn: t.viewColumn,
-          preview: false,
-          preserveFocus: !t.active,
-        });
-      } catch {
-        // Tab refers to a file that no longer exists — skip.
-      }
-    }
+  private async resolveRoots(folders: readonly vscode.WorkspaceFolder[]): Promise<WorkspaceRoot[]> {
+    return Promise.all(
+      folders.map(async (folder) => ({
+        path: folder.uri.fsPath,
+        name: folder.name,
+        commonDir: await getCommonDir(folder.uri.fsPath),
+      })),
+    );
+  }
 
-    await vscode.workspace
-      .getConfiguration()
-      .update(ACTIVE_KEY, targetPath, vscode.ConfigurationTarget.Global);
+  private async saveActiveWorktree(target: WorkspaceRoot): Promise<void> {
+    const active = this.globalState.get<Record<string, string>>(ACTIVE_WORKTREES_KEY, {});
+    await this.globalState.update(ACTIVE_WORKTREES_KEY, {
+      ...active,
+      [target.commonDir]: target.path,
+    });
   }
 }
