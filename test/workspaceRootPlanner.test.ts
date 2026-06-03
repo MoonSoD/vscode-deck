@@ -44,6 +44,30 @@ describe('WorkspaceRootPlanner.planSwap', () => {
       }),
     ).toBe(current);
   });
+
+  it('preserves non-git folders while swapping the matching root', () => {
+    const current = [
+      { path: '/notes', commonDir: null },
+      { path: '/work/beta-main', commonDir: '/git/beta' },
+    ];
+    const target = { path: '/work/beta-feature', commonDir: '/git/beta' };
+
+    expect(WorkspaceRootPlanner.planSwap(current, target)).toEqual([
+      { path: '/notes', commonDir: null },
+      { path: '/work/beta-feature', commonDir: '/git/beta' },
+    ]);
+  });
+
+  it('returns the current roots when the target itself is not a git worktree', () => {
+    const current = [
+      { path: '/notes', commonDir: null },
+      { path: '/work/beta-main', commonDir: '/git/beta' },
+    ];
+
+    expect(
+      WorkspaceRootPlanner.planSwap(current, { path: '/scratch', commonDir: null }),
+    ).toBe(current);
+  });
 });
 
 describe('WorkspaceRootPlanner.planReconcile', () => {
@@ -85,6 +109,20 @@ describe('WorkspaceRootPlanner.planReconcile', () => {
     ];
 
     expect(WorkspaceRootPlanner.planReconcile(current, registry)).toEqual([
+      { path: '/work/alpha-main', commonDir: '/git/alpha' },
+      { path: '/work/beta-main', commonDir: '/git/beta' },
+    ]);
+  });
+
+  it('appends registered roots alongside a non-git folder, preserving it', () => {
+    const current = [
+      { path: '/notes', commonDir: null },
+      { path: '/work/alpha-main', commonDir: '/git/alpha' },
+    ];
+    const registry = [{ path: '/work/beta-main', commonDir: '/git/beta' }];
+
+    expect(WorkspaceRootPlanner.planReconcile(current, registry)).toEqual([
+      { path: '/notes', commonDir: null },
       { path: '/work/alpha-main', commonDir: '/git/alpha' },
       { path: '/work/beta-main', commonDir: '/git/beta' },
     ]);
@@ -137,6 +175,16 @@ describe('WorkspaceRootPlanner.planRecovery', () => {
       unrecoverable: [
         { missingPath: '/work/beta-feature', commonDir: '/git/beta' },
       ],
+    });
+  });
+
+  it('preserves missing roots that do not belong to a registered project', () => {
+    const current = [{ path: '/scratch', commonDir: null, exists: false }];
+
+    expect(WorkspaceRootPlanner.planRecovery(current, [])).toEqual({
+      roots: [{ path: '/scratch', commonDir: null }],
+      recovered: [],
+      unrecoverable: [],
     });
   });
 });

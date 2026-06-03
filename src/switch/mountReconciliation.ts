@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { getCommonDir, listWorktrees } from '../git/worktrees';
+import { getCommonDir, getCommonDirSafe, listWorktrees } from '../git/worktrees';
 import { ActiveWorktreeStore } from './activeWorktreeStore';
 import {
   RecoverableWorkspaceRoot,
@@ -75,7 +75,7 @@ export class MountReconciler {
         return {
           path: folderPath,
           name: folder.name,
-          commonDir: project?.commonDir ?? (exists ? await getCommonDir(folderPath) : folderPath),
+          commonDir: project?.commonDir ?? (exists ? await getCommonDirSafe(folderPath) : null),
           exists,
         };
       }),

@@ -1,6 +1,6 @@
 export interface WorkspaceRoot {
   path: string;
-  commonDir: string;
+  commonDir: string | null;
   name?: string;
 }
 
@@ -34,6 +34,8 @@ export interface RecoveryPlan {
 
 export class WorkspaceRootPlanner {
   static planSwap(current: WorkspaceRoot[], target: WorkspaceRoot): WorkspaceRoot[] {
+    if (target.commonDir === null) return current;
+
     const index = current.findIndex((root) => root.commonDir === target.commonDir);
     if (index === -1) return current;
     if (current[index].path === target.path) return current;
@@ -72,8 +74,13 @@ export class WorkspaceRootPlanner {
         (candidate) =>
           candidate.commonDir === root.commonDir && candidate.activePath === root.path,
       );
-      if (!project?.mainRoot) {
-        unrecoverable.push({ missingPath: root.path, commonDir: root.commonDir });
+      if (!project) {
+        const { exists: _exists, ...workspaceRoot } = root;
+        return workspaceRoot;
+      }
+
+      if (!project.mainRoot) {
+        unrecoverable.push({ missingPath: root.path, commonDir: project.commonDir });
         const { exists: _exists, ...workspaceRoot } = root;
         return workspaceRoot;
       }

@@ -28,6 +28,14 @@ export async function getCommonDir(worktreePath: string): Promise<string> {
   return path.normalize(absoluteCommonDir);
 }
 
+export async function getCommonDirSafe(worktreePath: string): Promise<string | null> {
+  try {
+    return await getCommonDir(worktreePath);
+  } catch {
+    return null;
+  }
+}
+
 export function parsePorcelain(input: string): Worktree[] {
   const out: Worktree[] = [];
   let current: Partial<Worktree> | null = null;
