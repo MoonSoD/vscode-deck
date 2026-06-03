@@ -1,0 +1,99 @@
+{
+  "name": "vscode-deck",
+  "displayName": "Deck",
+  "description": "Multi-repo worktree workspace inside VS Code — projects, worktrees, per-worktree tabs, terminals, and agents.",
+  "version": "0.0.1",
+  "publisher": "a9a4k",
+  "private": true,
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "categories": [
+    "SCM Providers",
+    "Other"
+  ],
+  "activationEvents": [],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "deck",
+          "title": "Deck",
+          "icon": "$(repo)"
+        }
+      ]
+    },
+    "views": {
+      "deck": [
+        {
+          "id": "deck.projects",
+          "name": "Projects & Worktrees"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "deck.projects",
+        "contents": "No projects yet.\n[Add Project](command:deck.addProject)"
+      }
+    ],
+    "commands": [
+      {
+        "command": "deck.addProject",
+        "title": "Deck: Add Project",
+        "icon": "$(add)"
+      },
+      {
+        "command": "deck.switchWorktree",
+        "title": "Deck: Switch to Worktree"
+      },
+      {
+        "command": "deck.refresh",
+        "title": "Deck: Refresh",
+        "icon": "$(refresh)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "deck.addProject",
+          "when": "view == deck.projects",
+          "group": "navigation"
+        },
+        {
+          "command": "deck.refresh",
+          "when": "view == deck.projects",
+          "group": "navigation"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Deck",
+      "properties": {
+        "deck.projects": {
+          "type": "array",
+          "default": [],
+          "description": "Absolute paths to project root directories. Each is scanned for git worktrees.",
+          "items": { "type": "string" }
+        },
+        "deck.autoSaveOnSwitch": {
+          "type": "boolean",
+          "default": true,
+          "description": "Auto-save all dirty editors before switching worktrees."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run build",
+    "build": "tsc -p .",
+    "watch": "tsc -w -p .",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^20.x",
+    "@types/vscode": "^1.95.0",
+    "typescript": "^5.7.2"
+  }
+}

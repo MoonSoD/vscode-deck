@@ -1,0 +1,9 @@
+{
+  "repos": {
+    "superset": "../superset",
+    "vscode-git-worktree-switcher": "../vscode-git-worktree-switcher",
+    "git-worktree-manager": "../git-worktree-manager",
+    "vscode-project-manager": "../vscode-project-manager",
+    "tabstronaut": "../tabstronaut"
+  }
+}

@@ -1,0 +1,15 @@
+.vscode/**
+src/**
+references/**
+docs/**
+.sandcastle/**
+.claude/**
+.agents/**
+**/*.ts
+**/*.map
+tsconfig.json
+.gitignore
+AGENTS.md
+CLAUDE.md
+CONTEXT.md
+CONTRIBUTING.md
