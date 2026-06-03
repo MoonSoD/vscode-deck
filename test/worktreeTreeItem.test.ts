@@ -1,5 +1,24 @@
 import { describe, expect, it } from 'vitest';
-import { describeWorktreeTreeItem } from '../src/tree/worktreeTreeItem';
+import {
+  describeProjectTreeItem,
+  describeWorktreeTreeItem,
+} from '../src/tree/worktreeTreeItem';
+
+describe('describeProjectTreeItem', () => {
+  it('marks the project matching the open workspace folder common dir as active', () => {
+    expect(describeProjectTreeItem('/work/alpha', true)).toEqual({
+      label: 'alpha',
+      description: 'active',
+      iconId: 'repo',
+    });
+
+    expect(describeProjectTreeItem('/work/beta', false)).toEqual({
+      label: 'beta',
+      description: '',
+      iconId: 'repo',
+    });
+  });
+});
 
 describe('describeWorktreeTreeItem', () => {
   it('marks only the stored active worktree path as active', () => {

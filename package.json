@@ -76,11 +76,6 @@
           "default": [],
           "description": "Absolute paths to project root directories. Each is scanned for git worktrees.",
           "items": { "type": "string" }
-        },
-        "deck.autoSaveOnSwitch": {
-          "type": "boolean",
-          "default": true,
-          "description": "Auto-save all dirty editors before switching worktrees."
         }
       }
     }

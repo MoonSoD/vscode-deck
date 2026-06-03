@@ -1,10 +1,27 @@
 import { Worktree } from '../git/worktrees';
 
+export interface ProjectTreeItemDescription {
+  label: string;
+  description: string;
+  iconId: 'repo';
+}
+
 export interface WorktreeTreeItemDescription {
   label: string;
   description: string;
   iconId: 'check' | 'git-branch';
   contextValue: 'worktree.active' | 'worktree';
+}
+
+export function describeProjectTreeItem(
+  projectPath: string,
+  isActiveProject: boolean,
+): ProjectTreeItemDescription {
+  return {
+    label: projectPath.split('/').pop() ?? projectPath,
+    description: isActiveProject ? 'active' : '',
+    iconId: 'repo',
+  };
 }
 
 export function describeWorktreeTreeItem(

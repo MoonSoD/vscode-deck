@@ -1,19 +1,16 @@
 import * as vscode from 'vscode';
 import { ProjectTreeProvider } from './tree/projectTree';
 import { ActiveWorktreeStore } from './switch/activeWorktreeStore';
-import { MountReconciler } from './switch/mountReconciliation';
 import { WorktreeSwitcher } from './switch/worktreeSwitcher';
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const activeWorktrees = new ActiveWorktreeStore(context.globalState);
   const switcher = new WorktreeSwitcher(activeWorktrees);
   const tree = new ProjectTreeProvider(activeWorktrees);
-  const reconciler = new MountReconciler(activeWorktrees);
 
   context.subscriptions.push(
     vscode.window.registerTreeDataProvider('deck.projects', tree),
-    vscode.commands.registerCommand('deck.refresh', async () => {
-      await reconciler.reconcile();
+    vscode.commands.registerCommand('deck.refresh', () => {
       tree.refresh();
     }),
     vscode.commands.registerCommand('deck.addProject', () => tree.addProject()),
@@ -22,8 +19,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       tree.refresh();
     }),
   );
-
-  await reconciler.reconcile();
 }
 
 export function deactivate(): void {}
