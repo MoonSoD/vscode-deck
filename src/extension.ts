@@ -13,9 +13,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.window.registerTreeDataProvider('deck.projects', tree),
     vscode.commands.registerCommand('deck.refresh', () => tree.refresh()),
     vscode.commands.registerCommand('deck.addProject', () => tree.addProject()),
-    vscode.commands.registerCommand('deck.switchWorktree', (worktreePath: string) =>
-      switcher.switchTo(worktreePath),
-    ),
+    vscode.commands.registerCommand('deck.switchWorktree', async (worktreePath: string) => {
+      await switcher.switchTo(worktreePath);
+      tree.refresh();
+    }),
   );
 
   await new MountReconciler(activeWorktrees).reconcile();

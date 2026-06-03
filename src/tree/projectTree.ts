@@ -4,6 +4,7 @@ import { addProjectMount } from '../projects/addProjectMount';
 import { getCommonDir, listWorktrees, Worktree } from '../git/worktrees';
 import { ActiveWorktreeStore } from '../switch/activeWorktreeStore';
 import { WorkspaceRoot } from '../switch/workspaceRootPlanner';
+import { describeWorktreeTreeItem } from './worktreeTreeItem';
 
 type Node = ProjectNode | WorktreeNode;
 
@@ -17,11 +18,12 @@ class ProjectNode extends vscode.TreeItem {
 }
 
 class WorktreeNode extends vscode.TreeItem {
-  constructor(public readonly worktree: Worktree) {
-    super(worktree.branch ?? worktree.path);
-    this.contextValue = 'worktree';
-    this.description = worktree.path;
-    this.iconPath = new vscode.ThemeIcon('git-branch');
+  constructor(public readonly worktree: Worktree, activeWorktreePath: string | undefined) {
+    const item = describeWorktreeTreeItem(worktree, activeWorktreePath);
+    super(item.label);
+    this.contextValue = item.contextValue;
+    this.description = item.description;
+    this.iconPath = new vscode.ThemeIcon(item.iconId);
     this.command = {
       command: 'deck.switchWorktree',
       title: 'Switch',
@@ -52,8 +54,9 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
       return projects.map((p) => new ProjectNode(p));
     }
     if (element instanceof ProjectNode) {
+      const activeWorktreePath = this.activeWorktrees.get(await getCommonDir(element.projectPath));
       const worktrees = await listWorktrees(element.projectPath);
-      return worktrees.map((w) => new WorktreeNode(w));
+      return worktrees.map((w) => new WorktreeNode(w, activeWorktreePath));
     }
     return [];
   }
