@@ -8,11 +8,13 @@ reload, and preserves per-worktree editor tab state.
 
 | Term | Meaning |
 |---|---|
-| **Project** | A git repository the user has registered with Deck. Each Project owns N Worktrees. Stored in user settings (`deck.projects`) as absolute paths. |
+| **Project** | A git repository the user has registered with Deck, identified by its **git common dir** (`git rev-parse --git-common-dir`) — the one directory all of a repo's worktrees share. Each Project owns N Worktrees. The absolute path stored in user settings (`deck.projects`) is a **discovery seed**, not the identity: it's whichever worktree was checked out at registration, used to rediscover the repo across reloads. Mirrors `vscode-git-worktree-switcher`'s `commonDir`-based matching. |
 | **Worktree** | A `git worktree` entry inside a Project. Discovered by `git worktree list --porcelain`. Identified by its filesystem path. |
-| **ActiveWorktree** | The Worktree currently mounted as a Project's workspace root. Exactly one **per Project** — each registered Project contributes one root, and that root is the Project's ActiveWorktree. Stored in global settings, keyed by Project. |
+| **ActiveWorktree** | The Worktree currently mounted as a Project's workspace root. Exactly one **per Project** — each registered Project contributes one root, and that root is the Project's ActiveWorktree. Stored in global settings, **keyed by Project common dir** (the path can change on every switch, so it can't be the key). |
 | **TabSnapshot** | The set of `{uri, viewColumn, pinned, active}` for all text editor tabs at a moment. Persisted per Worktree in `globalState`. |
-| **SwitchOperation** | An atomic transition for one Project: capture current TabSnapshot → close that Project's tabs → swap the Project's workspace root in place to the target Worktree via a single `updateWorkspaceFolders(0, n, ...allRoots)` call (other Projects' roots preserved) → load target's TabSnapshot → update the Project's ActiveWorktree. |
+| **SwitchOperation** | An atomic transition for one Project: capture current TabSnapshot → close that Project's tabs → swap the Project's workspace root in place to the target Worktree via a single `updateWorkspaceFolders(0, n, ...allRoots)` call (other Projects' roots preserved) → load target's TabSnapshot → update the Project's ActiveWorktree. Reload-free **unless** the swapped slot is index 0 (see ADR-0002). |
+| **MountReconciliation** | On activation, the pass that makes `workspace.workspaceFolders` match the `deck.projects` registry: each registered Project's stored ActiveWorktree is **appended** if not already mounted (append never touches index 0 → reload-free), in one atomic call. Deck is registry-driven; the workspace is reconciled toward the registry, not the reverse. See ADR-0002. |
+| **Recovery** | The pass (borrowed from vscode-git-worktree-switcher) that detects a mounted root whose worktree was deleted out from under Deck and restores it to the Project's main worktree. |
 
 ## Components
 
@@ -51,6 +53,10 @@ Code layout:
 
 These are planned but not in the skeleton. Each gets a design doc before code.
 
+- **Per-worktree tab snapshot/restore.** Deferred past v1. v1's SwitchOperation
+  is pure root-swapping (no tab capture/close/restore). When added: root-prefix
+  attribution of tabs to Projects, unscoped tabs left untouched, `TabInputText`
+  only first (notebooks/diffs are known gaps).
 - **Per-worktree terminals (tmux-backed).** Designed in
   [docs/design/terminal-runtime.md](./docs/design/terminal-runtime.md) — TBD.
 - **Per-worktree agent chat session.** TBD.
