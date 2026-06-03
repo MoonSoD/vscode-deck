@@ -4,29 +4,26 @@ import { getCommonDir } from '../git/worktrees';
 import { ActiveWorktreeStore } from './activeWorktreeStore';
 import { WorkspaceRoot, WorkspaceRootPlanner } from './workspaceRootPlanner';
 
-export class WorktreeSwitcher {
+export class MountReconciler {
   constructor(private readonly activeWorktrees: ActiveWorktreeStore) {}
 
-  async switchTo(targetPath: string): Promise<void> {
+  async reconcile(): Promise<void> {
+    const projectPaths = vscode.workspace
+      .getConfiguration('deck')
+      .get<string[]>('projects', []);
+    if (projectPaths.length === 0) return;
+
     const currentFolders = vscode.workspace.workspaceFolders ?? [];
     const currentRoots = await this.resolveRoots(currentFolders);
-    const targetRoot: WorkspaceRoot = {
-      path: targetPath,
-      commonDir: await getCommonDir(targetPath),
-    };
-    const plannedRoots = WorkspaceRootPlanner.planSwap(currentRoots, targetRoot);
+    const registryRoots = await this.resolveRegistry(projectPaths);
+    const plannedRoots = WorkspaceRootPlanner.planReconcile(currentRoots, registryRoots);
     if (plannedRoots === currentRoots) return;
 
-    if (vscode.workspace.getConfiguration('deck').get<boolean>('autoSaveOnSwitch', true)) {
-      await vscode.workspace.saveAll(false);
-    }
-
-    await this.activeWorktrees.set(targetRoot.commonDir, targetRoot.path);
-
+    const rootsToAppend = plannedRoots.slice(currentRoots.length);
     vscode.workspace.updateWorkspaceFolders(
-      0,
       currentFolders.length,
-      ...plannedRoots.map((root) => ({
+      0,
+      ...rootsToAppend.map((root) => ({
         uri: vscode.Uri.file(root.path),
         name: root.name ?? path.basename(root.path),
       })),
@@ -43,4 +40,15 @@ export class WorktreeSwitcher {
     );
   }
 
+  private async resolveRegistry(projectPaths: string[]): Promise<WorkspaceRoot[]> {
+    return Promise.all(
+      projectPaths.map(async (projectPath) => {
+        const commonDir = await getCommonDir(projectPath);
+        return {
+          path: this.activeWorktrees.get(commonDir) ?? projectPath,
+          commonDir,
+        };
+      }),
+    );
+  }
 }

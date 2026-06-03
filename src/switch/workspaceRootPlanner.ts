@@ -14,4 +14,16 @@ export class WorkspaceRootPlanner {
     next[index] = target;
     return next;
   }
+
+  static planReconcile(current: WorkspaceRoot[], registry: WorkspaceRoot[]): WorkspaceRoot[] {
+    const mountedCommonDirs = new Set(current.map((root) => root.commonDir));
+    const missing = registry.filter((root) => {
+      if (mountedCommonDirs.has(root.commonDir)) return false;
+      mountedCommonDirs.add(root.commonDir);
+      return true;
+    });
+
+    if (missing.length === 0) return current;
+    return [...current, ...missing];
+  }
 }

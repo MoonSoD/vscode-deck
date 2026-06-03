@@ -45,3 +45,48 @@ describe('WorkspaceRootPlanner.planSwap', () => {
     ).toBe(current);
   });
 });
+
+describe('WorkspaceRootPlanner.planReconcile', () => {
+  it('appends registered roots that are not already mounted', () => {
+    const current = [
+      { path: '/work/alpha-main', commonDir: '/git/alpha' },
+      { path: '/work/beta-main', commonDir: '/git/beta' },
+    ];
+    const registry = [
+      { path: '/work/beta-feature', commonDir: '/git/beta' },
+      { path: '/work/gamma-feature', commonDir: '/git/gamma' },
+    ];
+
+    expect(WorkspaceRootPlanner.planReconcile(current, registry)).toEqual([
+      { path: '/work/alpha-main', commonDir: '/git/alpha' },
+      { path: '/work/beta-main', commonDir: '/git/beta' },
+      { path: '/work/gamma-feature', commonDir: '/git/gamma' },
+    ]);
+  });
+
+  it('returns the current roots when every registered project is already mounted', () => {
+    const current = [
+      { path: '/work/alpha-main', commonDir: '/git/alpha' },
+      { path: '/work/beta-main', commonDir: '/git/beta' },
+    ];
+    const registry = [
+      { path: '/work/alpha-feature', commonDir: '/git/alpha' },
+      { path: '/work/beta-feature', commonDir: '/git/beta' },
+    ];
+
+    expect(WorkspaceRootPlanner.planReconcile(current, registry)).toBe(current);
+  });
+
+  it('deduplicates registered projects by common dir', () => {
+    const current = [{ path: '/work/alpha-main', commonDir: '/git/alpha' }];
+    const registry = [
+      { path: '/work/beta-main', commonDir: '/git/beta' },
+      { path: '/work/beta-feature', commonDir: '/git/beta' },
+    ];
+
+    expect(WorkspaceRootPlanner.planReconcile(current, registry)).toEqual([
+      { path: '/work/alpha-main', commonDir: '/git/alpha' },
+      { path: '/work/beta-main', commonDir: '/git/beta' },
+    ]);
+  });
+});

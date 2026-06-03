@@ -1,9 +1,12 @@
 import * as vscode from 'vscode';
 import { ProjectTreeProvider } from './tree/projectTree';
+import { ActiveWorktreeStore } from './switch/activeWorktreeStore';
+import { MountReconciler } from './switch/mountReconciliation';
 import { WorktreeSwitcher } from './switch/worktreeSwitcher';
 
-export function activate(context: vscode.ExtensionContext): void {
-  const switcher = new WorktreeSwitcher(context.globalState);
+export async function activate(context: vscode.ExtensionContext): Promise<void> {
+  const activeWorktrees = new ActiveWorktreeStore(context.globalState);
+  const switcher = new WorktreeSwitcher(activeWorktrees);
   const tree = new ProjectTreeProvider();
 
   context.subscriptions.push(
@@ -14,6 +17,8 @@ export function activate(context: vscode.ExtensionContext): void {
       switcher.switchTo(worktreePath),
     ),
   );
+
+  await new MountReconciler(activeWorktrees).reconcile();
 }
 
 export function deactivate(): void {}
