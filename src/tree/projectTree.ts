@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 import { addProjectMount } from '../projects/addProjectMount';
 import { getCommonDir, listWorktrees, Worktree } from '../git/worktrees';
 import { ActiveWorktreeStore } from '../switch/activeWorktreeStore';
+import { resolveWorkspaceRoots } from '../switch/resolveWorkspaceRoots';
 import { WorkspaceRoot } from '../switch/workspaceRootPlanner';
 import { describeWorktreeTreeItem } from './worktreeTreeItem';
 
@@ -76,22 +77,18 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
       updateProjects: (projects) =>
         cfg.update('projects', [...projects], vscode.ConfigurationTarget.Global),
       getCommonDir,
-      getCurrentRoots: () => this.resolveRoots(vscode.workspace.workspaceFolders ?? []),
+      getCurrentRoots: () =>
+        resolveWorkspaceRoots(
+          (vscode.workspace.workspaceFolders ?? []).map((folder) => ({
+            path: folder.uri.fsPath,
+            name: folder.name,
+          })),
+        ),
       appendWorkspaceRoots: (roots) => this.appendWorkspaceRoots(roots),
       setActiveWorktree: (commonDir, worktreePath) =>
         this.activeWorktrees.set(commonDir, worktreePath),
     });
     this.refresh();
-  }
-
-  private async resolveRoots(folders: readonly vscode.WorkspaceFolder[]): Promise<WorkspaceRoot[]> {
-    return Promise.all(
-      folders.map(async (folder) => ({
-        path: folder.uri.fsPath,
-        name: folder.name,
-        commonDir: await getCommonDir(folder.uri.fsPath),
-      })),
-    );
   }
 
   private appendWorkspaceRoots(roots: WorkspaceRoot[]): void {
