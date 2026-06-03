@@ -7,7 +7,7 @@ import { WorktreeSwitcher } from './switch/worktreeSwitcher';
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const activeWorktrees = new ActiveWorktreeStore(context.globalState);
   const switcher = new WorktreeSwitcher(activeWorktrees);
-  const tree = new ProjectTreeProvider();
+  const tree = new ProjectTreeProvider(activeWorktrees);
 
   context.subscriptions.push(
     vscode.window.registerTreeDataProvider('deck.projects', tree),

@@ -1,5 +1,9 @@
+import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { listWorktrees, Worktree } from '../git/worktrees';
+import { addProjectMount } from '../projects/addProjectMount';
+import { getCommonDir, listWorktrees, Worktree } from '../git/worktrees';
+import { ActiveWorktreeStore } from '../switch/activeWorktreeStore';
+import { WorkspaceRoot } from '../switch/workspaceRootPlanner';
 
 type Node = ProjectNode | WorktreeNode;
 
@@ -29,6 +33,8 @@ class WorktreeNode extends vscode.TreeItem {
 export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
   private readonly _onDidChangeTreeData = new vscode.EventEmitter<Node | undefined>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
+
+  constructor(private readonly activeWorktrees: ActiveWorktreeStore) {}
 
   refresh(): void {
     this._onDidChangeTreeData.fire(undefined);
@@ -60,12 +66,40 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
       openLabel: 'Add as Deck project',
     });
     if (!picked || picked.length === 0) return;
-    const path = picked[0].fsPath;
+    const seedPath = picked[0].fsPath;
     const cfg = vscode.workspace.getConfiguration('deck');
-    const projects = cfg.get<string[]>('projects', []);
-    if (!projects.includes(path)) {
-      await cfg.update('projects', [...projects, path], vscode.ConfigurationTarget.Global);
-    }
+    await addProjectMount(seedPath, {
+      listProjects: () => cfg.get<string[]>('projects', []),
+      updateProjects: (projects) =>
+        cfg.update('projects', [...projects], vscode.ConfigurationTarget.Global),
+      getCommonDir,
+      getCurrentRoots: () => this.resolveRoots(vscode.workspace.workspaceFolders ?? []),
+      appendWorkspaceRoots: (roots) => this.appendWorkspaceRoots(roots),
+      setActiveWorktree: (commonDir, worktreePath) =>
+        this.activeWorktrees.set(commonDir, worktreePath),
+    });
     this.refresh();
+  }
+
+  private async resolveRoots(folders: readonly vscode.WorkspaceFolder[]): Promise<WorkspaceRoot[]> {
+    return Promise.all(
+      folders.map(async (folder) => ({
+        path: folder.uri.fsPath,
+        name: folder.name,
+        commonDir: await getCommonDir(folder.uri.fsPath),
+      })),
+    );
+  }
+
+  private appendWorkspaceRoots(roots: WorkspaceRoot[]): void {
+    const currentFolders = vscode.workspace.workspaceFolders ?? [];
+    vscode.workspace.updateWorkspaceFolders(
+      currentFolders.length,
+      0,
+      ...roots.map((root) => ({
+        uri: vscode.Uri.file(root.path),
+        name: root.name ?? path.basename(root.path),
+      })),
+    );
   }
 }
