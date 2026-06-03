@@ -128,3 +128,63 @@ describe('WorkspaceRootPlanner.planReconcile', () => {
     ]);
   });
 });
+
+describe('WorkspaceRootPlanner.planRecovery', () => {
+  it('replaces a missing mounted active worktree with the project main worktree', () => {
+    const current = [
+      { path: '/work/alpha-main', commonDir: '/git/alpha', exists: true },
+      { path: '/work/beta-feature', commonDir: '/git/beta', exists: false },
+    ];
+    const projects = [
+      {
+        commonDir: '/git/beta',
+        activePath: '/work/beta-feature',
+        mainRoot: { path: '/work/beta-main', commonDir: '/git/beta' },
+      },
+    ];
+
+    expect(WorkspaceRootPlanner.planRecovery(current, projects)).toEqual({
+      roots: [
+        { path: '/work/alpha-main', commonDir: '/git/alpha' },
+        { path: '/work/beta-main', commonDir: '/git/beta' },
+      ],
+      recovered: [
+        {
+          index: 1,
+          missingPath: '/work/beta-feature',
+          recoveryPath: '/work/beta-main',
+          commonDir: '/git/beta',
+        },
+      ],
+      unrecoverable: [],
+    });
+  });
+
+  it('leaves a missing root unrecovered when the project has no surviving worktrees', () => {
+    const current = [
+      { path: '/work/beta-feature', commonDir: '/git/beta', exists: false },
+    ];
+
+    expect(
+      WorkspaceRootPlanner.planRecovery(current, [
+        { commonDir: '/git/beta', activePath: '/work/beta-feature' },
+      ]),
+    ).toEqual({
+      roots: [{ path: '/work/beta-feature', commonDir: '/git/beta' }],
+      recovered: [],
+      unrecoverable: [
+        { missingPath: '/work/beta-feature', commonDir: '/git/beta' },
+      ],
+    });
+  });
+
+  it('preserves missing roots that do not belong to a registered project', () => {
+    const current = [{ path: '/scratch', commonDir: null, exists: false }];
+
+    expect(WorkspaceRootPlanner.planRecovery(current, [])).toEqual({
+      roots: [{ path: '/scratch', commonDir: null }],
+      recovered: [],
+      unrecoverable: [],
+    });
+  });
+});
