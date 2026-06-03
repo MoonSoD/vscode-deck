@@ -1,31 +1,29 @@
 # Deck Context
 
 A VS Code extension that surfaces multiple git repositories' worktrees in
-one Activity Bar view, switches between them in a single window without
-reload, and preserves per-worktree editor tab state.
+one Activity Bar view and switches between them by opening one folder at a
+time. VS Code handles tab/dirty-buffer/layout persistence per opened folder.
 
 ## Vocabulary
 
 | Term | Meaning |
 |---|---|
-| **Project** | A git repository the user has registered with Deck, identified by its **git common dir** (`git rev-parse --git-common-dir`) — the one directory all of a repo's worktrees share. Each Project owns N Worktrees. The absolute path stored in user settings (`deck.projects`) is a **discovery seed**, not the identity: it's whichever worktree was checked out at registration, used to rediscover the repo across reloads. Mirrors `vscode-git-worktree-switcher`'s `commonDir`-based matching. |
+| **Project** | A git repository the user has registered with Deck, identified by its **git common dir** (`git rev-parse --git-common-dir`) — the one directory all of a repo's worktrees share. Each Project owns N Worktrees. The absolute path stored in user settings (`deck.projects`) is a **discovery seed**, not the identity: it's whichever worktree was checked out at registration, used to rediscover the repo across reloads. |
 | **Worktree** | A `git worktree` entry inside a Project. Discovered by `git worktree list --porcelain`. Identified by its filesystem path. |
-| **ActiveWorktree** | The Worktree currently mounted as a Project's workspace root. Exactly one **per Project** — each registered Project contributes one root, and that root is the Project's ActiveWorktree. Stored in global settings, **keyed by Project common dir** (the path can change on every switch, so it can't be the key). |
-| **TabSnapshot** | The set of `{uri, viewColumn, pinned, active}` for all text editor tabs at a moment. Persisted per Worktree in `globalState`. |
-| **SwitchOperation** | An atomic transition for one Project: capture current TabSnapshot → close that Project's tabs → swap the Project's workspace root in place to the target Worktree via a single `updateWorkspaceFolders(0, n, ...allRoots)` call (other Projects' roots preserved) → load target's TabSnapshot → update the Project's ActiveWorktree. Reload-free **unless** the swapped slot is index 0 (see ADR-0002). |
-| **MountReconciliation** | On activation, the pass that makes `workspace.workspaceFolders` match the `deck.projects` registry: each registered Project's stored ActiveWorktree is **appended** if not already mounted (append never touches index 0 → reload-free), in one atomic call. Deck is registry-driven; the workspace is reconciled toward the registry, not the reverse. See ADR-0002. |
-| **Recovery** | The pass (borrowed from vscode-git-worktree-switcher) that detects a mounted root whose worktree was deleted out from under Deck and restores it to the Project's main worktree. |
+| **ActiveWorktree** | The Worktree last opened for a Project. Persisted per Project (`{ commonDir → worktreePath }` in `globalState`), so clicking a Project node opens that worktree again. Only one workspace folder is ever mounted at a time. |
+| **ActiveProject** | The Project whose ActiveWorktree is the current workspace folder. Derived from `workspace.workspaceFolders[0]` by resolving its common dir against the registry. Not persisted — VS Code is the source of truth. |
+| **SwitchOperation** | A switch is one call: persist `ActiveWorktree[commonDir] = targetPath`, then `vscode.openFolder(Uri.file(targetPath))`. The window reloads; VS Code restores that folder's own session (tabs, dirty buffers, splits, breakpoints) from its per-folder workspace storage. See [ADR-0003](./docs/adr/0003-single-folder-switching-via-openfolder.md). |
 
 ## Components
 
 ```
 ┌──────────────────────────────────────────────────────────┐
-│  Activity Bar: "Deck"                                │
+│  Activity Bar: "Deck"                                    │
 │  ┌────────────────────────────────────────────────────┐  │
 │  │  Projects & Worktrees (TreeView)                   │  │
-│  │  ├── ProjectA                                      │  │
-│  │  │   ├── main           ← click = SwitchOperation │  │
-│  │  │   ├── feature/x                                 │  │
+│  │  ├── ProjectA  ●  ← marker = ActiveProject         │  │
+│  │  │   ├── main  ✓  ← marker = ActiveWorktree        │  │
+│  │  │   ├── feature/x   ← click = SwitchOperation     │  │
 │  │  │   └── bugfix/y                                  │  │
 │  │  └── ProjectB                                      │  │
 │  │      ├── main                                      │  │
@@ -38,39 +36,29 @@ Code layout:
 
 - `src/extension.ts` — activation, command registration
 - `src/tree/projectTree.ts` — TreeDataProvider for Projects & Worktrees
-- `src/git/worktrees.ts` — `git worktree list --porcelain` parsing
-- `src/snapshot/tabSnapshotStore.ts` — capture/load TabSnapshot per Worktree
-- `src/switch/worktreeSwitcher.ts` — orchestrates SwitchOperation
+- `src/tree/worktreeTreeItem.ts` — pure label/icon derivation
+- `src/git/worktrees.ts` — `git worktree list --porcelain` parsing, common-dir resolution
+- `src/switch/activeWorktreeStore.ts` — `{ commonDir → worktreePath }` map in `globalState`
+- `src/switch/worktreeSwitcher.ts` — persist + `vscode.openFolder`
 
 ## Relationships
 
 - **Project → Worktree.** One-to-many. Discovered fresh each time the tree expands.
-- **Worktree → TabSnapshot.** One-to-one persistent. Keyed by absolute worktree path.
-- **ActiveWorktree → TabSnapshot.** The current window's tabs are the materialization of `ActiveWorktree`'s TabSnapshot.
-- **SwitchOperation reads previous ActiveWorktree, captures, then writes new ActiveWorktree.** Failure modes (missing files, dirty buffers) handled by the switcher, not callers.
+- **Project → ActiveWorktree.** One-to-one persistent. Keyed by Project's git common dir.
+- **Workspace folder → ActiveProject.** Derived at read time. There is at most one mounted folder (or none, on a brand-new window).
+- **SwitchOperation persists the new ActiveWorktree before reload**, so the persisted state is correct after the extension host restarts.
 
 ## Out of scope (deliberately, for now)
 
-These are planned but not in the skeleton. Each gets a design doc before code.
-
-- **Per-worktree tab snapshot/restore.** Deferred past v1. v1's SwitchOperation
-  is pure root-swapping (no tab capture/close/restore). When added: root-prefix
-  attribution of tabs to Projects, unscoped tabs left untouched, `TabInputText`
-  only first (notebooks/diffs are known gaps).
-- **Per-worktree terminals (tmux-backed).** Designed in
-  [docs/design/terminal-runtime.md](./docs/design/terminal-runtime.md) — TBD.
+- **Per-worktree terminals (tmux-backed).** Out-of-band today; users run agents in tmux to survive reloads.
 - **Per-worktree agent chat session.** TBD.
-- ~~**Multi-root mounting.**~~ **Resolved: one root per Project, swapped in place.**
-  Each registered Project contributes exactly one workspace root; SwitchOperation
-  swaps that Project's root via a single `updateWorkspaceFolders(0, n, ...allRoots)`
-  call, preserving every other Project's root. Swapping a non-first root is what
-  keeps switching reload-free (a first-root change restarts the extension host).
-  Mirrors vscode-git-worktree-switcher's `focusOn`/`buildRepoFocusSwap`.
-  See [docs/adr/0001-no-window-reload.md](./docs/adr/0001-no-window-reload.md).
+- ~~**Multi-root mounting.**~~ Rejected by ADR-0003: one folder is mounted at a time. Multi-root + a per-Project `MountReconciliation` were explored in ADR-0002 (now superseded).
+- ~~**Per-worktree tab snapshot/restore.**~~ Provided by VS Code: each folder URI has its own workspace storage, so tabs, dirty buffers, layout, cursor positions all restore per Worktree automatically.
+- ~~**No-window-reload switch.**~~ Rejected by ADR-0003 (supersedes ADR-0001): reload is the switch mechanism. Acceptable because the original motivation (preserving in-memory extension state) is handled out-of-band by the workflow.
 
 ## Reference repos
 
-See [docs/references.md](./docs/references.md). The two most load-bearing:
+See [docs/references.md](./docs/references.md). The two most load-bearing under ADR-0003:
 
-- `references/vscode-git-worktree-switcher` — the no-reload switch mechanic.
-- `references/tabstronaut` — the tab snapshot mechanic we're automating.
+- `references/vscode-project-manager` — the `vscode.openFolder` registry-and-launcher pattern.
+- `references/git-worktree-manager` — tree UX over `git worktree list`.

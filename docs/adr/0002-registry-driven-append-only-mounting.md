@@ -55,4 +55,7 @@ Revisit if that reload proves annoying.
 
 ## Status
 
-Accepted.
+Superseded by [ADR-0003](./0003-single-folder-switching-via-openfolder.md). The
+multi-root architecture (and its index-0 caveat) is no longer needed once the
+switch is `vscode.openFolder`: only one folder is mounted at a time, so there
+is nothing to append, reconcile, or swap in place.

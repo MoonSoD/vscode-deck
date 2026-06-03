@@ -32,4 +32,8 @@ the switch code path is a regression and review must reject it.
 
 ## Status
 
-Accepted.
+Superseded by [ADR-0003](./0003-single-folder-switching-via-openfolder.md). The
+no-reload guarantee was workflow-specific (preserving in-memory extension state
+such as Claude Code chat panels). With those handled out-of-band (tmux) and VS
+Code's per-folder workspace storage providing tab/dirty-buffer/layout
+persistence for free, `vscode.openFolder` is now the canonical switch path.
