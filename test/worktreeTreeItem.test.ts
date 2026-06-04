@@ -21,7 +21,7 @@ describe('describeProjectTreeItem', () => {
 });
 
 describe('describeWorktreeTreeItem', () => {
-  it('marks only the stored active worktree path as active', () => {
+  it('marks only the provided active worktree path as active', () => {
     const worktrees = [
       {
         path: '/work/alpha-main',

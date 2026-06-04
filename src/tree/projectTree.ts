@@ -76,7 +76,7 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
   }
 
   private async getWorktreeChildren(element: ProjectNode): Promise<Node[]> {
-    const activeWorktreePath = this.activeWorktrees.get(await getCommonDir(element.projectPath));
+    const activeWorktreePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
     const worktrees = await listWorktrees(element.projectPath);
     return worktrees.map((w) => new WorktreeNode(w, activeWorktreePath));
   }
