@@ -61,7 +61,6 @@ describe('ProjectRemovalCommand', () => {
         detail:
           "This only removes the Project from Deck. Files and git history are untouched.\n\nYou're currently in this Project's worktree. The folder will stay open, but Deck will no longer show this Project.",
       },
-      'Cancel',
       'Remove from Deck',
     );
     expect(vscodeState.update).toHaveBeenCalledWith(

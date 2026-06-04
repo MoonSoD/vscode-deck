@@ -9,7 +9,6 @@ interface PerProjectStoreLike {
   clear(commonDir: string): Promise<void>;
 }
 
-const CANCEL_LABEL = 'Cancel';
 const REMOVE_LABEL = 'Remove from Deck';
 const BASE_DETAIL = 'This only removes the Project from Deck. Files and git history are untouched.';
 const ACTIVE_PROJECT_DETAIL =
@@ -35,10 +34,10 @@ export class ProjectRemovalCommand {
         ? `${BASE_DETAIL}\n\n${ACTIVE_PROJECT_DETAIL}`
         : BASE_DETAIL;
 
+    // VS Code's modal supplies its own Cancel — don't add an explicit one.
     const picked = await vscode.window.showInformationMessage(
       `Remove \`${node.projectPath}\` from Deck?`,
       { modal: true, detail },
-      CANCEL_LABEL,
       REMOVE_LABEL,
     );
     if (picked !== REMOVE_LABEL) return;
