@@ -1,15 +1,21 @@
 import { describe, expect, it } from 'vitest';
 import { WORKTREE_ORDERS_KEY, WorktreeOrderStore } from '../src/worktree/worktreeOrderStore';
 
+function createStore() {
+  const values: Record<string, unknown> = {};
+  const store = new WorktreeOrderStore({
+    get: <T>(key: string, defaultValue: T) => (values[key] as T | undefined) ?? defaultValue,
+    update: async (key: string, value: unknown) => {
+      values[key] = value;
+    },
+  });
+
+  return { store, values };
+}
+
 describe('WorktreeOrderStore', () => {
   it('stores WorktreeOrder as a common-dir keyed map', async () => {
-    const values: Record<string, unknown> = {};
-    const store = new WorktreeOrderStore({
-      get: <T>(key: string, defaultValue: T) => (values[key] as T | undefined) ?? defaultValue,
-      update: async (key: string, value: unknown) => {
-        values[key] = value;
-      },
-    });
+    const { store, values } = createStore();
 
     expect(store.get('/git/alpha')).toBeUndefined();
 
@@ -24,13 +30,7 @@ describe('WorktreeOrderStore', () => {
   });
 
   it('overwrites and clears one Project order without touching others', async () => {
-    const values: Record<string, unknown> = {};
-    const store = new WorktreeOrderStore({
-      get: <T>(key: string, defaultValue: T) => (values[key] as T | undefined) ?? defaultValue,
-      update: async (key: string, value: unknown) => {
-        values[key] = value;
-      },
-    });
+    const { store, values } = createStore();
 
     await store.set('/git/alpha', ['/work/alpha-main']);
     await store.set('/git/beta', ['/work/beta-main']);

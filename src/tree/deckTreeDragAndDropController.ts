@@ -74,7 +74,7 @@ export class DeckTreeDragAndDropController
 
     const cfg = vscode.workspace.getConfiguration('deck');
     const projects = cfg.get<string[]>('projects', []);
-    const position = projectDropPosition(projects, payload.sourcePath, target.projectPath);
+    const position = dropPosition(projects, payload.sourcePath, target.projectPath);
     const reordered = reorderArray(
       projects,
       payload.sourcePath,
@@ -103,7 +103,7 @@ export class DeckTreeDragAndDropController
       gitWorktrees,
     );
     const paths = worktrees.map((worktree) => worktree.path);
-    const position = worktreeDropPosition(paths, payload.sourcePath, target.worktree.path);
+    const position = dropPosition(paths, payload.sourcePath, target.worktree.path);
     const reordered = reorderArray(paths, payload.sourcePath, target.worktree.path, position);
 
     if (sameOrder(paths, reordered)) return;
@@ -138,22 +138,12 @@ function isWorktreeNode(node: DeckNodeLike): node is WorktreeNodeLike {
   );
 }
 
-function projectDropPosition(
-  projects: readonly string[],
+function dropPosition(
+  paths: readonly string[],
   sourcePath: string,
   targetPath: string,
 ): DropPosition {
-  return projects.indexOf(sourcePath) < projects.indexOf(targetPath) ? 'below' : 'above';
-}
-
-function worktreeDropPosition(
-  worktreePaths: readonly string[],
-  sourcePath: string,
-  targetPath: string,
-): DropPosition {
-  return worktreePaths.indexOf(sourcePath) < worktreePaths.indexOf(targetPath)
-    ? 'below'
-    : 'above';
+  return paths.indexOf(sourcePath) < paths.indexOf(targetPath) ? 'below' : 'above';
 }
 
 function sameOrder(left: readonly string[], right: readonly string[]): boolean {
