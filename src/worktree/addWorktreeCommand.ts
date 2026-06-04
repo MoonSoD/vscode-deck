@@ -9,6 +9,8 @@ import {
 import { branchWorktreeName, defaultWorktreePath } from './defaultWorktreePath';
 
 const CREATE_BRANCH_LABEL = 'Create new branch...';
+const SWITCH_LABEL = 'Switch';
+const OPEN_IN_NEW_WINDOW_LABEL = 'Open in New Window';
 
 interface ProjectNodeLike {
   projectPath: string;
@@ -18,6 +20,10 @@ interface SwitcherLike {
   switchTo(targetPath: string): Promise<void>;
 }
 
+interface DetachedOpenerLike {
+  open(targetPath: string): Promise<void>;
+}
+
 interface WorktreeRootStoreLike {
   get(commonDir: string): string | undefined;
   set(commonDir: string, rootPath: string): Promise<void>;
@@ -25,6 +31,7 @@ interface WorktreeRootStoreLike {
 
 interface WorktreeRequest {
   path: string;
+  branch: string;
   add: AddWorktreeOptions;
 }
 
@@ -42,6 +49,8 @@ type BranchPick = vscode.QuickPickItem &
 export class AddWorktreeCommand {
   constructor(
     private readonly switcher: SwitcherLike,
+    private readonly detachedOpener: DetachedOpenerLike,
+    private readonly refresh: () => void,
     private readonly worktreeRoots: WorktreeRootStoreLike = {
       get: () => undefined,
       set: async () => undefined,
@@ -75,7 +84,18 @@ export class AddWorktreeCommand {
     }
 
     await this.worktreeRoots.set(commonDir, path.dirname(request.path));
-    await this.switcher.switchTo(request.path);
+    this.refresh();
+
+    const postCreateAction = await vscode.window.showInformationMessage(
+      `Created worktree ${request.branch}.`,
+      SWITCH_LABEL,
+      OPEN_IN_NEW_WINDOW_LABEL,
+    );
+    if (postCreateAction === SWITCH_LABEL) {
+      await this.switcher.switchTo(request.path);
+    } else if (postCreateAction === OPEN_IN_NEW_WINDOW_LABEL) {
+      await this.detachedOpener.open(request.path);
+    }
   }
 
   private branchPicks(branches: string[]): BranchPick[] {
@@ -103,6 +123,7 @@ export class AddWorktreeCommand {
     if (!targetPath) return undefined;
     return {
       path: targetPath,
+      branch,
       add: {
         path: targetPath,
         branch,
@@ -131,6 +152,7 @@ export class AddWorktreeCommand {
 
     return {
       path: targetPath,
+      branch: newBranch,
       add: {
         path: targetPath,
         newBranch,

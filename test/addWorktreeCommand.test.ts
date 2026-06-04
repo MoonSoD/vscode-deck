@@ -13,6 +13,7 @@ vi.mock('vscode', () => ({
   window: {
     createInputBox: vi.fn(),
     showErrorMessage: vi.fn(),
+    showInformationMessage: vi.fn(),
     showInputBox: vi.fn(),
     showOpenDialog: vi.fn(),
     showQuickPick: vi.fn(),
@@ -76,6 +77,30 @@ function createAcceptingInputBox(onShow?: (box: InputBoxMock) => Promise<void> |
   return box;
 }
 
+function createCommand(rootPath?: string) {
+  const switcher = { switchTo: vi.fn(async () => undefined) };
+  const detachedOpener = { open: vi.fn(async () => undefined) };
+  const refresh = vi.fn();
+  const worktreeRoots = {
+    get: vi.fn(() => rootPath),
+    set: vi.fn(async () => undefined),
+  };
+  return {
+    command: new AddWorktreeCommand(switcher, detachedOpener, refresh, worktreeRoots),
+    detachedOpener,
+    refresh,
+    switcher,
+    worktreeRoots,
+  };
+}
+
+function pickExistingBranch(): void {
+  vi.mocked(vscode.window.showQuickPick).mockImplementation(async (items) => {
+    const picks = items as Array<{ branch?: string }>;
+    return picks.find((item) => item.branch === 'feature/foo');
+  });
+}
+
 describe('AddWorktreeCommand', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -87,25 +112,111 @@ describe('AddWorktreeCommand', () => {
     vi.mocked(listBranches).mockResolvedValue(['main', 'feature/foo']);
     vi.mocked(vscode.window.createInputBox).mockReset();
     vi.mocked(vscode.window.showErrorMessage).mockReset();
+    vi.mocked(vscode.window.showInformationMessage).mockReset();
     vi.mocked(vscode.window.showInputBox).mockReset();
     vi.mocked(vscode.window.showOpenDialog).mockReset();
     vi.mocked(vscode.window.showQuickPick).mockReset();
+    vi.mocked(vscode.window.showInformationMessage).mockResolvedValue(undefined);
   });
 
-  it('creates an existing-branch worktree from the remembered root and learns the chosen root', async () => {
-    const switcher = { switchTo: vi.fn(async () => undefined) };
+  it('shows post-create switch options after creating an existing-branch worktree', async () => {
+    const { command, refresh } = createCommand('/custom/worktrees');
+    const input = createAcceptingInputBox();
+
+    pickExistingBranch();
+    vi.mocked(vscode.window.createInputBox).mockReturnValue(input as vscode.InputBox);
+
+    await command.run({ projectPath: '/work/myrepo' });
+
+    expect(refresh).toHaveBeenCalledOnce();
+    expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
+      'Created worktree feature/foo.',
+      'Switch',
+      'Open in New Window',
+    );
+  });
+
+  it('switches to the new worktree when the post-create Switch action is picked', async () => {
+    const { command, detachedOpener, switcher } = createCommand('/custom/worktrees');
+    const input = createAcceptingInputBox();
+
+    pickExistingBranch();
+    vi.mocked(vscode.window.createInputBox).mockReturnValue(input as vscode.InputBox);
+    vi.mocked(vscode.window.showInformationMessage).mockResolvedValue('Switch');
+
+    await command.run({ projectPath: '/work/myrepo' });
+
+    expect(switcher.switchTo).toHaveBeenCalledWith('/custom/worktrees/feature-foo');
+    expect(detachedOpener.open).not.toHaveBeenCalled();
+  });
+
+  it('opens the new worktree in a new window when that post-create action is picked', async () => {
+    const { command, detachedOpener, switcher } = createCommand('/custom/worktrees');
+    const input = createAcceptingInputBox();
+
+    pickExistingBranch();
+    vi.mocked(vscode.window.createInputBox).mockReturnValue(input as vscode.InputBox);
+    vi.mocked(vscode.window.showInformationMessage).mockResolvedValue('Open in New Window');
+
+    await command.run({ projectPath: '/work/myrepo' });
+
+    expect(detachedOpener.open).toHaveBeenCalledWith('/custom/worktrees/feature-foo');
+    expect(switcher.switchTo).not.toHaveBeenCalled();
+  });
+
+  it('does not switch, open, or mutate active worktree state when the post-create toast is dismissed', async () => {
+    const activeWorktrees = { set: vi.fn(async () => undefined) };
+    const switcher = {
+      switchTo: vi.fn(async (targetPath: string) => {
+        await activeWorktrees.set('/git/myrepo', targetPath);
+      }),
+    };
+    const detachedOpener = { open: vi.fn(async () => undefined) };
+    const refresh = vi.fn();
     const worktreeRoots = {
       get: vi.fn(() => '/custom/worktrees'),
       set: vi.fn(async () => undefined),
     };
-    const command = new AddWorktreeCommand(switcher, worktreeRoots);
+    const command = new AddWorktreeCommand(switcher, detachedOpener, refresh, worktreeRoots);
     const input = createAcceptingInputBox();
 
-    vi.mocked(vscode.window.showQuickPick).mockImplementation(async (items) => {
-      const picks = items as Array<{ branch?: string }>;
-      return picks.find((item) => item.branch === 'feature/foo');
-    });
+    pickExistingBranch();
     vi.mocked(vscode.window.createInputBox).mockReturnValue(input as vscode.InputBox);
+    vi.mocked(vscode.window.showInformationMessage).mockResolvedValue(undefined);
+
+    await command.run({ projectPath: '/work/myrepo' });
+
+    expect(switcher.switchTo).not.toHaveBeenCalled();
+    expect(detachedOpener.open).not.toHaveBeenCalled();
+    expect(activeWorktrees.set).not.toHaveBeenCalled();
+  });
+
+  it.each([['Switch'], ['Open in New Window'], [undefined]])(
+    'refreshes after successful creation when post-create action is %s',
+    async (postCreateAction) => {
+      const { command, refresh } = createCommand('/custom/worktrees');
+      const input = createAcceptingInputBox();
+
+      pickExistingBranch();
+      vi.mocked(vscode.window.createInputBox).mockReturnValue(input as vscode.InputBox);
+      vi.mocked(vscode.window.showInformationMessage).mockImplementation(async () => {
+        expect(refresh).toHaveBeenCalledOnce();
+        return postCreateAction;
+      });
+
+      await command.run({ projectPath: '/work/myrepo' });
+
+      expect(refresh).toHaveBeenCalledOnce();
+    },
+  );
+
+  it('creates an existing-branch worktree from the remembered root and learns the chosen root', async () => {
+    const { command, switcher, worktreeRoots } = createCommand('/custom/worktrees');
+    const input = createAcceptingInputBox();
+
+    pickExistingBranch();
+    vi.mocked(vscode.window.createInputBox).mockReturnValue(input as vscode.InputBox);
+    vi.mocked(vscode.window.showInformationMessage).mockResolvedValue('Switch');
 
     await command.run({ projectPath: '/work/myrepo' });
 
@@ -121,20 +232,12 @@ describe('AddWorktreeCommand', () => {
   });
 
   it('lets the inline folder picker replace the parent while preserving the branch slug', async () => {
-    const switcher = { switchTo: vi.fn(async () => undefined) };
-    const worktreeRoots = {
-      get: vi.fn(() => '/remembered/root'),
-      set: vi.fn(async () => undefined),
-    };
-    const command = new AddWorktreeCommand(switcher, worktreeRoots);
+    const { command, worktreeRoots } = createCommand('/remembered/root');
     const input = createAcceptingInputBox(async (box) => {
       await box.triggerButton(box.buttons[0]);
     });
 
-    vi.mocked(vscode.window.showQuickPick).mockImplementation(async (items) => {
-      const picks = items as Array<{ branch?: string }>;
-      return picks.find((item) => item.branch === 'feature/foo');
-    });
+    pickExistingBranch();
     vi.mocked(vscode.window.createInputBox).mockReturnValue(input as vscode.InputBox);
     vi.mocked(vscode.window.showOpenDialog).mockResolvedValue([
       { fsPath: '/picked/root' } as vscode.Uri,
@@ -163,16 +266,12 @@ describe('AddWorktreeCommand', () => {
   });
 
   it('keeps the input value when the inline folder picker is cancelled', async () => {
-    const switcher = { switchTo: vi.fn(async () => undefined) };
-    const command = new AddWorktreeCommand(switcher);
+    const { command } = createCommand();
     const input = createAcceptingInputBox(async (box) => {
       await box.triggerButton(box.buttons[0]);
     });
 
-    vi.mocked(vscode.window.showQuickPick).mockImplementation(async (items) => {
-      const picks = items as Array<{ branch?: string }>;
-      return picks.find((item) => item.branch === 'feature/foo');
-    });
+    pickExistingBranch();
     vi.mocked(vscode.window.createInputBox).mockReturnValue(input as vscode.InputBox);
     vi.mocked(vscode.window.showOpenDialog).mockResolvedValue(undefined);
 
@@ -190,20 +289,12 @@ describe('AddWorktreeCommand', () => {
   });
 
   it('does nothing when the path input is cleared', async () => {
-    const switcher = { switchTo: vi.fn(async () => undefined) };
-    const worktreeRoots = {
-      get: vi.fn(() => '/custom/worktrees'),
-      set: vi.fn(async () => undefined),
-    };
-    const command = new AddWorktreeCommand(switcher, worktreeRoots);
+    const { command, switcher, worktreeRoots } = createCommand('/custom/worktrees');
     const input = createAcceptingInputBox((box) => {
       box.value = '';
     });
 
-    vi.mocked(vscode.window.showQuickPick).mockImplementation(async (items) => {
-      const picks = items as Array<{ branch?: string }>;
-      return picks.find((item) => item.branch === 'feature/foo');
-    });
+    pickExistingBranch();
     vi.mocked(vscode.window.createInputBox).mockReturnValue(input as vscode.InputBox);
 
     await command.run({ projectPath: '/work/myrepo' });
@@ -214,8 +305,7 @@ describe('AddWorktreeCommand', () => {
   });
 
   it('creates a new-branch worktree from the chosen base ref', async () => {
-    const switcher = { switchTo: vi.fn(async () => undefined) };
-    const command = new AddWorktreeCommand(switcher);
+    const { command, switcher } = createCommand();
     const input = createAcceptingInputBox();
 
     vi.mocked(vscode.window.showQuickPick).mockImplementation(async (items) => {
@@ -226,6 +316,7 @@ describe('AddWorktreeCommand', () => {
       .mockResolvedValueOnce('feature/bar')
       .mockResolvedValueOnce('main');
     vi.mocked(vscode.window.createInputBox).mockReturnValue(input as vscode.InputBox);
+    vi.mocked(vscode.window.showInformationMessage).mockResolvedValue('Switch');
 
     await command.run({ projectPath: '/work/myrepo' });
 
@@ -238,8 +329,7 @@ describe('AddWorktreeCommand', () => {
   });
 
   it('does nothing when branch picking is cancelled', async () => {
-    const switcher = { switchTo: vi.fn(async () => undefined) };
-    const command = new AddWorktreeCommand(switcher);
+    const { command, switcher } = createCommand();
 
     vi.mocked(vscode.window.showQuickPick).mockResolvedValue(undefined);
 
@@ -250,18 +340,10 @@ describe('AddWorktreeCommand', () => {
   });
 
   it('surfaces git failures and does not switch', async () => {
-    const switcher = { switchTo: vi.fn(async () => undefined) };
-    const worktreeRoots = {
-      get: vi.fn(() => undefined),
-      set: vi.fn(async () => undefined),
-    };
-    const command = new AddWorktreeCommand(switcher, worktreeRoots);
+    const { command, refresh, switcher, worktreeRoots } = createCommand();
     const input = createAcceptingInputBox();
 
-    vi.mocked(vscode.window.showQuickPick).mockImplementation(async (items) => {
-      const picks = items as Array<{ branch?: string }>;
-      return picks.find((item) => item.branch === 'feature/foo');
-    });
+    pickExistingBranch();
     vi.mocked(vscode.window.createInputBox).mockReturnValue(input as vscode.InputBox);
     vi.mocked(addWorktree).mockRejectedValueOnce({ stderr: 'path already exists' });
 
@@ -271,6 +353,8 @@ describe('AddWorktreeCommand', () => {
       'Cannot create worktree: path already exists',
     );
     expect(worktreeRoots.set).not.toHaveBeenCalled();
+    expect(refresh).not.toHaveBeenCalled();
+    expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
     expect(switcher.switchTo).not.toHaveBeenCalled();
   });
 });

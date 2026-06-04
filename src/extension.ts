@@ -18,8 +18,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const branchDeletionPreferences = new BranchDeletionPreferenceStore(context.globalState);
   const switcher = new WorktreeSwitcher(activeWorktrees);
   const detachedOpener = new DetachedOpener(activeWorktrees);
-  const addWorktree = new AddWorktreeCommand(switcher, worktreeRoots);
   const tree = new ProjectTreeProvider(activeWorktrees, worktreeOrders);
+  const addWorktree = new AddWorktreeCommand(
+    switcher,
+    detachedOpener,
+    () => tree.refresh(),
+    worktreeRoots,
+  );
   const dragAndDropController = new DeckTreeDragAndDropController(
     () => tree.refresh(),
     worktreeOrders,
