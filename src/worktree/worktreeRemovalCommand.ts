@@ -28,6 +28,12 @@ const CANCEL_LABEL = 'Cancel';
 const REMOVE_LABEL = 'Remove';
 const FORCE_REMOVE_LABEL = 'Force Remove';
 
+interface RemovalActions {
+  labels: string[];
+  keepBranchLabel?: string;
+  deleteBranchLabel?: string;
+}
+
 export class WorktreeRemovalCommand {
   constructor(
     private readonly activeWorktrees: ActiveWorktreeStoreLike,
@@ -66,7 +72,11 @@ export class WorktreeRemovalCommand {
     const force = status.hasChanges || node.worktree.locked === true;
     const actionLabel = force ? FORCE_REMOVE_LABEL : REMOVE_LABEL;
     const branchName = node.worktree.detached ? undefined : node.worktree.branch;
-    const actions = removalActions(actionLabel, branchName, this.branchDeletionPreferences);
+    const actions = removalActions(
+      actionLabel,
+      branchName,
+      this.branchDeletionPreferences.get(),
+    );
     const picked = await vscode.window.showWarningMessage(
       `Remove worktree at \`${node.worktree.path}\`?`,
       { modal: true, detail: warningDetail(status, node.worktree.locked === true) },
@@ -74,10 +84,9 @@ export class WorktreeRemovalCommand {
     );
     if (!picked || picked === CANCEL_LABEL) return;
 
-    const deleteLocalBranch = picked === actions.deleteBranchLabel;
-    if (actions.deleteBranchLabel && picked !== actions.keepBranchLabel && !deleteLocalBranch) {
-      return;
-    }
+    const deleteLocalBranch = branchDeletionChoice(actions, picked);
+    if (deleteLocalBranch === undefined) return;
+
     if (branchName) {
       await this.branchDeletionPreferences.set(deleteLocalBranch);
     }
@@ -109,17 +118,13 @@ export class WorktreeRemovalCommand {
 function removalActions(
   actionLabel: string,
   branchName: string | undefined,
-  branchDeletionPreferences: BranchDeletionPreferenceStoreLike,
-): {
-  labels: string[];
-  keepBranchLabel?: string;
-  deleteBranchLabel?: string;
-} {
+  deleteBranchByDefault: boolean,
+): RemovalActions {
   if (!branchName) return { labels: [CANCEL_LABEL, actionLabel] };
 
   const keepBranchLabel = `${actionLabel} (keep branch)`;
   const deleteBranchLabel = `${actionLabel} and delete branch`;
-  const orderedActions = branchDeletionPreferences.get()
+  const orderedActions = deleteBranchByDefault
     ? [deleteBranchLabel, keepBranchLabel]
     : [keepBranchLabel, deleteBranchLabel];
   return {
@@ -127,6 +132,16 @@ function removalActions(
     keepBranchLabel,
     deleteBranchLabel,
   };
+}
+
+function branchDeletionChoice(
+  actions: RemovalActions,
+  picked: string,
+): boolean | undefined {
+  if (!actions.deleteBranchLabel) return false;
+  if (picked === actions.deleteBranchLabel) return true;
+  if (picked === actions.keepBranchLabel) return false;
+  return undefined;
 }
 
 function warningDetail(
