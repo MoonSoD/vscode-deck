@@ -251,7 +251,11 @@ describe('AddWorktreeCommand', () => {
 
   it('surfaces git failures and does not switch', async () => {
     const switcher = { switchTo: vi.fn(async () => undefined) };
-    const command = new AddWorktreeCommand(switcher);
+    const worktreeRoots = {
+      get: vi.fn(() => undefined),
+      set: vi.fn(async () => undefined),
+    };
+    const command = new AddWorktreeCommand(switcher, worktreeRoots);
     const input = createAcceptingInputBox();
 
     vi.mocked(vscode.window.showQuickPick).mockImplementation(async (items) => {
@@ -266,6 +270,7 @@ describe('AddWorktreeCommand', () => {
     expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
       'Cannot create worktree: path already exists',
     );
+    expect(worktreeRoots.set).not.toHaveBeenCalled();
     expect(switcher.switchTo).not.toHaveBeenCalled();
   });
 });

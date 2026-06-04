@@ -58,11 +58,12 @@ export class AddWorktreeCommand {
     if (!picked) return;
 
     const commonDir = await getCommonDir(node.projectPath);
+    const rememberedRoot = this.worktreeRoots.get(commonDir);
     let request: WorktreeRequest | undefined;
     if (picked.action === 'create') {
-      request = await this.newBranchRequest(node.projectPath, commonDir, branches);
+      request = await this.newBranchRequest(node.projectPath, rememberedRoot, branches);
     } else {
-      request = await this.existingBranchRequest(node.projectPath, commonDir, picked.branch);
+      request = await this.existingBranchRequest(node.projectPath, rememberedRoot, picked.branch);
     }
     if (!request) return;
 
@@ -95,14 +96,10 @@ export class AddWorktreeCommand {
 
   private async existingBranchRequest(
     projectPath: string,
-    commonDir: string,
+    rememberedRoot: string | undefined,
     branch: string,
   ): Promise<WorktreeRequest | undefined> {
-    const targetPath = await this.promptForPath(
-      projectPath,
-      branch,
-      this.worktreeRoots.get(commonDir),
-    );
+    const targetPath = await this.promptForPath(projectPath, branch, rememberedRoot);
     if (!targetPath) return undefined;
     return {
       path: targetPath,
@@ -115,7 +112,7 @@ export class AddWorktreeCommand {
 
   private async newBranchRequest(
     projectPath: string,
-    commonDir: string,
+    rememberedRoot: string | undefined,
     branches: string[],
   ): Promise<WorktreeRequest | undefined> {
     const newBranch = (await vscode.window.showInputBox({ prompt: 'New branch name' }))?.trim();
@@ -129,11 +126,7 @@ export class AddWorktreeCommand {
     )?.trim();
     if (!baseRef) return undefined;
 
-    const targetPath = await this.promptForPath(
-      projectPath,
-      newBranch,
-      this.worktreeRoots.get(commonDir),
-    );
+    const targetPath = await this.promptForPath(projectPath, newBranch, rememberedRoot);
     if (!targetPath) return undefined;
 
     return {
