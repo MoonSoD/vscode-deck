@@ -22,4 +22,3 @@ pick a folder with git worktrees → click a worktree to switch.
 - [CONTEXT.md](./CONTEXT.md) — domain glossary and component map
 - [docs/references.md](./docs/references.md) — reference repos under `references/`
 - [docs/adr/](./docs/adr/) — architectural decisions
-

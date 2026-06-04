@@ -1,10 +1,14 @@
 {
-  "name": "vscode-deck",
+  "name": "deck",
   "displayName": "Deck",
-  "description": "Multi-repo worktree workspace inside VS Code — projects, worktrees, per-worktree tabs, terminals, and agents.",
+  "description": "Switch between git worktrees of multiple registered repositories from a single Activity Bar tree.",
   "version": "0.0.1",
   "publisher": "a9a4k",
-  "private": true,
+  "repository": { "type": "git", "url": "https://github.com/a9a4k/vscode-deck.git" },
+  "bugs": { "url": "https://github.com/a9a4k/vscode-deck/issues" },
+  "homepage": "https://github.com/a9a4k/vscode-deck#readme",
+  "license": "MIT",
+  "keywords": ["git", "worktree", "worktrees", "projects", "monorepo"],
   "engines": {
     "vscode": "^1.95.0"
   },
