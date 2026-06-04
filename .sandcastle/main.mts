@@ -52,8 +52,8 @@ const dockerSandbox = docker({
     { hostPath: CARGO_REGISTRY_DIR, sandboxPath: CARGO_REGISTRY_DIR },
     { hostPath: CARGO_GIT_DIR, sandboxPath: CARGO_GIT_DIR },
     {
-      hostPath: CODEX_AUTH_DIR,
-      sandboxPath: "/home/agent/.codex",
+      hostPath: CODEX_AUTH_FILE,
+      sandboxPath: "/home/agent/.codex/auth.json",
     },
   ],
 });
