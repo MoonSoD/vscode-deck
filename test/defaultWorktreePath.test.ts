@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { defaultWorktreePath } from '../src/worktree/defaultWorktreePath';
+import { branchWorktreeName, defaultWorktreePath } from '../src/worktree/defaultWorktreePath';
 
 describe('defaultWorktreePath', () => {
   it('groups worktrees under <repo>.worktrees and slugs only the branch slashes', () => {
@@ -18,5 +18,12 @@ describe('defaultWorktreePath', () => {
     expect(defaultWorktreePath('/work/myrepo/', 'bug/fix')).toBe(
       '/work/myrepo.worktrees/bug-fix',
     );
+  });
+
+  it('uses a remembered root when present', () => {
+    expect(defaultWorktreePath('/work/myrepo', 'feature/foo', '/worktrees/myrepo')).toBe(
+      '/worktrees/myrepo/feature-foo',
+    );
+    expect(branchWorktreeName('feature/foo')).toBe('feature-foo');
   });
 });

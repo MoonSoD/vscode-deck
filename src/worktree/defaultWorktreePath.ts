@@ -12,9 +12,19 @@ import * as path from 'node:path';
  *
  * See `extensions/git/src/commands.ts` `getWorktreePath` in microsoft/vscode.
  */
-export function defaultWorktreePath(mainWorktreePath: string, branch: string): string {
+export function branchWorktreeName(branch: string): string {
+  return branch.replace(/\//g, '-');
+}
+
+export function defaultWorktreePath(
+  mainWorktreePath: string,
+  branch: string,
+  rememberedRoot?: string,
+): string {
   const normalizedMain = path.normalize(mainWorktreePath);
-  const worktreeName = branch.replace(/\//g, '-');
+  const worktreeName = branchWorktreeName(branch);
+  if (rememberedRoot) return path.join(rememberedRoot, worktreeName);
+
   return path.join(
     path.dirname(normalizedMain),
     `${path.basename(normalizedMain)}.worktrees`,

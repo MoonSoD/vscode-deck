@@ -3,11 +3,13 @@ import { ProjectTreeProvider } from './tree/projectTree';
 import { ActiveWorktreeStore } from './switch/activeWorktreeStore';
 import { WorktreeSwitcher } from './switch/worktreeSwitcher';
 import { AddWorktreeCommand } from './worktree/addWorktreeCommand';
+import { WorktreeRootStore } from './worktree/worktreeRootStore';
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const activeWorktrees = new ActiveWorktreeStore(context.globalState);
+  const worktreeRoots = new WorktreeRootStore(context.globalState);
   const switcher = new WorktreeSwitcher(activeWorktrees);
-  const addWorktree = new AddWorktreeCommand(switcher);
+  const addWorktree = new AddWorktreeCommand(switcher, worktreeRoots);
   const tree = new ProjectTreeProvider(activeWorktrees);
 
   context.subscriptions.push(

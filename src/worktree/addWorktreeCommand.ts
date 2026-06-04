@@ -1,6 +1,12 @@
+import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { addWorktree, listBranches, type AddWorktreeOptions } from '../git/worktrees';
-import { defaultWorktreePath } from './defaultWorktreePath';
+import {
+  addWorktree,
+  getCommonDir,
+  listBranches,
+  type AddWorktreeOptions,
+} from '../git/worktrees';
+import { branchWorktreeName, defaultWorktreePath } from './defaultWorktreePath';
 
 const CREATE_BRANCH_LABEL = 'Create new branch...';
 
@@ -10,6 +16,11 @@ interface ProjectNodeLike {
 
 interface SwitcherLike {
   switchTo(targetPath: string): Promise<void>;
+}
+
+interface WorktreeRootStoreLike {
+  get(commonDir: string): string | undefined;
+  set(commonDir: string, rootPath: string): Promise<void>;
 }
 
 interface WorktreeRequest {
@@ -29,7 +40,13 @@ type BranchPick = vscode.QuickPickItem &
   );
 
 export class AddWorktreeCommand {
-  constructor(private readonly switcher: SwitcherLike) {}
+  constructor(
+    private readonly switcher: SwitcherLike,
+    private readonly worktreeRoots: WorktreeRootStoreLike = {
+      get: () => undefined,
+      set: async () => undefined,
+    },
+  ) {}
 
   async run(node: ProjectNodeLike | undefined): Promise<void> {
     if (!node) return;
@@ -40,11 +57,12 @@ export class AddWorktreeCommand {
     });
     if (!picked) return;
 
+    const commonDir = await getCommonDir(node.projectPath);
     let request: WorktreeRequest | undefined;
     if (picked.action === 'create') {
-      request = await this.newBranchRequest(node.projectPath, branches);
+      request = await this.newBranchRequest(node.projectPath, commonDir, branches);
     } else {
-      request = await this.existingBranchRequest(node.projectPath, picked.branch);
+      request = await this.existingBranchRequest(node.projectPath, commonDir, picked.branch);
     }
     if (!request) return;
 
@@ -55,6 +73,7 @@ export class AddWorktreeCommand {
       return;
     }
 
+    await this.worktreeRoots.set(commonDir, path.dirname(request.path));
     await this.switcher.switchTo(request.path);
   }
 
@@ -76,14 +95,19 @@ export class AddWorktreeCommand {
 
   private async existingBranchRequest(
     projectPath: string,
+    commonDir: string,
     branch: string,
   ): Promise<WorktreeRequest | undefined> {
-    const path = await this.promptForPath(projectPath, branch);
-    if (!path) return undefined;
+    const targetPath = await this.promptForPath(
+      projectPath,
+      branch,
+      this.worktreeRoots.get(commonDir),
+    );
+    if (!targetPath) return undefined;
     return {
-      path,
+      path: targetPath,
       add: {
-        path,
+        path: targetPath,
         branch,
       },
     };
@@ -91,6 +115,7 @@ export class AddWorktreeCommand {
 
   private async newBranchRequest(
     projectPath: string,
+    commonDir: string,
     branches: string[],
   ): Promise<WorktreeRequest | undefined> {
     const newBranch = (await vscode.window.showInputBox({ prompt: 'New branch name' }))?.trim();
@@ -104,27 +129,77 @@ export class AddWorktreeCommand {
     )?.trim();
     if (!baseRef) return undefined;
 
-    const path = await this.promptForPath(projectPath, newBranch);
-    if (!path) return undefined;
+    const targetPath = await this.promptForPath(
+      projectPath,
+      newBranch,
+      this.worktreeRoots.get(commonDir),
+    );
+    if (!targetPath) return undefined;
 
     return {
-      path,
+      path: targetPath,
       add: {
-        path,
+        path: targetPath,
         newBranch,
         baseRef,
       },
     };
   }
 
-  private async promptForPath(projectPath: string, branch: string): Promise<string | undefined> {
-    const targetPath = (
-      await vscode.window.showInputBox({
-        prompt: 'Worktree path',
-        value: defaultWorktreePath(projectPath, branch),
-      })
-    )?.trim();
-    return targetPath || undefined;
+  private async promptForPath(
+    projectPath: string,
+    branch: string,
+    rememberedRoot: string | undefined,
+  ): Promise<string | undefined> {
+    const input = vscode.window.createInputBox();
+    const worktreeName = branchWorktreeName(branch);
+    const rootPickerButton: vscode.QuickInputButton = {
+      iconPath: new vscode.ThemeIcon('folder'),
+      tooltip: 'Choose worktree root',
+      location: vscode.QuickInputButtonLocation.Inline,
+    };
+
+    input.prompt = 'Worktree path';
+    input.value = defaultWorktreePath(projectPath, branch, rememberedRoot);
+    input.buttons = [rootPickerButton];
+
+    return new Promise((resolve) => {
+      let settled = false;
+      const disposables: vscode.Disposable[] = [];
+      const settle = (value: string | undefined) => {
+        if (settled) return;
+        settled = true;
+        for (const disposable of disposables) disposable.dispose();
+        input.dispose();
+        resolve(value);
+      };
+
+      disposables.push(
+        input.onDidAccept(() => {
+          const targetPath = input.value.trim();
+          settle(targetPath || undefined);
+          input.hide();
+        }),
+        input.onDidHide(() => {
+          settle(undefined);
+        }),
+        input.onDidTriggerButton(async (button) => {
+          if (button !== rootPickerButton) return;
+          const picked = await vscode.window.showOpenDialog({
+            canSelectFolders: true,
+            canSelectFiles: false,
+            canSelectMany: false,
+            defaultUri: vscode.Uri.file(
+              rememberedRoot ?? path.dirname(path.normalize(projectPath)),
+            ),
+          });
+          if (!picked || picked.length === 0) return;
+          input.value = path.join(picked[0].fsPath, worktreeName);
+        }),
+      );
+
+      input.show();
+    });
   }
 }
 
