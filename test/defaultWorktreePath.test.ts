@@ -2,18 +2,21 @@ import { describe, expect, it } from 'vitest';
 import { defaultWorktreePath } from '../src/worktree/defaultWorktreePath';
 
 describe('defaultWorktreePath', () => {
-  it('places new worktrees beside the main worktree using a safe branch slug', () => {
+  it('groups worktrees under <repo>.worktrees and slugs only the branch slashes', () => {
     expect(defaultWorktreePath('/work/myrepo', 'feature/foo')).toBe(
-      '/work/myrepo-feature-foo',
+      '/work/myrepo.worktrees/feature-foo',
     );
-    expect(defaultWorktreePath('/work/myrepo', '...bug/fix!!!')).toBe(
-      '/work/myrepo-bug-fix',
+    // Non-slash punctuation is preserved (matches VS Code, which trusts git ref rules).
+    expect(defaultWorktreePath('/work/myrepo', 'fix-123')).toBe(
+      '/work/myrepo.worktrees/fix-123',
     );
+    // Non-ASCII characters are preserved — git accepts them, the filesystem accepts them.
     expect(defaultWorktreePath('/work/myrepo', 'féature/雪')).toBe(
-      '/work/myrepo-feature',
+      '/work/myrepo.worktrees/féature-雪',
     );
+    // Trailing slash on the repo path is normalized away.
     expect(defaultWorktreePath('/work/myrepo/', 'bug/fix')).toBe(
-      '/work/myrepo-bug-fix',
+      '/work/myrepo.worktrees/bug-fix',
     );
   });
 });

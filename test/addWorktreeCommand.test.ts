@@ -31,7 +31,7 @@ describe('AddWorktreeCommand', () => {
       return picks.find((item) => item.branch === 'feature/foo');
     });
     vi.mocked(vscode.window.showInputBox).mockResolvedValue(
-      '/work/myrepo-feature-foo',
+      '/work/myrepo.worktrees/feature-foo',
     );
 
     await command.run({ projectPath: '/work/myrepo' });
@@ -40,14 +40,14 @@ describe('AddWorktreeCommand', () => {
     expect(vscode.window.showInputBox).toHaveBeenCalledWith(
       expect.objectContaining({
         prompt: 'Worktree path',
-        value: '/work/myrepo-feature-foo',
+        value: '/work/myrepo.worktrees/feature-foo',
       }),
     );
     expect(addWorktree).toHaveBeenCalledWith('/work/myrepo', {
-      path: '/work/myrepo-feature-foo',
+      path: '/work/myrepo.worktrees/feature-foo',
       branch: 'feature/foo',
     });
-    expect(switcher.switchTo).toHaveBeenCalledWith('/work/myrepo-feature-foo');
+    expect(switcher.switchTo).toHaveBeenCalledWith('/work/myrepo.worktrees/feature-foo');
   });
 
   it('creates a new-branch worktree from the chosen base ref', async () => {
@@ -61,16 +61,16 @@ describe('AddWorktreeCommand', () => {
     vi.mocked(vscode.window.showInputBox)
       .mockResolvedValueOnce('feature/bar')
       .mockResolvedValueOnce('main')
-      .mockResolvedValueOnce('/work/myrepo-feature-bar');
+      .mockResolvedValueOnce('/work/myrepo.worktrees/feature-bar');
 
     await command.run({ projectPath: '/work/myrepo' });
 
     expect(addWorktree).toHaveBeenCalledWith('/work/myrepo', {
-      path: '/work/myrepo-feature-bar',
+      path: '/work/myrepo.worktrees/feature-bar',
       newBranch: 'feature/bar',
       baseRef: 'main',
     });
-    expect(switcher.switchTo).toHaveBeenCalledWith('/work/myrepo-feature-bar');
+    expect(switcher.switchTo).toHaveBeenCalledWith('/work/myrepo.worktrees/feature-bar');
   });
 
   it('does nothing when branch picking is cancelled', async () => {
@@ -94,7 +94,7 @@ describe('AddWorktreeCommand', () => {
       return picks.find((item) => item.branch === 'feature/foo');
     });
     vi.mocked(vscode.window.showInputBox).mockResolvedValue(
-      '/work/myrepo-feature-foo',
+      '/work/myrepo.worktrees/feature-foo',
     );
     vi.mocked(addWorktree).mockRejectedValueOnce({ stderr: 'path already exists' });
 
