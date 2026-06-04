@@ -57,14 +57,23 @@ describe('package contributions', () => {
       title: 'Deck: Open Worktree in New Window',
     });
 
-    expect(pkg.contributes.menus['view/item/context']).toContainEqual({
+    expect(
+      pkg.contributes.menus['view/item/context'].filter(
+        (item: { command: string }) => item.command === 'deck.openWorktreeInNewWindow',
+      ),
+    ).toEqual([{
       command: 'deck.openWorktreeInNewWindow',
       when: 'view == deck.projects && (viewItem == deck.worktree || viewItem == deck.worktree.main)',
       group: 'navigation',
-    });
+    }]);
     expect(pkg.contributes.menus.commandPalette).toContainEqual({
       command: 'deck.openWorktreeInNewWindow',
       when: 'false',
     });
+    expect(
+      pkg.contributes.keybindings.some(
+        (item: { command: string }) => item.command === 'deck.openWorktreeInNewWindow',
+      ),
+    ).toBe(false);
   });
 });
