@@ -75,7 +75,6 @@ describe('WorktreeRemovalCommand', () => {
       { modal: true, detail: undefined },
       'Remove (keep branch)',
       'Remove and delete branch',
-      'Cancel',
     );
     expect(branchDeletionPreferences.set).toHaveBeenCalledOnce();
     expect(branchDeletionPreferences.set).toHaveBeenCalledWith(false);
@@ -114,7 +113,6 @@ describe('WorktreeRemovalCommand', () => {
       { modal: true, detail: undefined },
       'Remove and delete branch',
       'Remove (keep branch)',
-      'Cancel',
     );
     expect(branchDeletionPreferences.set).toHaveBeenCalledOnce();
     expect(branchDeletionPreferences.set).toHaveBeenCalledWith(true);
@@ -291,7 +289,6 @@ describe('WorktreeRemovalCommand', () => {
       },
       'Force Remove (keep branch)',
       'Force Remove and delete branch',
-      'Cancel',
     );
     expect(removeWorktree).toHaveBeenCalledWith('/repo/main', '/repo/feature', {
       force: true,
@@ -327,7 +324,6 @@ describe('WorktreeRemovalCommand', () => {
     expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
       'Remove worktree at `/repo/feature`?',
       { modal: true, detail: undefined },
-      'Cancel',
       'Remove',
     );
     expect(branchDeletionPreferences.set).not.toHaveBeenCalled();
@@ -355,7 +351,6 @@ describe('WorktreeRemovalCommand', () => {
     expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
       'Remove worktree at `/repo/main`?',
       { modal: true, detail: 'Switch to another worktree first.' },
-      'Cancel',
     );
     expect(getWorktreeStatus).not.toHaveBeenCalled();
     expect(removeWorktree).not.toHaveBeenCalled();

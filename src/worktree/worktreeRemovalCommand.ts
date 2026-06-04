@@ -24,7 +24,6 @@ interface BranchDeletionPreferenceStoreLike {
   set(value: boolean): Promise<void>;
 }
 
-const CANCEL_LABEL = 'Cancel';
 const REMOVE_LABEL = 'Remove';
 const FORCE_REMOVE_LABEL = 'Force Remove';
 
@@ -54,10 +53,10 @@ export class WorktreeRemovalCommand {
       node.mainWorktreePath,
     );
     if (!decision.canDelete) {
+      // VS Code's modal provides an implicit Cancel button; no explicit action items.
       await vscode.window.showWarningMessage(
         `Remove worktree at \`${node.worktree.path}\`?`,
         { modal: true, detail: decision.reason },
-        CANCEL_LABEL,
       );
       return;
     }
@@ -82,7 +81,8 @@ export class WorktreeRemovalCommand {
       { modal: true, detail: warningDetail(status, node.worktree.locked === true) },
       ...actions.labels,
     );
-    if (!picked || picked === CANCEL_LABEL) return;
+    // VS Code's modal adds its own Cancel; undefined here = user cancelled.
+    if (!picked) return;
 
     const deleteLocalBranch = branchDeletionChoice(actions, picked);
     if (deleteLocalBranch === undefined) return;
@@ -120,7 +120,8 @@ function removalActions(
   branchName: string | undefined,
   deleteBranchByDefault: boolean,
 ): RemovalActions {
-  if (!branchName) return { labels: [CANCEL_LABEL, actionLabel] };
+  // No explicit Cancel — VS Code's modal supplies its own Cancel/Esc affordance.
+  if (!branchName) return { labels: [actionLabel] };
 
   const keepBranchLabel = `${actionLabel} (keep branch)`;
   const deleteBranchLabel = `${actionLabel} and delete branch`;
@@ -128,7 +129,7 @@ function removalActions(
     ? [deleteBranchLabel, keepBranchLabel]
     : [keepBranchLabel, deleteBranchLabel];
   return {
-    labels: [...orderedActions, CANCEL_LABEL],
+    labels: orderedActions,
     keepBranchLabel,
     deleteBranchLabel,
   };
