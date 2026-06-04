@@ -52,8 +52,15 @@ const dockerSandbox = docker({
     { hostPath: CARGO_REGISTRY_DIR, sandboxPath: CARGO_REGISTRY_DIR },
     { hostPath: CARGO_GIT_DIR, sandboxPath: CARGO_GIT_DIR },
     {
-      hostPath: CODEX_AUTH_FILE,
-      sandboxPath: "/home/agent/.codex/auth.json",
+      hostPath: CODEX_AUTH_DIR,
+      sandboxPath: "/home/agent/.codex",
+    },
+    // Override the host config.toml so the container codex doesn't inherit
+    // host MCP servers (context7 / datadog), which crash codex on startup
+    // when their stdio JSON-RPC channels misbehave.
+    {
+      hostPath: ".sandcastle/codex-container.toml",
+      sandboxPath: "/home/agent/.codex/config.toml",
     },
   ],
 });
