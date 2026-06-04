@@ -65,6 +65,16 @@ export async function removeWorktree(
   await exec('git', args, { cwd: projectPath });
 }
 
+export async function deleteBranch(
+  projectPath: string,
+  branchName: string,
+  options: { force?: boolean } = {},
+): Promise<void> {
+  await exec('git', ['branch', options.force ? '-D' : '-d', branchName], {
+    cwd: projectPath,
+  });
+}
+
 export interface WorktreeStatus {
   hasChanges: boolean;
   hasUnpushedCommits: boolean;

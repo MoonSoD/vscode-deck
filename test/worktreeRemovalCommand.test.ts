@@ -17,10 +17,11 @@ vi.mock('../src/git/worktrees', () => ({
     hasUnpushedCommits: false,
   })),
   removeWorktree: vi.fn(async () => undefined),
+  deleteBranch: vi.fn(async () => undefined),
 }));
 
 import * as vscode from 'vscode';
-import { getCommonDir, getWorktreeStatus, removeWorktree } from '../src/git/worktrees';
+import { deleteBranch, getCommonDir, getWorktreeStatus, removeWorktree } from '../src/git/worktrees';
 import { WorktreeRemovalCommand } from '../src/worktree/worktreeRemovalCommand';
 
 const node = {
@@ -44,30 +45,89 @@ describe('WorktreeRemovalCommand', () => {
       hasUnpushedCommits: false,
     });
     vi.mocked(removeWorktree).mockResolvedValue(undefined);
+    vi.mocked(deleteBranch).mockResolvedValue(undefined);
   });
 
-  it('removes the worktree only after confirmation', async () => {
+  it('removes the worktree without deleting the branch when keep-branch is accepted', async () => {
     const activeWorktrees = {
       get: vi.fn(() => undefined),
       clear: vi.fn(async () => undefined),
     };
+    const branchDeletionPreferences = {
+      get: vi.fn(() => false),
+      set: vi.fn(async () => undefined),
+    };
     const refresh = vi.fn();
-    const command = new WorktreeRemovalCommand(activeWorktrees, refresh);
+    const command = new WorktreeRemovalCommand(
+      activeWorktrees,
+      refresh,
+      branchDeletionPreferences,
+    );
 
-    vi.mocked(vscode.window.showWarningMessage).mockResolvedValue('Remove' as never);
+    vi.mocked(vscode.window.showWarningMessage).mockResolvedValue(
+      'Remove (keep branch)' as never,
+    );
 
     await command.run(node);
 
     expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
       'Remove worktree at `/repo/feature`?',
       { modal: true, detail: undefined },
+      'Remove (keep branch)',
+      'Remove and delete branch',
       'Cancel',
-      'Remove',
+    );
+    expect(branchDeletionPreferences.set).toHaveBeenCalledOnce();
+    expect(branchDeletionPreferences.set).toHaveBeenCalledWith(false);
+    expect(removeWorktree).toHaveBeenCalledWith('/repo/main', '/repo/feature', {
+      force: false,
+    });
+    expect(deleteBranch).not.toHaveBeenCalled();
+    expect(activeWorktrees.clear).not.toHaveBeenCalled();
+    expect(refresh).toHaveBeenCalledOnce();
+  });
+
+  it('removes the worktree and then deletes the branch when accepted', async () => {
+    const activeWorktrees = {
+      get: vi.fn(() => undefined),
+      clear: vi.fn(async () => undefined),
+    };
+    const branchDeletionPreferences = {
+      get: vi.fn(() => true),
+      set: vi.fn(async () => undefined),
+    };
+    const refresh = vi.fn();
+    const command = new WorktreeRemovalCommand(
+      activeWorktrees,
+      refresh,
+      branchDeletionPreferences,
+    );
+
+    vi.mocked(vscode.window.showWarningMessage).mockResolvedValue(
+      'Remove and delete branch' as never,
+    );
+
+    await command.run(node);
+
+    expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
+      'Remove worktree at `/repo/feature`?',
+      { modal: true, detail: undefined },
+      'Remove and delete branch',
+      'Remove (keep branch)',
+      'Cancel',
+    );
+    expect(branchDeletionPreferences.set).toHaveBeenCalledOnce();
+    expect(branchDeletionPreferences.set).toHaveBeenCalledWith(true);
+    expect(branchDeletionPreferences.set.mock.invocationCallOrder[0]).toBeLessThan(
+      removeWorktree.mock.invocationCallOrder[0],
     );
     expect(removeWorktree).toHaveBeenCalledWith('/repo/main', '/repo/feature', {
       force: false,
     });
-    expect(activeWorktrees.clear).not.toHaveBeenCalled();
+    expect(deleteBranch).toHaveBeenCalledWith('/repo/main', 'feature');
+    expect(removeWorktree.mock.invocationCallOrder[0]).toBeLessThan(
+      deleteBranch.mock.invocationCallOrder[0],
+    );
     expect(refresh).toHaveBeenCalledOnce();
   });
 
@@ -76,14 +136,24 @@ describe('WorktreeRemovalCommand', () => {
       get: vi.fn(() => '/repo/feature'),
       clear: vi.fn(async () => undefined),
     };
+    const branchDeletionPreferences = {
+      get: vi.fn(() => true),
+      set: vi.fn(async () => undefined),
+    };
     const refresh = vi.fn();
-    const command = new WorktreeRemovalCommand(activeWorktrees, refresh);
+    const command = new WorktreeRemovalCommand(
+      activeWorktrees,
+      refresh,
+      branchDeletionPreferences,
+    );
 
     vi.mocked(vscode.window.showWarningMessage).mockResolvedValue(undefined);
 
     await command.run(node);
 
+    expect(branchDeletionPreferences.set).not.toHaveBeenCalled();
     expect(removeWorktree).not.toHaveBeenCalled();
+    expect(deleteBranch).not.toHaveBeenCalled();
     expect(activeWorktrees.clear).not.toHaveBeenCalled();
     expect(refresh).not.toHaveBeenCalled();
   });
@@ -96,7 +166,9 @@ describe('WorktreeRemovalCommand', () => {
     const refresh = vi.fn();
     const command = new WorktreeRemovalCommand(activeWorktrees, refresh);
 
-    vi.mocked(vscode.window.showWarningMessage).mockResolvedValue('Remove' as never);
+    vi.mocked(vscode.window.showWarningMessage).mockResolvedValue(
+      'Remove (keep branch)' as never,
+    );
     vi.mocked(removeWorktree).mockRejectedValueOnce({ stderr: 'is dirty' });
 
     await command.run(node);
@@ -104,8 +176,41 @@ describe('WorktreeRemovalCommand', () => {
     expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
       'Cannot remove worktree: is dirty',
     );
+    expect(deleteBranch).not.toHaveBeenCalled();
     expect(activeWorktrees.clear).not.toHaveBeenCalled();
     expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it('surfaces branch deletion failures after removing the worktree', async () => {
+    const activeWorktrees = {
+      get: vi.fn(() => '/repo/feature'),
+      clear: vi.fn(async () => undefined),
+    };
+    const branchDeletionPreferences = {
+      get: vi.fn(() => true),
+      set: vi.fn(async () => undefined),
+    };
+    const refresh = vi.fn();
+    const command = new WorktreeRemovalCommand(
+      activeWorktrees,
+      refresh,
+      branchDeletionPreferences,
+    );
+
+    vi.mocked(vscode.window.showWarningMessage).mockResolvedValue(
+      'Remove and delete branch' as never,
+    );
+    vi.mocked(deleteBranch).mockRejectedValueOnce({ stderr: 'not fully merged' });
+
+    await command.run(node);
+
+    expect(removeWorktree).toHaveBeenCalledOnce();
+    expect(deleteBranch).toHaveBeenCalledWith('/repo/main', 'feature');
+    expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
+      'Cannot delete branch: not fully merged',
+    );
+    expect(activeWorktrees.clear).toHaveBeenCalledWith('/git/repo');
+    expect(refresh).toHaveBeenCalledOnce();
   });
 
   it('surfaces status failures without removing', async () => {
@@ -136,7 +241,9 @@ describe('WorktreeRemovalCommand', () => {
     const refresh = vi.fn();
     const command = new WorktreeRemovalCommand(activeWorktrees, refresh);
 
-    vi.mocked(vscode.window.showWarningMessage).mockResolvedValue('Remove' as never);
+    vi.mocked(vscode.window.showWarningMessage).mockResolvedValue(
+      'Remove (keep branch)' as never,
+    );
 
     await command.run(node);
 
@@ -163,7 +270,9 @@ describe('WorktreeRemovalCommand', () => {
       hasChanges: true,
       hasUnpushedCommits: true,
     });
-    vi.mocked(vscode.window.showWarningMessage).mockResolvedValue('Force Remove' as never);
+    vi.mocked(vscode.window.showWarningMessage).mockResolvedValue(
+      'Force Remove (keep branch)' as never,
+    );
 
     await command.run({
       ...node,
@@ -180,12 +289,50 @@ describe('WorktreeRemovalCommand', () => {
         detail:
           'Warning: this worktree has uncommitted changes, unpushed commits, locked worktree.',
       },
+      'Force Remove (keep branch)',
+      'Force Remove and delete branch',
       'Cancel',
-      'Force Remove',
     );
     expect(removeWorktree).toHaveBeenCalledWith('/repo/main', '/repo/feature', {
       force: true,
     });
+  });
+
+  it('hides branch deletion for detached worktrees', async () => {
+    const activeWorktrees = {
+      get: vi.fn(() => undefined),
+      clear: vi.fn(async () => undefined),
+    };
+    const branchDeletionPreferences = {
+      get: vi.fn(() => true),
+      set: vi.fn(async () => undefined),
+    };
+    const command = new WorktreeRemovalCommand(
+      activeWorktrees,
+      vi.fn(),
+      branchDeletionPreferences,
+    );
+
+    vi.mocked(vscode.window.showWarningMessage).mockResolvedValue('Remove' as never);
+
+    await command.run({
+      ...node,
+      worktree: {
+        ...node.worktree,
+        branch: undefined,
+        detached: true,
+      },
+    });
+
+    expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
+      'Remove worktree at `/repo/feature`?',
+      { modal: true, detail: undefined },
+      'Cancel',
+      'Remove',
+    );
+    expect(branchDeletionPreferences.set).not.toHaveBeenCalled();
+    expect(deleteBranch).not.toHaveBeenCalled();
+    expect(removeWorktree).toHaveBeenCalledOnce();
   });
 
   it('shows the structural reason and does not call git for active or main worktrees', async () => {

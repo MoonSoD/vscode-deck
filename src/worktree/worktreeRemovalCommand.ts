@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import {
+  deleteBranch,
   getCommonDir,
   getWorktreeStatus,
   removeWorktree,
@@ -18,6 +19,11 @@ interface ActiveWorktreeStoreLike {
   clear(commonDir: string): Promise<void>;
 }
 
+interface BranchDeletionPreferenceStoreLike {
+  get(): boolean;
+  set(value: boolean): Promise<void>;
+}
+
 const CANCEL_LABEL = 'Cancel';
 const REMOVE_LABEL = 'Remove';
 const FORCE_REMOVE_LABEL = 'Force Remove';
@@ -26,6 +32,10 @@ export class WorktreeRemovalCommand {
   constructor(
     private readonly activeWorktrees: ActiveWorktreeStoreLike,
     private readonly refresh: () => void,
+    private readonly branchDeletionPreferences: BranchDeletionPreferenceStoreLike = {
+      get: () => false,
+      set: async () => undefined,
+    },
   ) {}
 
   async run(node: WorktreeNodeLike | undefined): Promise<void> {
@@ -55,13 +65,22 @@ export class WorktreeRemovalCommand {
     }
     const force = status.hasChanges || node.worktree.locked === true;
     const actionLabel = force ? FORCE_REMOVE_LABEL : REMOVE_LABEL;
+    const branchName = node.worktree.detached ? undefined : node.worktree.branch;
+    const actions = removalActions(actionLabel, branchName, this.branchDeletionPreferences);
     const picked = await vscode.window.showWarningMessage(
       `Remove worktree at \`${node.worktree.path}\`?`,
       { modal: true, detail: warningDetail(status, node.worktree.locked === true) },
-      CANCEL_LABEL,
-      actionLabel,
+      ...actions.labels,
     );
-    if (picked !== actionLabel) return;
+    if (!picked || picked === CANCEL_LABEL) return;
+
+    const deleteLocalBranch = picked === actions.deleteBranchLabel;
+    if (actions.deleteBranchLabel && picked !== actions.keepBranchLabel && !deleteLocalBranch) {
+      return;
+    }
+    if (branchName) {
+      await this.branchDeletionPreferences.set(deleteLocalBranch);
+    }
 
     let commonDir: string;
     try {
@@ -72,11 +91,42 @@ export class WorktreeRemovalCommand {
       return;
     }
 
+    if (deleteLocalBranch && branchName) {
+      try {
+        await deleteBranch(node.projectPath, branchName);
+      } catch (error) {
+        vscode.window.showErrorMessage(`Cannot delete branch: ${errorMessage(error)}`);
+      }
+    }
+
     if (this.activeWorktrees.get(commonDir) === node.worktree.path) {
       await this.activeWorktrees.clear(commonDir);
     }
     this.refresh();
   }
+}
+
+function removalActions(
+  actionLabel: string,
+  branchName: string | undefined,
+  branchDeletionPreferences: BranchDeletionPreferenceStoreLike,
+): {
+  labels: string[];
+  keepBranchLabel?: string;
+  deleteBranchLabel?: string;
+} {
+  if (!branchName) return { labels: [CANCEL_LABEL, actionLabel] };
+
+  const keepBranchLabel = `${actionLabel} (keep branch)`;
+  const deleteBranchLabel = `${actionLabel} and delete branch`;
+  const orderedActions = branchDeletionPreferences.get()
+    ? [deleteBranchLabel, keepBranchLabel]
+    : [keepBranchLabel, deleteBranchLabel];
+  return {
+    labels: [...orderedActions, CANCEL_LABEL],
+    keepBranchLabel,
+    deleteBranchLabel,
+  };
 }
 
 function warningDetail(
