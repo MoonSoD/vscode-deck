@@ -90,7 +90,13 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
     });
     if (!picked || picked.length === 0) return;
     const seedPath = picked[0].fsPath;
-    const commonDir = await getCommonDir(seedPath);
+    const commonDir = await getCommonDirSafe(seedPath);
+    if (commonDir === null) {
+      vscode.window.showErrorMessage(
+        `Cannot add ${seedPath}: not a git repository.`,
+      );
+      return;
+    }
     const cfg = vscode.workspace.getConfiguration('deck');
     const projects = cfg.get<string[]>('projects', []);
     const isRegistered = await this.hasRegisteredCommonDir(projects, commonDir);
@@ -107,8 +113,11 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
   }
 
   private async hasRegisteredCommonDir(projects: string[], commonDir: string): Promise<boolean> {
+    // getCommonDirSafe: a stale registered entry returns null and is skipped,
+    // so dedup never throws and a single bad entry doesn't block Add Project.
     for (const projectPath of projects) {
-      if (await getCommonDir(projectPath) === commonDir) return true;
+      const registered = await getCommonDirSafe(projectPath);
+      if (registered !== null && registered === commonDir) return true;
     }
     return false;
   }
