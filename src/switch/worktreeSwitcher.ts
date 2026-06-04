@@ -8,6 +8,7 @@ export class WorktreeSwitcher {
   async switchTo(targetPath: string): Promise<void> {
     const commonDir = await getCommonDir(targetPath);
     await this.activeWorktrees.set(commonDir, targetPath);
+    await this.activeWorktrees.setFocusIntent(true);
     await vscode.commands.executeCommand('vscode.openFolder', vscode.Uri.file(targetPath), {
       forceNewWindow: false,
     });

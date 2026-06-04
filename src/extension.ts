@@ -19,6 +19,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       tree.refresh();
     }),
   );
+
+  if (await activeWorktrees.consumeFocusIntent()) {
+    await vscode.commands.executeCommand('workbench.view.extension.deck');
+  }
 }
 
 export function deactivate(): void {}
