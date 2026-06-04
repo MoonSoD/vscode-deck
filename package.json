@@ -2,7 +2,7 @@
   "name": "deck",
   "displayName": "Deck",
   "description": "Switch between git worktrees of multiple registered repositories from a single Activity Bar tree.",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "publisher": "a9a4k",
   "repository": {
     "type": "git",
@@ -75,6 +75,12 @@
         "command": "deck.refresh",
         "title": "Deck: Refresh",
         "icon": "$(refresh)"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "workbench.view.extension.deck",
+        "key": "ctrl+alt+d"
       }
     ],
     "menus": {
