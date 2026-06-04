@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { ProjectTreeProvider } from './tree/projectTree';
 import { ActiveWorktreeStore } from './switch/activeWorktreeStore';
+import { DetachedOpener } from './switch/detachedOpener';
 import { WorktreeSwitcher } from './switch/worktreeSwitcher';
 import { ProjectRemovalCommand } from './project/projectRemovalCommand';
 import { AddWorktreeCommand } from './worktree/addWorktreeCommand';
@@ -16,6 +17,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const worktreeOrders = new WorktreeOrderStore(context.globalState);
   const branchDeletionPreferences = new BranchDeletionPreferenceStore(context.globalState);
   const switcher = new WorktreeSwitcher(activeWorktrees);
+  const detachedOpener = new DetachedOpener(activeWorktrees);
   const addWorktree = new AddWorktreeCommand(switcher, worktreeRoots);
   const tree = new ProjectTreeProvider(activeWorktrees, worktreeOrders);
   const dragAndDropController = new DeckTreeDragAndDropController(
@@ -47,6 +49,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand('deck.addWorktree', (node) => addWorktree.run(node)),
     vscode.commands.registerCommand('deck.removeProject', (node) => removeProject.run(node)),
     vscode.commands.registerCommand('deck.removeWorktree', (node) => removeWorktree.run(node)),
+    vscode.commands.registerCommand('deck.openWorktreeInNewWindow', (node: { worktree: { path: string } }) =>
+      detachedOpener.open(node.worktree.path),
+    ),
     vscode.commands.registerCommand('deck.switchWorktree', async (worktreePath: string) => {
       await switcher.switchTo(worktreePath);
       tree.refresh();

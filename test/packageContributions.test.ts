@@ -50,4 +50,21 @@ describe('package contributions', () => {
       group: 'navigation',
     });
   });
+
+  it('contributes open Worktree in new window as a Worktree context-only action', () => {
+    expect(pkg.contributes.commands).toContainEqual({
+      command: 'deck.openWorktreeInNewWindow',
+      title: 'Deck: Open Worktree in New Window',
+    });
+
+    expect(pkg.contributes.menus['view/item/context']).toContainEqual({
+      command: 'deck.openWorktreeInNewWindow',
+      when: 'view == deck.projects && (viewItem == deck.worktree || viewItem == deck.worktree.main)',
+      group: 'navigation',
+    });
+    expect(pkg.contributes.menus.commandPalette).toContainEqual({
+      command: 'deck.openWorktreeInNewWindow',
+      when: 'false',
+    });
+  });
 });

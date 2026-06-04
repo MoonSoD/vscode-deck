@@ -81,6 +81,10 @@
         "title": "Deck: Switch to Worktree"
       },
       {
+        "command": "deck.openWorktreeInNewWindow",
+        "title": "Deck: Open Worktree in New Window"
+      },
+      {
         "command": "deck.refresh",
         "title": "Deck: Refresh",
         "icon": "$(refresh)"
@@ -122,9 +126,20 @@
           "group": "navigation"
         },
         {
+          "command": "deck.openWorktreeInNewWindow",
+          "when": "view == deck.projects && (viewItem == deck.worktree || viewItem == deck.worktree.main)",
+          "group": "navigation"
+        },
+        {
           "command": "deck.removeProject",
           "when": "view == deck.projects && viewItem == deck.project",
           "group": "navigation"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "deck.openWorktreeInNewWindow",
+          "when": "false"
         }
       ]
     },
