@@ -10,7 +10,7 @@ export interface WorktreeTreeItemDescription {
   label: string;
   description: string;
   iconId: 'check' | 'git-branch';
-  contextValue: 'worktree.active' | 'worktree';
+  contextValue: 'deck.worktree.active' | 'deck.worktree';
 }
 
 export function describeProjectTreeItem(
@@ -33,6 +33,6 @@ export function describeWorktreeTreeItem(
     label: worktree.branch ?? worktree.path,
     description: worktree.path,
     iconId: isActive ? 'check' : 'git-branch',
-    contextValue: isActive ? 'worktree.active' : 'worktree',
+    contextValue: isActive ? 'deck.worktree.active' : 'deck.worktree',
   };
 }

@@ -14,7 +14,7 @@ describe('package contributions', () => {
 
     expect(pkg.contributes.menus['view/item/context']).toContainEqual({
       command: 'deck.addWorktree',
-      when: 'view == deck.projects && viewItem == project',
+      when: 'view == deck.projects && viewItem == deck.project',
       group: 'inline',
     });
   });

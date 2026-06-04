@@ -9,7 +9,7 @@ class ProjectNode extends vscode.TreeItem {
   constructor(public readonly projectPath: string, isActiveProject: boolean) {
     const item = describeProjectTreeItem(projectPath, isActiveProject);
     super(item.label, vscode.TreeItemCollapsibleState.Expanded);
-    this.contextValue = 'project';
+    this.contextValue = 'deck.project';
     this.description = item.description;
     this.tooltip = projectPath;
     this.iconPath = new vscode.ThemeIcon(item.iconId);

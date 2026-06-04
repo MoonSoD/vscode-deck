@@ -95,8 +95,8 @@ describe('ProjectTreeProvider', () => {
     ).flat();
 
     expect(worktreeNodes.map((node) => node.contextValue)).toEqual([
-      'worktree',
-      'worktree.active',
+      'deck.worktree',
+      'deck.worktree.active',
     ]);
     expect(worktreeNodes.map((node) => (node.iconPath as { id: string }).id)).toEqual([
       'git-branch',

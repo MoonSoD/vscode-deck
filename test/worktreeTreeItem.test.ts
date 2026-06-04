@@ -46,13 +46,13 @@ describe('describeWorktreeTreeItem', () => {
         label: 'main',
         description: '/work/alpha-main',
         iconId: 'check',
-        contextValue: 'worktree.active',
+        contextValue: 'deck.worktree.active',
       },
       {
         label: 'feature',
         description: '/work/alpha-feature',
         iconId: 'git-branch',
-        contextValue: 'worktree',
+        contextValue: 'deck.worktree',
       },
     ]);
   });
