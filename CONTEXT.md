@@ -13,6 +13,8 @@ time. VS Code handles tab/dirty-buffer/layout persistence per opened folder.
 | **ActiveWorktree** | The Worktree last opened for a Project. Persisted per Project (`{ commonDir → worktreePath }` in `globalState`), so clicking a Project node opens that worktree again. Only one workspace folder is ever mounted at a time. |
 | **ActiveProject** | The Project whose ActiveWorktree is the current workspace folder. Derived from `workspace.workspaceFolders[0]` by resolving its common dir against the registry. Not persisted — VS Code is the source of truth. |
 | **SwitchOperation** | A switch is one call: persist `ActiveWorktree[commonDir] = targetPath`, then `vscode.openFolder(Uri.file(targetPath))`. The window reloads; VS Code restores that folder's own session (tabs, dirty buffers, splits, breakpoints) from its per-folder workspace storage. See [ADR-0003](./docs/adr/0003-single-folder-switching-via-openfolder.md). |
+| **WorktreeRemoval** | Runs `git worktree remove <path>` (optionally `--force` when the worktree has uncommitted changes), and — only when the user opts in via a checkbox in the confirm dialog — also runs `git branch -d <branch>` afterwards. The branch-deletion checkbox's last value is remembered per-user. Mirrors superset's pattern; deliberately keeps branch and worktree as separate ref-counted things by default. |
+| **ProjectRemoval** | Delists a Project from `deck.projects` and clears its per-Project Deck state (ActiveWorktree entry and remembered worktree root). Does **not** touch the git repository, its worktrees, or their files. The inverse of "Add Project." |
 
 ## Components
 
