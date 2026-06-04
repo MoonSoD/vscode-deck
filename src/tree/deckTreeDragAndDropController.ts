@@ -60,27 +60,34 @@ export class DeckTreeDragAndDropController
     target: DeckNodeLike | undefined,
     dataTransfer: vscode.DataTransfer,
   ): Promise<void> {
-    if (!target) return;
-
     const payload = dataTransfer.get(DECK_TREE_MIME)?.value as DragPayload | undefined;
     if (!payload) return;
 
     if (payload.kind === 'worktree') {
+      if (!target) return;
       await this.dropWorktree(payload, target);
       return;
     }
 
-    if (!isProjectNode(target)) return;
-
     const cfg = vscode.workspace.getConfiguration('deck');
     const projects = cfg.get<string[]>('projects', []);
-    const position = dropPosition(projects, payload.sourcePath, target.projectPath);
-    const reordered = reorderArray(
-      projects,
-      payload.sourcePath,
-      target.projectPath,
-      position,
-    );
+    let reordered: string[];
+    if (target) {
+      if (!isProjectNode(target)) return;
+      const position = dropPosition(projects, payload.sourcePath, target.projectPath);
+      reordered = reorderArray(
+        projects,
+        payload.sourcePath,
+        target.projectPath,
+        position,
+      );
+    } else {
+      if (!projects.includes(payload.sourcePath)) return;
+      reordered = [
+        ...projects.filter((projectPath) => projectPath !== payload.sourcePath),
+        payload.sourcePath,
+      ];
+    }
 
     if (sameOrder(projects, reordered)) return;
 

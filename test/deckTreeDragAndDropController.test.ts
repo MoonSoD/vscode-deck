@@ -129,6 +129,21 @@ describe('DeckTreeDragAndDropController', () => {
     expect(refresh).toHaveBeenCalledOnce();
   });
 
+  it('moves Projects to the bottom when dropped on the empty root area', async () => {
+    const { controller, refresh } = createController();
+    const dataTransfer = new DataTransferMock();
+
+    controller.handleDrag?.([project('/repo/b')], dataTransfer as vscode.DataTransfer, {} as never);
+    await controller.handleDrop?.(undefined, dataTransfer as vscode.DataTransfer, {} as never);
+
+    expect(vscodeState.update).toHaveBeenCalledWith(
+      'projects',
+      ['/repo/a', '/repo/c', '/repo/d', '/repo/b'],
+      vscode.ConfigurationTarget.Global,
+    );
+    expect(refresh).toHaveBeenCalledOnce();
+  });
+
   it('ignores Project drops onto Worktree rows', async () => {
     const { controller, refresh } = createController();
     const dataTransfer = new DataTransferMock();
