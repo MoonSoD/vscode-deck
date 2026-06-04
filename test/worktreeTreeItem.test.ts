@@ -21,7 +21,7 @@ describe('describeProjectTreeItem', () => {
 });
 
 describe('describeWorktreeTreeItem', () => {
-  it('marks only the provided active worktree path as active', () => {
+  it('marks active and main worktree rows with delete-scoping context values', () => {
     const worktrees = [
       {
         path: '/work/alpha-main',
@@ -40,7 +40,9 @@ describe('describeWorktreeTreeItem', () => {
     ];
 
     expect(
-      worktrees.map((worktree) => describeWorktreeTreeItem(worktree, '/work/alpha-main')),
+      worktrees.map((worktree) =>
+        describeWorktreeTreeItem(worktree, '/work/alpha-main', '/work/alpha-feature'),
+      ),
     ).toEqual([
       {
         label: 'main',
@@ -52,8 +54,17 @@ describe('describeWorktreeTreeItem', () => {
         label: 'feature',
         description: '/work/alpha-feature',
         iconId: 'git-branch',
-        contextValue: 'deck.worktree',
+        contextValue: 'deck.worktree.main',
       },
     ]);
+
+    expect(
+      describeWorktreeTreeItem(worktrees[0], '/work/alpha-main', '/work/alpha-main')
+        .contextValue,
+    ).toBe('deck.worktree.active');
+    expect(
+      describeWorktreeTreeItem(worktrees[1], '/work/alpha-main', '/work/other')
+        .contextValue,
+    ).toBe('deck.worktree');
   });
 });

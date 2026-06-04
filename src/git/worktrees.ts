@@ -10,6 +10,7 @@ export interface Worktree {
   branch?: string;
   bare: boolean;
   detached: boolean;
+  locked?: boolean;
 }
 
 export type AddWorktreeOptions =
@@ -53,6 +54,43 @@ export async function addWorktree(
   await exec('git', args, { cwd: projectPath });
 }
 
+export async function removeWorktree(
+  projectPath: string,
+  worktreePath: string,
+  options: { force?: boolean } = {},
+): Promise<void> {
+  const args = ['worktree', 'remove'];
+  if (options.force) args.push('--force');
+  args.push(worktreePath);
+  await exec('git', args, { cwd: projectPath });
+}
+
+export interface WorktreeStatus {
+  hasChanges: boolean;
+  hasUnpushedCommits: boolean;
+}
+
+export async function getWorktreeStatus(worktreePath: string): Promise<WorktreeStatus> {
+  const { stdout: statusStdout } = await exec('git', ['status', '--porcelain'], {
+    cwd: worktreePath,
+  });
+
+  let hasUnpushedCommits = false;
+  try {
+    const { stdout } = await exec('git', ['rev-list', '--count', '@{u}..HEAD'], {
+      cwd: worktreePath,
+    });
+    hasUnpushedCommits = Number(stdout.trim()) > 0;
+  } catch {
+    hasUnpushedCommits = false;
+  }
+
+  return {
+    hasChanges: statusStdout.trim().length > 0,
+    hasUnpushedCommits,
+  };
+}
+
 export async function getCommonDir(worktreePath: string): Promise<string> {
   const { stdout } = await exec('git', ['rev-parse', '--git-common-dir'], {
     cwd: worktreePath,
@@ -82,13 +120,15 @@ export function parsePorcelain(input: string): Worktree[] {
   const pushCurrent = () => {
     if (!current?.path) return;
 
-    out.push({
+    const worktree: Worktree = {
       path: current.path,
       head: current.head ?? '',
       branch: current.branch,
       bare: current.bare ?? false,
       detached: current.detached ?? false,
-    });
+    };
+    if (current.locked) worktree.locked = true;
+    out.push(worktree);
   };
 
   for (const raw of input.split('\n')) {
@@ -104,6 +144,7 @@ export function parsePorcelain(input: string): Worktree[] {
     else if (line.startsWith('branch ')) current.branch = line.slice('branch refs/heads/'.length);
     else if (line === 'bare') current.bare = true;
     else if (line === 'detached') current.detached = true;
+    else if (line === 'locked' || line.startsWith('locked ')) current.locked = true;
   }
   pushCurrent();
   return out;

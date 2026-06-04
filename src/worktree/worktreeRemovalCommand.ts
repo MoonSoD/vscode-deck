@@ -1,0 +1,102 @@
+import * as vscode from 'vscode';
+import {
+  getCommonDir,
+  getWorktreeStatus,
+  removeWorktree,
+  Worktree,
+} from '../git/worktrees';
+import { canRemoveWorktree } from './worktreeRemoval';
+
+interface WorktreeNodeLike {
+  projectPath: string;
+  mainWorktreePath?: string;
+  worktree: Worktree;
+}
+
+interface ActiveWorktreeStoreLike {
+  get(commonDir: string): string | undefined;
+  clear(commonDir: string): Promise<void>;
+}
+
+const CANCEL_LABEL = 'Cancel';
+const REMOVE_LABEL = 'Remove';
+const FORCE_REMOVE_LABEL = 'Force Remove';
+
+export class WorktreeRemovalCommand {
+  constructor(
+    private readonly activeWorktrees: ActiveWorktreeStoreLike,
+    private readonly refresh: () => void,
+  ) {}
+
+  async run(node: WorktreeNodeLike | undefined): Promise<void> {
+    if (!node) return;
+
+    const activeWorktreePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    const decision = canRemoveWorktree(
+      node.worktree,
+      activeWorktreePath,
+      node.mainWorktreePath,
+    );
+    if (!decision.canDelete) {
+      await vscode.window.showWarningMessage(
+        `Remove worktree at \`${node.worktree.path}\`?`,
+        { modal: true, detail: decision.reason },
+        CANCEL_LABEL,
+      );
+      return;
+    }
+
+    let status: { hasChanges: boolean; hasUnpushedCommits: boolean };
+    try {
+      status = await getWorktreeStatus(node.worktree.path);
+    } catch (error) {
+      vscode.window.showErrorMessage(`Cannot inspect worktree: ${errorMessage(error)}`);
+      return;
+    }
+    const force = status.hasChanges || node.worktree.locked === true;
+    const actionLabel = force ? FORCE_REMOVE_LABEL : REMOVE_LABEL;
+    const picked = await vscode.window.showWarningMessage(
+      `Remove worktree at \`${node.worktree.path}\`?`,
+      { modal: true, detail: warningDetail(status, node.worktree.locked === true) },
+      CANCEL_LABEL,
+      actionLabel,
+    );
+    if (picked !== actionLabel) return;
+
+    let commonDir: string;
+    try {
+      commonDir = await getCommonDir(node.projectPath);
+      await removeWorktree(node.projectPath, node.worktree.path, { force });
+    } catch (error) {
+      vscode.window.showErrorMessage(`Cannot remove worktree: ${errorMessage(error)}`);
+      return;
+    }
+
+    if (this.activeWorktrees.get(commonDir) === node.worktree.path) {
+      await this.activeWorktrees.clear(commonDir);
+    }
+    this.refresh();
+  }
+}
+
+function warningDetail(
+  status: { hasChanges: boolean; hasUnpushedCommits: boolean },
+  locked: boolean,
+): string | undefined {
+  const warnings: string[] = [];
+  if (status.hasChanges) warnings.push('uncommitted changes');
+  if (status.hasUnpushedCommits) warnings.push('unpushed commits');
+  if (locked) warnings.push('locked worktree');
+  if (warnings.length === 0) return undefined;
+  return `Warning: this worktree has ${warnings.join(', ')}.`;
+}
+
+function errorMessage(error: unknown): string {
+  if (typeof error === 'object' && error !== null && 'stderr' in error) {
+    const stderrValue = error.stderr;
+    const stderr = typeof stderrValue === 'string' ? stderrValue.trim() : '';
+    if (stderr) return stderr;
+  }
+  if (error instanceof Error) return error.message;
+  return String(error);
+}

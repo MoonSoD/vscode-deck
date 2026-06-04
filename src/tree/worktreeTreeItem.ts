@@ -10,7 +10,7 @@ export interface WorktreeTreeItemDescription {
   label: string;
   description: string;
   iconId: 'check' | 'git-branch';
-  contextValue: 'deck.worktree.active' | 'deck.worktree';
+  contextValue: 'deck.worktree.active' | 'deck.worktree.main' | 'deck.worktree';
 }
 
 export function describeProjectTreeItem(
@@ -27,12 +27,14 @@ export function describeProjectTreeItem(
 export function describeWorktreeTreeItem(
   worktree: Worktree,
   activeWorktreePath: string | undefined,
+  mainWorktreePath?: string,
 ): WorktreeTreeItemDescription {
   const isActive = worktree.path === activeWorktreePath;
+  const isMain = worktree.path === mainWorktreePath;
   return {
     label: worktree.branch ?? worktree.path,
     description: worktree.path,
     iconId: isActive ? 'check' : 'git-branch',
-    contextValue: isActive ? 'deck.worktree.active' : 'deck.worktree',
+    contextValue: isActive ? 'deck.worktree.active' : isMain ? 'deck.worktree.main' : 'deck.worktree',
   };
 }

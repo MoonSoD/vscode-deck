@@ -68,6 +68,11 @@
         "icon": "$(add)"
       },
       {
+        "command": "deck.removeWorktree",
+        "title": "Deck: Delete Worktree…",
+        "icon": "$(trash)"
+      },
+      {
         "command": "deck.switchWorktree",
         "title": "Deck: Switch to Worktree"
       },
@@ -101,6 +106,16 @@
           "command": "deck.addWorktree",
           "when": "view == deck.projects && viewItem == deck.project",
           "group": "inline"
+        },
+        {
+          "command": "deck.removeWorktree",
+          "when": "view == deck.projects && viewItem == deck.worktree",
+          "group": "inline"
+        },
+        {
+          "command": "deck.removeWorktree",
+          "when": "view == deck.projects && viewItem == deck.worktree",
+          "group": "navigation"
         }
       ]
     },

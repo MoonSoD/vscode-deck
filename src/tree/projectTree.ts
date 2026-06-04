@@ -17,8 +17,13 @@ class ProjectNode extends vscode.TreeItem {
 }
 
 class WorktreeNode extends vscode.TreeItem {
-  constructor(public readonly worktree: Worktree, activeWorktreePath: string | undefined) {
-    const item = describeWorktreeTreeItem(worktree, activeWorktreePath);
+  constructor(
+    public readonly projectPath: string,
+    public readonly worktree: Worktree,
+    activeWorktreePath: string | undefined,
+    public readonly mainWorktreePath: string | undefined,
+  ) {
+    const item = describeWorktreeTreeItem(worktree, activeWorktreePath, mainWorktreePath);
     super(item.label);
     this.contextValue = item.contextValue;
     this.description = item.description;
@@ -78,7 +83,8 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
   private async getWorktreeChildren(element: ProjectNode): Promise<Node[]> {
     const activeWorktreePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
     const worktrees = await listWorktrees(element.projectPath);
-    return worktrees.map((w) => new WorktreeNode(w, activeWorktreePath));
+    const mainWorktreePath = worktrees.find((w) => !w.bare)?.path;
+    return worktrees.map((w) => new WorktreeNode(element.projectPath, w, activeWorktreePath, mainWorktreePath));
   }
 
   async addProject(): Promise<void> {

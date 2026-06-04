@@ -22,6 +22,12 @@ export class ActiveWorktreeStore {
     });
   }
 
+  async clear(commonDir: string): Promise<void> {
+    const all = { ...this.all() };
+    delete all[commonDir];
+    await this.memento.update(ACTIVE_WORKTREES_KEY, all);
+  }
+
   async setFocusIntent(value: boolean): Promise<void> {
     await this.memento.update(FOCUS_DECK_AFTER_RELOAD_KEY, value);
   }

@@ -41,6 +41,26 @@ bare
       },
     ]);
   });
+
+  it('parses locked worktree entries', () => {
+    expect(
+      parsePorcelain(`worktree /repo/locked
+HEAD abc123
+branch refs/heads/feature
+locked because
+
+`),
+    ).toEqual([
+      {
+        path: '/repo/locked',
+        head: 'abc123',
+        branch: 'feature',
+        bare: false,
+        detached: false,
+        locked: true,
+      },
+    ]);
+  });
 });
 
 describe('parseBranchRefs', () => {

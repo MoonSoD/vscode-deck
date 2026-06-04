@@ -18,4 +18,23 @@ describe('package contributions', () => {
       group: 'inline',
     });
   });
+
+  it('contributes delete worktree only for removable worktree rows', () => {
+    expect(pkg.contributes.commands).toContainEqual({
+      command: 'deck.removeWorktree',
+      title: 'Deck: Delete Worktree…',
+      icon: '$(trash)',
+    });
+
+    expect(pkg.contributes.menus['view/item/context']).toContainEqual({
+      command: 'deck.removeWorktree',
+      when: 'view == deck.projects && viewItem == deck.worktree',
+      group: 'inline',
+    });
+    expect(pkg.contributes.menus['view/item/context']).toContainEqual({
+      command: 'deck.removeWorktree',
+      when: 'view == deck.projects && viewItem == deck.worktree',
+      group: 'navigation',
+    });
+  });
 });

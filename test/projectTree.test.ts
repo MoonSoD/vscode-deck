@@ -95,7 +95,7 @@ describe('ProjectTreeProvider', () => {
     ).flat();
 
     expect(worktreeNodes.map((node) => node.contextValue)).toEqual([
-      'deck.worktree',
+      'deck.worktree.main',
       'deck.worktree.active',
     ]);
     expect(worktreeNodes.map((node) => (node.iconPath as { id: string }).id)).toEqual([
