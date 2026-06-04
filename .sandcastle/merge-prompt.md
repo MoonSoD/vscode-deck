@@ -11,9 +11,11 @@ For each branch:
 3. After resolving conflicts, install deps then verify:
 
    ```sh
-   npm install
+   npm ci
    npm run typecheck && npm run test
    ```
+
+   Use `npm ci` (not `npm install`) — it won't rewrite `package-lock.json`. If `npm ci` fails because `package.json` and `package-lock.json` are out of sync, that's a real bug in the merge: fix it by running `npm install` once and committing the updated lockfile as part of the merge.
 
 4. If verification fails, fix the issues before proceeding to the next branch
 
