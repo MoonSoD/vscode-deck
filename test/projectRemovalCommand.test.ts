@@ -49,8 +49,14 @@ describe('ProjectRemovalCommand', () => {
   it('removes a Project from Deck and clears its per-Project state after confirmation', async () => {
     const activeWorktrees = { clear: vi.fn(async () => undefined) };
     const worktreeRoots = { clear: vi.fn(async () => undefined) };
+    const worktreeOrders = { clear: vi.fn(async () => undefined) };
     const refresh = vi.fn();
-    const command = new ProjectRemovalCommand(activeWorktrees, worktreeRoots, refresh);
+    const command = new ProjectRemovalCommand(
+      activeWorktrees,
+      worktreeRoots,
+      worktreeOrders,
+      refresh,
+    );
 
     await command.run({ projectPath: '/repo/main' });
 
@@ -70,14 +76,21 @@ describe('ProjectRemovalCommand', () => {
     );
     expect(activeWorktrees.clear).toHaveBeenCalledWith('/git/repo');
     expect(worktreeRoots.clear).toHaveBeenCalledWith('/git/repo');
+    expect(worktreeOrders.clear).toHaveBeenCalledWith('/git/repo');
     expect(refresh).toHaveBeenCalledOnce();
   });
 
   it('does nothing when confirmation is cancelled', async () => {
     const activeWorktrees = { clear: vi.fn(async () => undefined) };
     const worktreeRoots = { clear: vi.fn(async () => undefined) };
+    const worktreeOrders = { clear: vi.fn(async () => undefined) };
     const refresh = vi.fn();
-    const command = new ProjectRemovalCommand(activeWorktrees, worktreeRoots, refresh);
+    const command = new ProjectRemovalCommand(
+      activeWorktrees,
+      worktreeRoots,
+      worktreeOrders,
+      refresh,
+    );
 
     vscodeState.showInformationMessage.mockResolvedValue(undefined);
 
@@ -86,6 +99,7 @@ describe('ProjectRemovalCommand', () => {
     expect(vscodeState.update).not.toHaveBeenCalled();
     expect(activeWorktrees.clear).not.toHaveBeenCalled();
     expect(worktreeRoots.clear).not.toHaveBeenCalled();
+    expect(worktreeOrders.clear).not.toHaveBeenCalled();
     expect(refresh).not.toHaveBeenCalled();
   });
 });

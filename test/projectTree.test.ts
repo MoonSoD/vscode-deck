@@ -59,6 +59,13 @@ vi.mock('../src/git/worktrees', () => ({
           detached: false,
           branch: 'main',
         },
+        {
+          path: '/work/alpha-feature',
+          head: 'aa',
+          bare: false,
+          detached: false,
+          branch: 'feature',
+        },
       ];
     }
 
@@ -76,6 +83,7 @@ vi.mock('../src/git/worktrees', () => ({
 
 import { ActiveWorktreeStore } from '../src/switch/activeWorktreeStore';
 import { ProjectTreeProvider } from '../src/tree/projectTree';
+import { WorktreeOrderStore } from '../src/worktree/worktreeOrderStore';
 
 describe('ProjectTreeProvider', () => {
   it('marks only the currently mounted worktree as active', async () => {
@@ -85,7 +93,10 @@ describe('ProjectTreeProvider', () => {
     const activeWorktrees = {
       get,
     } as ActiveWorktreeStore;
-    const provider = new ProjectTreeProvider(activeWorktrees);
+    const worktreeOrders = {
+      get: vi.fn(),
+    } as unknown as WorktreeOrderStore;
+    const provider = new ProjectTreeProvider(activeWorktrees, worktreeOrders);
 
     const projects = provider.getChildren();
     if (!Array.isArray(projects)) throw new Error('expected sync project roots');
@@ -96,12 +107,40 @@ describe('ProjectTreeProvider', () => {
 
     expect(worktreeNodes.map((node) => node.contextValue)).toEqual([
       'deck.worktree.main',
+      'deck.worktree',
       'deck.worktree.active',
     ]);
     expect(worktreeNodes.map((node) => (node.iconPath as { id: string }).id)).toEqual([
       'git-branch',
+      'git-branch',
       'check',
     ]);
     expect(get).not.toHaveBeenCalled();
+  });
+
+  it('renders worktrees in stored order with unknown worktrees appended', async () => {
+    const activeWorktrees = {
+      get: vi.fn(),
+    } as unknown as ActiveWorktreeStore;
+    const worktreeOrders = {
+      get: vi.fn(() => ['/work/alpha-feature']),
+    } as unknown as WorktreeOrderStore;
+    const provider = new ProjectTreeProvider(activeWorktrees, worktreeOrders);
+
+    const projectNode = provider.getChildren();
+    if (!Array.isArray(projectNode)) throw new Error('expected sync project roots');
+
+    const worktreeNodes = await provider.getChildren(projectNode[0]);
+    if (!Array.isArray(worktreeNodes)) throw new Error('expected worktree children');
+
+    expect(worktreeOrders.get).toHaveBeenCalledWith('/git/alpha');
+    expect(worktreeNodes.map((node) => ('worktree' in node ? node.worktree.path : ''))).toEqual([
+      '/work/alpha-feature',
+      '/work/alpha-main',
+    ]);
+    expect(worktreeNodes.map((node) => node.contextValue)).toEqual([
+      'deck.worktree',
+      'deck.worktree.main',
+    ]);
   });
 });

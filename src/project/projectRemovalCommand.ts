@@ -18,6 +18,7 @@ export class ProjectRemovalCommand {
   constructor(
     private readonly activeWorktrees: PerProjectStoreLike,
     private readonly worktreeRoots: PerProjectStoreLike,
+    private readonly worktreeOrders: PerProjectStoreLike,
     private readonly refresh: () => void,
   ) {}
 
@@ -53,6 +54,7 @@ export class ProjectRemovalCommand {
     if (commonDir !== null) {
       await this.activeWorktrees.clear(commonDir);
       await this.worktreeRoots.clear(commonDir);
+      await this.worktreeOrders.clear(commonDir);
     }
     this.refresh();
   }

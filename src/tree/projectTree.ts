@@ -1,6 +1,8 @@
 import * as vscode from 'vscode';
 import { getCommonDir, getCommonDirSafe, listWorktrees, Worktree } from '../git/worktrees';
 import { ActiveWorktreeStore } from '../switch/activeWorktreeStore';
+import { WorktreeOrderStore } from '../worktree/worktreeOrderStore';
+import { reconcileWorktreeOrder } from './reconcileWorktreeOrder';
 import { describeProjectTreeItem, describeWorktreeTreeItem } from './worktreeTreeItem';
 
 type Node = ProjectNode | WorktreeNode;
@@ -44,7 +46,10 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
   private readonly projectCommonDirs = new Map<string, string | null>();
   private readonly resolvingProjectPaths = new Set<string>();
 
-  constructor(private readonly activeWorktrees: ActiveWorktreeStore) {}
+  constructor(
+    private readonly activeWorktrees: ActiveWorktreeStore,
+    private readonly worktreeOrders: WorktreeOrderStore,
+  ) {}
 
   refresh(): void {
     this.resolveActiveProject();
@@ -82,8 +87,13 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
 
   private async getWorktreeChildren(element: ProjectNode): Promise<Node[]> {
     const activeWorktreePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-    const worktrees = await listWorktrees(element.projectPath);
-    const mainWorktreePath = worktrees.find((w) => !w.bare)?.path;
+    const gitWorktrees = await listWorktrees(element.projectPath);
+    const commonDir = await getCommonDirSafe(element.projectPath);
+    const worktrees = reconcileWorktreeOrder(
+      commonDir === null ? undefined : this.worktreeOrders.get(commonDir),
+      gitWorktrees,
+    );
+    const mainWorktreePath = gitWorktrees.find((w) => !w.bare)?.path;
     return worktrees.map((w) => new WorktreeNode(element.projectPath, w, activeWorktreePath, mainWorktreePath));
   }
 

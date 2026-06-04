@@ -1,4 +1,7 @@
 import * as vscode from 'vscode';
+import { getCommonDirSafe, listWorktrees } from '../git/worktrees';
+import { WorktreeOrderStore } from '../worktree/worktreeOrderStore';
+import { reconcileWorktreeOrder } from './reconcileWorktreeOrder';
 import { DropPosition, reorderArray } from './reorderArray';
 
 const DECK_TREE_MIME = 'application/vnd.code.tree.deck.projects';
@@ -35,7 +38,10 @@ export class DeckTreeDragAndDropController
   readonly dragMimeTypes = [DECK_TREE_MIME];
   readonly dropMimeTypes = [DECK_TREE_MIME];
 
-  constructor(private readonly refresh: () => void) {}
+  constructor(
+    private readonly refresh: () => void,
+    private readonly worktreeOrders: WorktreeOrderStore,
+  ) {}
 
   handleDrag(
     source: readonly DeckNodeLike[],
@@ -54,10 +60,17 @@ export class DeckTreeDragAndDropController
     target: DeckNodeLike | undefined,
     dataTransfer: vscode.DataTransfer,
   ): Promise<void> {
-    if (!target || !isProjectNode(target)) return;
+    if (!target) return;
 
     const payload = dataTransfer.get(DECK_TREE_MIME)?.value as DragPayload | undefined;
-    if (!payload || payload.kind !== 'project') return;
+    if (!payload) return;
+
+    if (payload.kind === 'worktree') {
+      await this.dropWorktree(payload, target);
+      return;
+    }
+
+    if (!isProjectNode(target)) return;
 
     const cfg = vscode.workspace.getConfiguration('deck');
     const projects = cfg.get<string[]>('projects', []);
@@ -72,6 +85,30 @@ export class DeckTreeDragAndDropController
     if (sameOrder(projects, reordered)) return;
 
     await cfg.update('projects', reordered, vscode.ConfigurationTarget.Global);
+    this.refresh();
+  }
+
+  private async dropWorktree(
+    payload: Extract<DragPayload, { kind: 'worktree' }>,
+    target: DeckNodeLike,
+  ): Promise<void> {
+    if (!isWorktreeNode(target) || payload.projectPath !== target.projectPath) return;
+
+    const commonDir = await getCommonDirSafe(target.projectPath);
+    if (commonDir === null) return;
+
+    const gitWorktrees = await listWorktrees(target.projectPath);
+    const worktrees = reconcileWorktreeOrder(
+      this.worktreeOrders.get(commonDir),
+      gitWorktrees,
+    );
+    const paths = worktrees.map((worktree) => worktree.path);
+    const position = worktreeDropPosition(paths, payload.sourcePath, target.worktree.path);
+    const reordered = reorderArray(paths, payload.sourcePath, target.worktree.path, position);
+
+    if (sameOrder(paths, reordered)) return;
+
+    await this.worktreeOrders.set(commonDir, reordered);
     this.refresh();
   }
 }
@@ -107,6 +144,16 @@ function projectDropPosition(
   targetPath: string,
 ): DropPosition {
   return projects.indexOf(sourcePath) < projects.indexOf(targetPath) ? 'below' : 'above';
+}
+
+function worktreeDropPosition(
+  worktreePaths: readonly string[],
+  sourcePath: string,
+  targetPath: string,
+): DropPosition {
+  return worktreePaths.indexOf(sourcePath) < worktreePaths.indexOf(targetPath)
+    ? 'below'
+    : 'above';
 }
 
 function sameOrder(left: readonly string[], right: readonly string[]): boolean {

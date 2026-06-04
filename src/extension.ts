@@ -8,15 +8,20 @@ import { BranchDeletionPreferenceStore } from './worktree/branchDeletionPreferen
 import { WorktreeRemovalCommand } from './worktree/worktreeRemovalCommand';
 import { WorktreeRootStore } from './worktree/worktreeRootStore';
 import { DeckTreeDragAndDropController } from './tree/deckTreeDragAndDropController';
+import { WorktreeOrderStore } from './worktree/worktreeOrderStore';
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const activeWorktrees = new ActiveWorktreeStore(context.globalState);
   const worktreeRoots = new WorktreeRootStore(context.globalState);
+  const worktreeOrders = new WorktreeOrderStore(context.globalState);
   const branchDeletionPreferences = new BranchDeletionPreferenceStore(context.globalState);
   const switcher = new WorktreeSwitcher(activeWorktrees);
   const addWorktree = new AddWorktreeCommand(switcher, worktreeRoots);
-  const tree = new ProjectTreeProvider(activeWorktrees);
-  const dragAndDropController = new DeckTreeDragAndDropController(() => tree.refresh());
+  const tree = new ProjectTreeProvider(activeWorktrees, worktreeOrders);
+  const dragAndDropController = new DeckTreeDragAndDropController(
+    () => tree.refresh(),
+    worktreeOrders,
+  );
   const removeWorktree = new WorktreeRemovalCommand(
     activeWorktrees,
     () => tree.refresh(),
@@ -25,6 +30,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const removeProject = new ProjectRemovalCommand(
     activeWorktrees,
     worktreeRoots,
+    worktreeOrders,
     () => tree.refresh(),
   );
 
