@@ -7,6 +7,7 @@ import { AddWorktreeCommand } from './worktree/addWorktreeCommand';
 import { BranchDeletionPreferenceStore } from './worktree/branchDeletionPreferenceStore';
 import { WorktreeRemovalCommand } from './worktree/worktreeRemovalCommand';
 import { WorktreeRootStore } from './worktree/worktreeRootStore';
+import { DeckTreeDragAndDropController } from './tree/deckTreeDragAndDropController';
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const activeWorktrees = new ActiveWorktreeStore(context.globalState);
@@ -15,6 +16,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const switcher = new WorktreeSwitcher(activeWorktrees);
   const addWorktree = new AddWorktreeCommand(switcher, worktreeRoots);
   const tree = new ProjectTreeProvider(activeWorktrees);
+  const dragAndDropController = new DeckTreeDragAndDropController(() => tree.refresh());
   const removeWorktree = new WorktreeRemovalCommand(
     activeWorktrees,
     () => tree.refresh(),
@@ -27,7 +29,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   );
 
   context.subscriptions.push(
-    vscode.window.registerTreeDataProvider('deck.projects', tree),
+    vscode.window.createTreeView('deck.projects', {
+      treeDataProvider: tree,
+      dragAndDropController,
+      canSelectMany: false,
+    }),
     vscode.commands.registerCommand('deck.refresh', () => {
       tree.refresh();
     }),
