@@ -16,6 +16,12 @@ export class WorktreeRootStore {
     });
   }
 
+  async clear(commonDir: string): Promise<void> {
+    const all = { ...this.all() };
+    delete all[commonDir];
+    await this.memento.update(WORKTREE_ROOTS_KEY, all);
+  }
+
   private all(): Record<string, string> {
     return this.memento.get<Record<string, string>>(WORKTREE_ROOTS_KEY, {});
   }

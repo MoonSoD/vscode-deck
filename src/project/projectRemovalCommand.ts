@@ -1,0 +1,60 @@
+import * as vscode from 'vscode';
+import { getCommonDirSafe } from '../git/worktrees';
+
+interface ProjectNodeLike {
+  projectPath: string;
+}
+
+interface PerProjectStoreLike {
+  clear(commonDir: string): Promise<void>;
+}
+
+const CANCEL_LABEL = 'Cancel';
+const REMOVE_LABEL = 'Remove from Deck';
+const BASE_DETAIL = 'This only removes the Project from Deck. Files and git history are untouched.';
+const ACTIVE_PROJECT_DETAIL =
+  "You're currently in this Project's worktree. The folder will stay open, but Deck will no longer show this Project.";
+
+export class ProjectRemovalCommand {
+  constructor(
+    private readonly activeWorktrees: PerProjectStoreLike,
+    private readonly worktreeRoots: PerProjectStoreLike,
+    private readonly refresh: () => void,
+  ) {}
+
+  async run(node: ProjectNodeLike | undefined): Promise<void> {
+    if (!node) return;
+
+    const commonDir = await getCommonDirSafe(node.projectPath);
+    const activeFolderPath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    const activeCommonDir = activeFolderPath
+      ? await getCommonDirSafe(activeFolderPath)
+      : null;
+    const detail =
+      commonDir !== null && commonDir === activeCommonDir
+        ? `${BASE_DETAIL}\n\n${ACTIVE_PROJECT_DETAIL}`
+        : BASE_DETAIL;
+
+    const picked = await vscode.window.showInformationMessage(
+      `Remove \`${node.projectPath}\` from Deck?`,
+      { modal: true, detail },
+      CANCEL_LABEL,
+      REMOVE_LABEL,
+    );
+    if (picked !== REMOVE_LABEL) return;
+
+    const cfg = vscode.workspace.getConfiguration('deck');
+    const projects = cfg.get<string[]>('projects', []);
+    await cfg.update(
+      'projects',
+      projects.filter((projectPath) => projectPath !== node.projectPath),
+      vscode.ConfigurationTarget.Global,
+    );
+
+    if (commonDir !== null) {
+      await this.activeWorktrees.clear(commonDir);
+      await this.worktreeRoots.clear(commonDir);
+    }
+    this.refresh();
+  }
+}

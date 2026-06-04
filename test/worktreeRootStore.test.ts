@@ -20,4 +20,25 @@ describe('WorktreeRootStore', () => {
     });
     expect(store.get('/git/alpha')).toBe('/worktrees/alpha');
   });
+
+  it('clears one remembered root without touching other projects', async () => {
+    const values: Record<string, unknown> = {
+      [WORKTREE_ROOTS_KEY]: {
+        '/git/alpha': '/worktrees/alpha',
+        '/git/beta': '/worktrees/beta',
+      },
+    };
+    const store = new WorktreeRootStore({
+      get: <T>(key: string, defaultValue: T) => (values[key] as T | undefined) ?? defaultValue,
+      update: async (key: string, value: unknown) => {
+        values[key] = value;
+      },
+    });
+
+    await store.clear('/git/alpha');
+
+    expect(values[WORKTREE_ROOTS_KEY]).toEqual({
+      '/git/beta': '/worktrees/beta',
+    });
+  });
 });

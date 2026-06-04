@@ -37,4 +37,17 @@ describe('package contributions', () => {
       group: 'navigation',
     });
   });
+
+  it('contributes remove project only as a Project context action', () => {
+    expect(pkg.contributes.commands).toContainEqual({
+      command: 'deck.removeProject',
+      title: 'Deck: Remove from Deck…',
+    });
+
+    expect(pkg.contributes.menus['view/item/context']).toContainEqual({
+      command: 'deck.removeProject',
+      when: 'view == deck.projects && viewItem == deck.project',
+      group: 'navigation',
+    });
+  });
 });

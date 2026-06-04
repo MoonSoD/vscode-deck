@@ -2,7 +2,7 @@
   "name": "deck",
   "displayName": "Deck",
   "description": "Switch between git worktrees of multiple registered repositories from a single Activity Bar tree.",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "publisher": "a9a4k",
   "repository": {
     "type": "git",
@@ -73,6 +73,10 @@
         "icon": "$(trash)"
       },
       {
+        "command": "deck.removeProject",
+        "title": "Deck: Remove from Deck…"
+      },
+      {
         "command": "deck.switchWorktree",
         "title": "Deck: Switch to Worktree"
       },
@@ -115,6 +119,11 @@
         {
           "command": "deck.removeWorktree",
           "when": "view == deck.projects && viewItem == deck.worktree",
+          "group": "navigation"
+        },
+        {
+          "command": "deck.removeProject",
+          "when": "view == deck.projects && viewItem == deck.project",
           "group": "navigation"
         }
       ]

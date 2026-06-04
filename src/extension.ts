@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { ProjectTreeProvider } from './tree/projectTree';
 import { ActiveWorktreeStore } from './switch/activeWorktreeStore';
 import { WorktreeSwitcher } from './switch/worktreeSwitcher';
+import { ProjectRemovalCommand } from './project/projectRemovalCommand';
 import { AddWorktreeCommand } from './worktree/addWorktreeCommand';
 import { BranchDeletionPreferenceStore } from './worktree/branchDeletionPreferenceStore';
 import { WorktreeRemovalCommand } from './worktree/worktreeRemovalCommand';
@@ -19,6 +20,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     () => tree.refresh(),
     branchDeletionPreferences,
   );
+  const removeProject = new ProjectRemovalCommand(
+    activeWorktrees,
+    worktreeRoots,
+    () => tree.refresh(),
+  );
 
   context.subscriptions.push(
     vscode.window.registerTreeDataProvider('deck.projects', tree),
@@ -27,6 +33,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }),
     vscode.commands.registerCommand('deck.addProject', () => tree.addProject()),
     vscode.commands.registerCommand('deck.addWorktree', (node) => addWorktree.run(node)),
+    vscode.commands.registerCommand('deck.removeProject', (node) => removeProject.run(node)),
     vscode.commands.registerCommand('deck.removeWorktree', (node) => removeWorktree.run(node)),
     vscode.commands.registerCommand('deck.switchWorktree', async (worktreePath: string) => {
       await switcher.switchTo(worktreePath);
