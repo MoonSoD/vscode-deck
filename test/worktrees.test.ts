@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parsePorcelain } from '../src/git/worktrees';
+import { parseBranchRefs, parsePorcelain } from '../src/git/worktrees';
 
 describe('parsePorcelain', () => {
   it('parses normal, detached, and bare worktree entries', () => {
@@ -40,5 +40,19 @@ bare
         detached: false,
       },
     ]);
+  });
+});
+
+describe('parseBranchRefs', () => {
+  it('dedupes branch refs and omits remote HEAD aliases', () => {
+    expect(
+      parseBranchRefs(`main
+feature/foo
+origin/HEAD
+origin/main
+origin/feature/foo
+feature/foo
+`),
+    ).toEqual(['main', 'feature/foo', 'origin/main', 'origin/feature/foo']);
   });
 });

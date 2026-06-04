@@ -12,11 +12,42 @@ export interface Worktree {
   detached: boolean;
 }
 
+export type AddWorktreeOptions =
+  | {
+      path: string;
+      branch: string;
+    }
+  | {
+      path: string;
+      newBranch: string;
+      baseRef: string;
+    };
+
 export async function listWorktrees(projectPath: string): Promise<Worktree[]> {
   const { stdout } = await exec('git', ['worktree', 'list', '--porcelain'], {
     cwd: projectPath,
   });
   return parsePorcelain(stdout);
+}
+
+export async function listBranches(projectPath: string): Promise<string[]> {
+  const { stdout } = await exec(
+    'git',
+    ['for-each-ref', '--format=%(refname:short)', 'refs/heads', 'refs/remotes'],
+    { cwd: projectPath },
+  );
+  return parseBranchRefs(stdout);
+}
+
+export async function addWorktree(
+  projectPath: string,
+  options: AddWorktreeOptions,
+): Promise<void> {
+  const args =
+    'newBranch' in options
+      ? ['worktree', 'add', '-b', options.newBranch, options.path, options.baseRef]
+      : ['worktree', 'add', options.path, options.branch];
+  await exec('git', args, { cwd: projectPath });
 }
 
 export async function getCommonDir(worktreePath: string): Promise<string> {
@@ -73,4 +104,18 @@ export function parsePorcelain(input: string): Worktree[] {
   }
   pushCurrent();
   return out;
+}
+
+export function parseBranchRefs(input: string): string[] {
+  const seen = new Set<string>();
+  const branches: string[] = [];
+
+  for (const raw of input.split('\n')) {
+    const branch = raw.trim();
+    if (branch === '' || branch.endsWith('/HEAD') || seen.has(branch)) continue;
+    seen.add(branch);
+    branches.push(branch);
+  }
+
+  return branches;
 }

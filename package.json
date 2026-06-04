@@ -63,6 +63,11 @@
         "icon": "$(add)"
       },
       {
+        "command": "deck.addWorktree",
+        "title": "Deck: Add Worktree",
+        "icon": "$(add)"
+      },
+      {
         "command": "deck.switchWorktree",
         "title": "Deck: Switch to Worktree"
       },
@@ -83,6 +88,13 @@
           "command": "deck.refresh",
           "when": "view == deck.projects",
           "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "deck.addWorktree",
+          "when": "view == deck.projects && viewItem == project",
+          "group": "inline"
         }
       ]
     },

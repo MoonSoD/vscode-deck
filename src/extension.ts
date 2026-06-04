@@ -2,10 +2,12 @@ import * as vscode from 'vscode';
 import { ProjectTreeProvider } from './tree/projectTree';
 import { ActiveWorktreeStore } from './switch/activeWorktreeStore';
 import { WorktreeSwitcher } from './switch/worktreeSwitcher';
+import { AddWorktreeCommand } from './worktree/addWorktreeCommand';
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const activeWorktrees = new ActiveWorktreeStore(context.globalState);
   const switcher = new WorktreeSwitcher(activeWorktrees);
+  const addWorktree = new AddWorktreeCommand(switcher);
   const tree = new ProjectTreeProvider(activeWorktrees);
 
   context.subscriptions.push(
@@ -14,6 +16,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       tree.refresh();
     }),
     vscode.commands.registerCommand('deck.addProject', () => tree.addProject()),
+    vscode.commands.registerCommand('deck.addWorktree', (node) => addWorktree.run(node)),
     vscode.commands.registerCommand('deck.switchWorktree', async (worktreePath: string) => {
       await switcher.switchTo(worktreePath);
       tree.refresh();
