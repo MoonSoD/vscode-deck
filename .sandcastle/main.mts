@@ -15,7 +15,7 @@
 //   npx tsx .sandcastle/main.mts
 
 import { execFile as execFileCb } from "node:child_process";
-import { access, mkdir } from "node:fs/promises";
+import { access, copyFile, mkdir, rm } from "node:fs/promises";
 import { promisify } from "node:util";
 
 import * as sandcastle from "@ai-hero/sandcastle";
@@ -30,8 +30,12 @@ const IDLE_TIMEOUT_SECONDS = 1800;
 const NPM_CACHE_DIR = "~/.npm";
 const CARGO_REGISTRY_DIR = "~/.cargo/registry";
 const CARGO_GIT_DIR = "~/.cargo/git";
-const CODEX_AUTH_DIR = "~/.codex";
-const CODEX_AUTH_FILE = `${CODEX_AUTH_DIR}/auth.json`;
+const HOST_CODEX_AUTH_FILE = "~/.codex/auth.json";
+// Sandcastle-owned codex home — pre-populated with just auth + minimal config
+// before each run, so the container codex inherits NONE of the host's MCP
+// servers, hooks, shell snapshots, sqlite state, etc.
+const SANDBOX_CODEX_DIR = ".sandcastle/.codex";
+const SANDBOX_CODEX_CONFIG_SRC = ".sandcastle/codex-container.toml";
 const expandHome = (path: string) =>
   path.replace(/^~/, process.env.HOME ?? "");
 
@@ -39,29 +43,27 @@ await mkdir(expandHome(NPM_CACHE_DIR), { recursive: true });
 await mkdir(expandHome(CARGO_REGISTRY_DIR), { recursive: true });
 await mkdir(expandHome(CARGO_GIT_DIR), { recursive: true });
 try {
-  await access(expandHome(CODEX_AUTH_FILE));
+  await access(expandHome(HOST_CODEX_AUTH_FILE));
 } catch {
   throw new Error(
-    `Codex auth not found at ${CODEX_AUTH_FILE}. Run "codex login" on the host before starting Sandcastle.`,
+    `Codex auth not found at ${HOST_CODEX_AUTH_FILE}. Run "codex login" on the host before starting Sandcastle.`,
   );
 }
+// Reset sandbox codex dir each run so stale state can't leak.
+await rm(SANDBOX_CODEX_DIR, { recursive: true, force: true });
+await mkdir(SANDBOX_CODEX_DIR, { recursive: true });
+await copyFile(
+  expandHome(HOST_CODEX_AUTH_FILE),
+  `${SANDBOX_CODEX_DIR}/auth.json`,
+);
+await copyFile(SANDBOX_CODEX_CONFIG_SRC, `${SANDBOX_CODEX_DIR}/config.toml`);
 
 const dockerSandbox = docker({
   mounts: [
     { hostPath: NPM_CACHE_DIR, sandboxPath: NPM_CACHE_DIR },
     { hostPath: CARGO_REGISTRY_DIR, sandboxPath: CARGO_REGISTRY_DIR },
     { hostPath: CARGO_GIT_DIR, sandboxPath: CARGO_GIT_DIR },
-    {
-      hostPath: CODEX_AUTH_DIR,
-      sandboxPath: "/home/agent/.codex",
-    },
-    // Override the host config.toml so the container codex doesn't inherit
-    // host MCP servers (context7 / datadog), which crash codex on startup
-    // when their stdio JSON-RPC channels misbehave.
-    {
-      hostPath: ".sandcastle/codex-container.toml",
-      sandboxPath: "/home/agent/.codex/config.toml",
-    },
+    { hostPath: SANDBOX_CODEX_DIR, sandboxPath: "/home/agent/.codex" },
   ],
 });
 
