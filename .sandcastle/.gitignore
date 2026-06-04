@@ -2,3 +2,4 @@
 logs/
 worktrees/
 .codex/
+.gitconfig

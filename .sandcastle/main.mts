@@ -15,7 +15,8 @@
 //   npx tsx .sandcastle/main.mts
 
 import { execFile as execFileCb } from "node:child_process";
-import { access, copyFile, mkdir, rm } from "node:fs/promises";
+import { access, copyFile, mkdir, rm, writeFile } from "node:fs/promises";
+import { resolve } from "node:path";
 import { promisify } from "node:util";
 
 import * as sandcastle from "@ai-hero/sandcastle";
@@ -36,6 +37,12 @@ const HOST_CODEX_AUTH_FILE = "~/.codex/auth.json";
 // servers, hooks, shell snapshots, sqlite state, etc.
 const SANDBOX_CODEX_DIR = ".sandcastle/.codex";
 const SANDBOX_CODEX_CONFIG_SRC = ".sandcastle/codex-container.toml";
+// Sandcastle calls `git config --global --add safe.directory <path>` for
+// every host-side worktree. Without redirection that pollutes ~/.gitconfig
+// with one stale entry per run. We point GIT_CONFIG_GLOBAL at a throwaway
+// file that just `[include]`s the real ~/.gitconfig — reads still resolve
+// host identity, but the `--global --add` writes land in the throwaway.
+const SANDBOX_GITCONFIG = ".sandcastle/.gitconfig";
 const expandHome = (path: string) =>
   path.replace(/^~/, process.env.HOME ?? "");
 
@@ -57,6 +64,9 @@ await copyFile(
   `${SANDBOX_CODEX_DIR}/auth.json`,
 );
 await copyFile(SANDBOX_CODEX_CONFIG_SRC, `${SANDBOX_CODEX_DIR}/config.toml`);
+
+await writeFile(SANDBOX_GITCONFIG, "[include]\n\tpath = ~/.gitconfig\n");
+process.env.GIT_CONFIG_GLOBAL = resolve(SANDBOX_GITCONFIG);
 
 const dockerSandbox = docker({
   mounts: [
