@@ -43,10 +43,13 @@ export async function addWorktree(
   projectPath: string,
   options: AddWorktreeOptions,
 ): Promise<void> {
-  const args =
-    'newBranch' in options
-      ? ['worktree', 'add', '-b', options.newBranch, options.path, options.baseRef]
-      : ['worktree', 'add', options.path, options.branch];
+  let args: string[];
+  if ('newBranch' in options) {
+    args = ['worktree', 'add', '-b', options.newBranch, options.path, options.baseRef];
+  } else {
+    args = ['worktree', 'add', options.path, options.branch];
+  }
+
   await exec('git', args, { cwd: projectPath });
 }
 

@@ -1,6 +1,5 @@
 import * as vscode from 'vscode';
-import { addWorktree, listBranches } from '../git/worktrees';
-import { WorktreeSwitcher } from '../switch/worktreeSwitcher';
+import { addWorktree, listBranches, type AddWorktreeOptions } from '../git/worktrees';
 import { defaultWorktreePath } from './defaultWorktreePath';
 
 const CREATE_BRANCH_LABEL = 'Create new branch...';
@@ -11,6 +10,11 @@ interface ProjectNodeLike {
 
 interface SwitcherLike {
   switchTo(targetPath: string): Promise<void>;
+}
+
+interface WorktreeRequest {
+  path: string;
+  add: AddWorktreeOptions;
 }
 
 type BranchPick = vscode.QuickPickItem &
@@ -25,7 +29,7 @@ type BranchPick = vscode.QuickPickItem &
   );
 
 export class AddWorktreeCommand {
-  constructor(private readonly switcher: WorktreeSwitcher | SwitcherLike) {}
+  constructor(private readonly switcher: SwitcherLike) {}
 
   async run(node: ProjectNodeLike | undefined): Promise<void> {
     if (!node) return;
@@ -36,10 +40,12 @@ export class AddWorktreeCommand {
     });
     if (!picked) return;
 
-    const request =
-      picked.action === 'create'
-        ? await this.newBranchRequest(node.projectPath, branches)
-        : await this.existingBranchRequest(node.projectPath, picked.branch);
+    let request: WorktreeRequest | undefined;
+    if (picked.action === 'create') {
+      request = await this.newBranchRequest(node.projectPath, branches);
+    } else {
+      request = await this.existingBranchRequest(node.projectPath, picked.branch);
+    }
     if (!request) return;
 
     try {
@@ -68,7 +74,10 @@ export class AddWorktreeCommand {
     ];
   }
 
-  private async existingBranchRequest(projectPath: string, branch: string) {
+  private async existingBranchRequest(
+    projectPath: string,
+    branch: string,
+  ): Promise<WorktreeRequest | undefined> {
     const path = await this.promptForPath(projectPath, branch);
     if (!path) return undefined;
     return {
@@ -80,7 +89,10 @@ export class AddWorktreeCommand {
     };
   }
 
-  private async newBranchRequest(projectPath: string, branches: string[]) {
+  private async newBranchRequest(
+    projectPath: string,
+    branches: string[],
+  ): Promise<WorktreeRequest | undefined> {
     const newBranch = (await vscode.window.showInputBox({ prompt: 'New branch name' }))?.trim();
     if (!newBranch) return undefined;
 
@@ -117,14 +129,15 @@ export class AddWorktreeCommand {
 }
 
 function defaultBaseRef(branches: string[]): string {
-  return (
-    branches.find((branch) => branch === 'main') ??
-    branches.find((branch) => branch.endsWith('/main')) ??
-    branches.find((branch) => branch === 'master') ??
-    branches.find((branch) => branch.endsWith('/master')) ??
-    branches[0] ??
-    'HEAD'
-  );
+  for (const name of ['main', 'master']) {
+    const local = branches.find((branch) => branch === name);
+    if (local) return local;
+
+    const remote = branches.find((branch) => branch.endsWith(`/${name}`));
+    if (remote) return remote;
+  }
+
+  return branches[0] ?? 'HEAD';
 }
 
 function errorMessage(error: unknown): string {
