@@ -8,6 +8,7 @@
   "bugs": { "url": "https://github.com/a9a4k/vscode-deck/issues" },
   "homepage": "https://github.com/a9a4k/vscode-deck#readme",
   "license": "MIT",
+  "icon": "icon.png",
   "keywords": ["git", "worktree", "worktrees", "projects", "monorepo"],
   "engines": {
     "vscode": "^1.95.0"
