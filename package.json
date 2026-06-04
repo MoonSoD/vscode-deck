@@ -2,14 +2,25 @@
   "name": "deck",
   "displayName": "Deck",
   "description": "Switch between git worktrees of multiple registered repositories from a single Activity Bar tree.",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "publisher": "a9a4k",
-  "repository": { "type": "git", "url": "https://github.com/a9a4k/vscode-deck.git" },
-  "bugs": { "url": "https://github.com/a9a4k/vscode-deck/issues" },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/a9a4k/vscode-deck.git"
+  },
+  "bugs": {
+    "url": "https://github.com/a9a4k/vscode-deck/issues"
+  },
   "homepage": "https://github.com/a9a4k/vscode-deck#readme",
   "license": "MIT",
   "icon": "icon.png",
-  "keywords": ["git", "worktree", "worktrees", "projects", "monorepo"],
+  "keywords": [
+    "git",
+    "worktree",
+    "worktrees",
+    "projects",
+    "monorepo"
+  ],
   "engines": {
     "vscode": "^1.95.0"
   },
@@ -17,7 +28,9 @@
     "SCM Providers",
     "Other"
   ],
-  "activationEvents": ["onStartupFinished"],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
   "main": "./dist/extension.js",
   "contributes": {
     "viewsContainers": {
@@ -80,7 +93,9 @@
           "type": "array",
           "default": [],
           "description": "Absolute paths to project root directories. Each is scanned for git worktrees.",
-          "items": { "type": "string" }
+          "items": {
+            "type": "string"
+          }
         }
       }
     }
