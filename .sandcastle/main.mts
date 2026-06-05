@@ -167,7 +167,11 @@ for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
           copyToWorktree: ["node_modules"],
           hooks: {
             sandbox: {
-              onSandboxReady: [{ command: "npm install" }],
+              // Use `npm ci` (not `npm install`) so the boot hook can't
+              // silently rewrite package-lock.json based on the container's
+              // platform (linux) vs the host's (macOS). Mutation here forces
+              // the merger to repair the lockfile every iteration.
+              onSandboxReady: [{ command: "npm ci" }],
             },
           },
         });
