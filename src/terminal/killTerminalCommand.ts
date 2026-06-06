@@ -1,6 +1,7 @@
 import type { TerminalSessionListCacheStore } from './terminalSessionListCacheStore';
+import type { TerminalSessionRegistry } from './terminalSessionRegistry';
 
-export interface KillTerminalTmuxCli {
+export interface CloseTerminalTmuxCli {
   killSession(session: string): Promise<void>;
 }
 
@@ -10,9 +11,10 @@ interface TerminalNodeLike {
   };
 }
 
-export class KillTerminalCommand {
+export class CloseTerminalCommand {
   constructor(
-    private readonly tmux: KillTerminalTmuxCli,
+    private readonly tmux: CloseTerminalTmuxCli,
+    private readonly registry: Pick<TerminalSessionRegistry, 'getTerminal' | 'deleteSession'>,
     private readonly refresh: () => void = () => undefined,
     private readonly terminalSessionListCache: Pick<TerminalSessionListCacheStore, 'removeSession'> = {
       removeSession: async () => undefined,
@@ -22,8 +24,15 @@ export class KillTerminalCommand {
   async run(node: TerminalNodeLike | undefined): Promise<void> {
     if (!node) return;
 
-    await this.tmux.killSession(node.terminal.sessionName);
-    await this.terminalSessionListCache.removeSession(node.terminal.sessionName);
+    const session = node.terminal.sessionName;
+    await this.tmux.killSession(session);
+    await this.terminalSessionListCache.removeSession(session);
+    const terminal = this.registry.getTerminal(session);
+    this.registry.deleteSession(session);
+    terminal?.dispose?.();
     this.refresh();
   }
 }
+
+export type KillTerminalTmuxCli = CloseTerminalTmuxCli;
+export { CloseTerminalCommand as KillTerminalCommand };

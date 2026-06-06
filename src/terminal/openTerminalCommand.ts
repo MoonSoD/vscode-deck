@@ -38,7 +38,7 @@ export class OpenTerminalCommand {
     if (!node) return;
     if (await this.switchForForeignWorktree(node)) return;
 
-    const existing = this.registry.get(node.terminal.sessionName);
+    const existing = this.registry.getTerminal(node.terminal.sessionName);
     if (existing) {
       // VS Code: Terminal.show(preserveFocus). false → focus moves to the terminal.
       existing.show(false);

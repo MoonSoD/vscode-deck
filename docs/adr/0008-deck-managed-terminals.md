@@ -108,15 +108,14 @@ state, not the user's whole tmux. Sanctel solved this with `-L sanctel -f
    A — the same property ADR-0003 leverages for tabs/buffers/layout.
 
 10. **Lifecycle.**
-    - Close editor tab → tmux client detaches; session persists. Re-click
-      reattaches.
+    - Close editor tab → tmux session killed; row removed on next refresh.
     - User runs `exit` in the shell → window dies, session has 0 windows,
       session dies. VS Code's terminal-in-editor tab stays open showing
       exit status (default behavior); user dismisses. Row disappears on
       next Deck refresh.
-    - Explicit "Kill Terminal" (right-click) → `tmux -L deck kill-session
-      -t =<session>`. No confirmation; tmux can't know about unsaved
-      buffer state inside the pane.
+    - Inline X "Close Terminal" → `tmux -L deck kill-session -t =<session>`;
+      Deck then disposes the registered editor terminal. No Deck-side
+      confirmation; the inline X is a deliberate close.
     - WorktreeRemoval → before `git worktree remove`, enumerate sessions
       matching the Worktree's prefix and kill each. Idempotent —
       "session not found" is swallowed.

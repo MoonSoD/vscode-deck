@@ -139,11 +139,11 @@ describe('package contributions', () => {
     ).toBe(false);
   });
 
-  it('contributes kill Terminal only as a tmux-available Terminal context action', () => {
+  it('contributes close Terminal as the inline X action on Terminal rows', () => {
     expect(pkg.contributes.commands).toContainEqual({
       command: 'deck.killTerminal',
-      title: 'Kill Terminal',
-      icon: '$(trash)',
+      title: 'Deck: Close Terminal',
+      icon: '$(close)',
     });
 
     expect(
@@ -153,7 +153,7 @@ describe('package contributions', () => {
     ).toEqual([{
       command: 'deck.killTerminal',
       when: 'view == deck.projects && viewItem == deck.terminal && deck.tmuxAvailable',
-      group: 'navigation',
+      group: 'inline',
     }]);
     expect(pkg.contributes.menus.commandPalette).toContainEqual({
       command: 'deck.killTerminal',
