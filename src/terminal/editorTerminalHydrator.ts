@@ -18,6 +18,12 @@ interface TerminalPidStoreLike {
 
 type HydratableTerminal = vscode.Terminal & TerminalLike;
 
+export interface TabPosition {
+  viewColumn: vscode.ViewColumn;
+  tabIndex: number;
+  groupSize: number;
+}
+
 export class EditorTerminalHydrator {
   constructor(
     private readonly tmux: HydratorTmuxCli,
@@ -96,15 +102,24 @@ export class EditorTerminalHydrator {
     terminal: HydratableTerminal,
     sessionName: string,
   ): Promise<void> {
-    const viewColumn = terminalViewColumn(terminal);
+    const originalPos = findTabPosition(terminal);
+    if (originalPos === undefined) {
+      terminal.dispose?.();
+    }
     const options: vscode.TerminalOptions = {
       name: terminal.name,
       shellPath: 'tmux',
       shellArgs: this.tmux.attachShellArgs(sessionName),
-      ...(viewColumn === undefined ? {} : { location: { viewColumn } }),
+      ...(originalPos === undefined ? {} : { location: { viewColumn: originalPos.viewColumn } }),
     };
     const recreated = vscode.window.createTerminal(options) as HydratableTerminal;
-    terminal.dispose?.();
+    if (originalPos !== undefined) {
+      recreated.show(false);
+      await moveActiveEditorLeft(originalPos.groupSize - originalPos.tabIndex - 1);
+    }
+    if (originalPos !== undefined) {
+      terminal.dispose?.();
+    }
     this.registry.set(sessionName, recreated);
     const pid = await recreated.processId;
     if (pid !== undefined) {
@@ -128,16 +143,25 @@ function terminalCwd(terminal: vscode.Terminal): string | undefined {
   return cwd.fsPath;
 }
 
-function terminalViewColumn(terminal: vscode.Terminal): vscode.ViewColumn | undefined {
+export function findTabPosition(terminal: vscode.Terminal): TabPosition | undefined {
   for (const group of vscode.window.tabGroups?.all ?? []) {
-    if (
-      group.tabs.some((tab) => {
-        if (!(tab.input instanceof vscode.TabInputTerminal)) return false;
-        return (tab.input as { terminal?: vscode.Terminal }).terminal === terminal;
-      })
-    ) {
-      return group.viewColumn;
+    const tabIndex = group.tabs.findIndex((tab) => {
+      if (!(tab.input instanceof vscode.TabInputTerminal)) return false;
+      return (tab.input as { terminal?: vscode.Terminal }).terminal === terminal;
+    });
+    if (tabIndex !== -1) {
+      return { viewColumn: group.viewColumn, tabIndex, groupSize: group.tabs.length };
     }
   }
   return undefined;
+}
+
+export async function moveActiveEditorLeft(times: number): Promise<void> {
+  for (let i = 0; i < times; i += 1) {
+    try {
+      await vscode.commands.executeCommand('workbench.action.moveEditorLeftInGroup');
+    } catch {
+      // Best-effort tab strip repair; attachment correctness does not depend on it.
+    }
+  }
 }
