@@ -36,8 +36,11 @@ describe('AddTerminalCommand', () => {
     vscodeState.createTerminal.mockReturnValue(terminal);
     const registry = new TerminalSessionRegistry();
     const refresh = vi.fn();
+    const terminalSessionListCache = {
+      set: vi.fn(async () => undefined),
+    };
 
-    await new AddTerminalCommand(tmux, registry, refresh).run({
+    await new AddTerminalCommand(tmux, registry, refresh, terminalSessionListCache).run({
       worktree: { path: '/work/repo' },
     });
 
@@ -62,6 +65,11 @@ describe('AddTerminalCommand', () => {
     });
     expect(terminal.show).toHaveBeenCalledWith(true);
     expect(registry.get('wt-_work_repo__term-4')).toBe(terminal);
+    expect(terminalSessionListCache.set).toHaveBeenCalledWith('wt-_work_repo__', [
+      { sessionName: 'wt-_work_repo__term-1', n: 1, windowName: 'zsh' },
+      { sessionName: 'wt-_work_repo__term-3', n: 3, windowName: 'claude' },
+      { sessionName: 'wt-_work_repo__term-4', n: 4, windowName: 'term-4' },
+    ]);
     expect(refresh).toHaveBeenCalledOnce();
   });
 });

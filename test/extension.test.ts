@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const vscodeState = vi.hoisted(() => ({
   addProjectArgs: undefined as unknown[] | undefined,
+  addTerminalArgs: undefined as unknown[] | undefined,
   addProjectRun: vi.fn(),
   addTerminalRun: vi.fn(),
   configUpdate: vi.fn(),
@@ -12,6 +13,7 @@ const vscodeState = vi.hoisted(() => ({
   })),
   executeCommand: vi.fn(),
   killTerminalRun: vi.fn(),
+  killTerminalArgs: undefined as unknown[] | undefined,
   onDidChangeWorkspaceFolders: vi.fn(() => ({ dispose: vi.fn() })),
   openTerminalRun: vi.fn(),
   projectTreeArgs: undefined as unknown[] | undefined,
@@ -56,6 +58,10 @@ vi.mock('../src/worktree/branchDeletionPreferenceStore', () => ({
 
 vi.mock('../src/worktree/worktreeListCacheStore', () => ({
   WorktreeListCacheStore: class {},
+}));
+
+vi.mock('../src/terminal/terminalSessionListCacheStore', () => ({
+  TerminalSessionListCacheStore: class {},
 }));
 
 vi.mock('../src/project/projectCommonDirCache', () => ({
@@ -114,6 +120,10 @@ vi.mock('../src/terminal/tmuxCli', () => ({
 
 vi.mock('../src/terminal/addTerminalCommand', () => ({
   AddTerminalCommand: class {
+    constructor(...args: unknown[]) {
+      vscodeState.addTerminalArgs = args;
+    }
+
     run = vscodeState.addTerminalRun;
   },
 }));
@@ -126,6 +136,10 @@ vi.mock('../src/terminal/openTerminalCommand', () => ({
 
 vi.mock('../src/terminal/killTerminalCommand', () => ({
   KillTerminalCommand: class {
+    constructor(...args: unknown[]) {
+      vscodeState.killTerminalArgs = args;
+    }
+
     run = vscodeState.killTerminalRun;
   },
 }));
@@ -141,6 +155,8 @@ describe('activate', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vscodeState.addProjectArgs = undefined;
+    vscodeState.addTerminalArgs = undefined;
+    vscodeState.killTerminalArgs = undefined;
     vscodeState.projectTreeArgs = undefined;
     vscodeState.settingsProjects = ['/settings/repo'];
     vscodeState.configUpdate.mockResolvedValue(undefined);
@@ -215,7 +231,18 @@ describe('activate', () => {
       'deck.tmuxAvailable',
       false,
     );
-    expect(vscodeState.projectTreeArgs?.at(-1)).toBe(false);
+    expect(vscodeState.projectTreeArgs?.at(-2)).toBe(false);
+  });
+
+  it('hydrates terminal session list cache into the tree and terminal commands', async () => {
+    const context = createContext();
+
+    await activate(context as never);
+
+    const terminalSessionListCache = vscodeState.projectTreeArgs?.at(-1);
+    expect(terminalSessionListCache).toBeDefined();
+    expect(vscodeState.addTerminalArgs?.at(-1)).toBe(terminalSessionListCache);
+    expect(vscodeState.killTerminalArgs?.at(-1)).toBe(terminalSessionListCache);
   });
 
   it('registers deck.addTerminal through AddTerminalCommand', async () => {

@@ -21,6 +21,7 @@ import { KillTerminalCommand } from './terminal/killTerminalCommand';
 import { OpenTerminalCommand } from './terminal/openTerminalCommand';
 import { TerminalCascade } from './terminal/terminalCascade';
 import { TerminalSessionRegistry } from './terminal/terminalSessionRegistry';
+import { TerminalSessionListCacheStore } from './terminal/terminalSessionListCacheStore';
 import { TmuxCli } from './terminal/tmuxCli';
 import { tmuxPreflight } from './terminal/tmuxPreflight';
 
@@ -36,6 +37,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const worktreeRoots = new WorktreeRootStore(context.globalState);
   const worktreeOrders = new WorktreeOrderStore(context.globalState);
   const worktreeListCache = new WorktreeListCacheStore(context.globalState);
+  const terminalSessionListCache = new TerminalSessionListCacheStore(context.globalState);
   const projectCommonDirCache = new ProjectCommonDirCache(context.globalState);
   const branchDeletionPreferences = new BranchDeletionPreferenceStore(context.globalState);
   const switcher = new WorktreeSwitcher(activeWorktrees);
@@ -48,11 +50,21 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     projectCommonDirCache,
     tmux,
     tmuxAvailability.available,
+    terminalSessionListCache,
   );
   const terminalRegistry = new TerminalSessionRegistry(vscode.window.onDidCloseTerminal);
-  const addTerminal = new AddTerminalCommand(tmux, terminalRegistry, () => tree.refresh());
+  const addTerminal = new AddTerminalCommand(
+    tmux,
+    terminalRegistry,
+    () => tree.refresh(),
+    terminalSessionListCache,
+  );
   const openTerminal = new OpenTerminalCommand(tmux, terminalRegistry);
-  const killTerminal = new KillTerminalCommand(tmux, () => tree.refresh());
+  const killTerminal = new KillTerminalCommand(
+    tmux,
+    () => tree.refresh(),
+    terminalSessionListCache,
+  );
   const terminalCascade = new TerminalCascade(tmux);
   const addWorktree = new AddWorktreeCommand(
     switcher,

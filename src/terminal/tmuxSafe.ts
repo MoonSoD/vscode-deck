@@ -7,7 +7,11 @@ export function terminalSessionName(worktreePath: string, n: number): string {
 }
 
 export function terminalSessionPrefix(worktreePath: string): string {
-  return `wt-${tmuxSafe(worktreePath)}__term-`;
+  return `${terminalWorktreePrefix(worktreePath)}term-`;
+}
+
+export function terminalWorktreePrefix(worktreePath: string): string {
+  return `wt-${tmuxSafe(worktreePath)}__`;
 }
 
 export function allocateTermN(worktreePath: string, existingSessions: readonly string[]): number {

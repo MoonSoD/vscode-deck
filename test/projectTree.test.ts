@@ -90,6 +90,7 @@ import { WorktreeListCacheStore } from '../src/worktree/worktreeListCacheStore';
 import { WorktreeOrderStore } from '../src/worktree/worktreeOrderStore';
 import { ProjectCommonDirCache } from '../src/project/projectCommonDirCache';
 import { ProjectRegistryStore } from '../src/project/projectRegistryStore';
+import { TerminalSessionListCacheStore } from '../src/terminal/terminalSessionListCacheStore';
 
 function registry(projects = ['/work/alpha-main', '/work/beta-main']) {
   return {
@@ -323,6 +324,91 @@ describe('ProjectTreeProvider', () => {
       }),
     ]);
     expect(tmux.listSessions).toHaveBeenCalledWith('wt-_work_alpha-main__term-');
+  });
+
+  it('renders warm cached terminals synchronously and refreshes in the background only on diff', async () => {
+    const tmux = {
+      listSessions: vi.fn(async () => [
+        { sessionName: 'wt-_work_alpha-main__term-1', windowName: 'zsh' },
+        { sessionName: 'wt-_work_alpha-main__term-2', windowName: 'claude' },
+      ]),
+    };
+    const terminalSessionListCache = {
+      get: vi.fn(() => [
+        { sessionName: 'wt-_work_alpha-main__term-1', n: 1, windowName: 'zsh' },
+      ]),
+      set: vi.fn(async () => undefined),
+    } as unknown as TerminalSessionListCacheStore;
+    const provider = new ProjectTreeProvider(
+      registry(['/work/alpha-main']),
+      { get: vi.fn() } as unknown as ActiveWorktreeStore,
+      { get: vi.fn() } as unknown as WorktreeOrderStore,
+      { get: vi.fn(), set: vi.fn(async () => undefined) } as unknown as WorktreeListCacheStore,
+      { get: vi.fn(() => '/git/alpha'), set: vi.fn(async () => undefined) } as unknown as ProjectCommonDirCache,
+      tmux,
+      true,
+      terminalSessionListCache,
+    );
+    const projects = provider.getChildren();
+    if (!Array.isArray(projects)) throw new Error('expected sync project roots');
+    const worktrees = await provider.getChildren(projects[0]);
+    if (!Array.isArray(worktrees)) throw new Error('expected worktree children');
+    const fire = (provider as unknown as { _onDidChangeTreeData: { fire: { mockClear(): void } } })._onDidChangeTreeData.fire;
+    fire.mockClear();
+
+    const terminalRows = provider.getChildren(worktrees[0]);
+
+    expect(Array.isArray(terminalRows)).toBe(true);
+    expect((terminalRows as Array<{ label: string }>).map((row) => row.label)).toEqual([
+      '1 zsh',
+      '+ Add Terminal',
+    ]);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(tmux.listSessions).toHaveBeenCalledWith('wt-_work_alpha-main__term-');
+    expect(terminalSessionListCache.set).toHaveBeenCalledWith('wt-_work_alpha-main__', [
+      { sessionName: 'wt-_work_alpha-main__term-1', n: 1, windowName: 'zsh' },
+      { sessionName: 'wt-_work_alpha-main__term-2', n: 2, windowName: 'claude' },
+    ]);
+    expect(fire).toHaveBeenCalledWith(undefined);
+  });
+
+  it('keeps warm cached terminals when the background refresh has no logical diff', async () => {
+    const terminals = [
+      { sessionName: 'wt-_work_alpha-main__term-1', n: 1, windowName: 'zsh' },
+      { sessionName: 'wt-_work_alpha-main__term-2', n: 2, windowName: 'claude' },
+    ];
+    const tmux = {
+      listSessions: vi.fn(async () => [
+        { sessionName: 'wt-_work_alpha-main__term-1', windowName: 'zsh' },
+        { sessionName: 'wt-_work_alpha-main__term-2', windowName: 'claude' },
+      ]),
+    };
+    const terminalSessionListCache = {
+      get: vi.fn(() => terminals),
+      set: vi.fn(async () => undefined),
+    } as unknown as TerminalSessionListCacheStore;
+    const provider = new ProjectTreeProvider(
+      registry(['/work/alpha-main']),
+      { get: vi.fn() } as unknown as ActiveWorktreeStore,
+      { get: vi.fn() } as unknown as WorktreeOrderStore,
+      { get: vi.fn(), set: vi.fn(async () => undefined) } as unknown as WorktreeListCacheStore,
+      { get: vi.fn(() => '/git/alpha'), set: vi.fn(async () => undefined) } as unknown as ProjectCommonDirCache,
+      tmux,
+      true,
+      terminalSessionListCache,
+    );
+    const projects = provider.getChildren();
+    if (!Array.isArray(projects)) throw new Error('expected sync project roots');
+    const worktrees = await provider.getChildren(projects[0]);
+    if (!Array.isArray(worktrees)) throw new Error('expected worktree children');
+    const fire = (provider as unknown as { _onDidChangeTreeData: { fire: { mockClear(): void } } })._onDidChangeTreeData.fire;
+    fire.mockClear();
+
+    provider.getChildren(worktrees[0]);
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(terminalSessionListCache.set).not.toHaveBeenCalled();
+    expect(fire).not.toHaveBeenCalled();
   });
 
   it('renders tmux install placeholder when tmux is unavailable', async () => {

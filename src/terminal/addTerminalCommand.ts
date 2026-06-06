@@ -1,7 +1,17 @@
 import * as vscode from 'vscode';
-import { allocateTermN, terminalSessionName, terminalSessionPrefix } from './tmuxSafe';
+import {
+  allocateTermN,
+  terminalSessionName,
+  terminalSessionNumber,
+  terminalSessionPrefix,
+  terminalWorktreePrefix,
+} from './tmuxSafe';
 import { TerminalSessionRegistry } from './terminalSessionRegistry';
 import type { TmuxSession } from './tmuxCli';
+import type {
+  CachedTerminalSession,
+  TerminalSessionListCacheStore,
+} from './terminalSessionListCacheStore';
 
 export interface AddTerminalTmuxCli {
   listSessions(prefix?: string): Promise<TmuxSession[]>;
@@ -20,16 +30,28 @@ export class AddTerminalCommand {
     private readonly tmux: AddTerminalTmuxCli,
     private readonly registry: TerminalSessionRegistry = new TerminalSessionRegistry(),
     private readonly refresh: () => void = () => undefined,
+    private readonly terminalSessionListCache: Pick<TerminalSessionListCacheStore, 'set'> = {
+      set: async () => undefined,
+    },
   ) {}
 
   async run(node: WorktreeNodeLike | undefined): Promise<void> {
     if (!node) return;
 
-    const existing = await this.tmux.listSessions(terminalSessionPrefix(node.worktree.path));
+    const prefix = terminalSessionPrefix(node.worktree.path);
+    const cacheKey = terminalWorktreePrefix(node.worktree.path);
+    const existing = await this.tmux.listSessions(prefix);
     const termN = allocateTermN(node.worktree.path, existing.map((session) => session.sessionName));
     const windowName = `term-${termN}`;
     const session = terminalSessionName(node.worktree.path, termN);
     await this.tmux.ensureSessionWindow(session, windowName, node.worktree.path);
+    await this.terminalSessionListCache.set(
+      cacheKey,
+      toCachedTerminalSessions(node.worktree.path, [
+        ...existing,
+        { sessionName: session, windowName },
+      ]),
+    );
 
     const terminal = vscode.window.createTerminal({
       name: `Deck ${windowName}`,
@@ -41,4 +63,18 @@ export class AddTerminalCommand {
     terminal.show(true);
     this.refresh();
   }
+}
+
+function toCachedTerminalSessions(
+  worktreePath: string,
+  sessions: readonly TmuxSession[],
+): CachedTerminalSession[] {
+  return sessions
+    .map((tmuxSession) => ({
+      sessionName: tmuxSession.sessionName,
+      n: terminalSessionNumber(worktreePath, tmuxSession.sessionName),
+      windowName: tmuxSession.windowName,
+    }))
+    .filter((session) => session.n > 0)
+    .sort((left, right) => left.n - right.n);
 }

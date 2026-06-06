@@ -7,12 +7,16 @@ describe('KillTerminalCommand', () => {
       killSession: vi.fn(async () => undefined),
     };
     const refresh = vi.fn();
+    const terminalSessionListCache = {
+      removeSession: vi.fn(async () => undefined),
+    };
 
-    await new KillTerminalCommand(tmux, refresh).run({
+    await new KillTerminalCommand(tmux, refresh, terminalSessionListCache).run({
       terminal: { sessionName: 'wt-_work_repo__term-1' },
     });
 
     expect(tmux.killSession).toHaveBeenCalledWith('wt-_work_repo__term-1');
+    expect(terminalSessionListCache.removeSession).toHaveBeenCalledWith('wt-_work_repo__term-1');
     expect(refresh).toHaveBeenCalledOnce();
   });
 });

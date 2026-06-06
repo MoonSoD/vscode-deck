@@ -3,6 +3,7 @@ import {
   allocateTermN,
   terminalSessionName,
   terminalSessionPrefix,
+  terminalWorktreePrefix,
   tmuxSafe,
 } from '../src/terminal/tmuxSafe';
 
@@ -18,6 +19,7 @@ describe('tmuxSafe', () => {
     expect(terminalSessionName('/work/repo.feature', 1)).toBe(
       'wt-_work_repo_feature__term-1',
     );
+    expect(terminalWorktreePrefix('/work/repo.feature')).toBe('wt-_work_repo_feature__');
     expect(terminalSessionPrefix('/work/repo.feature')).toBe('wt-_work_repo_feature__term-');
   });
 
