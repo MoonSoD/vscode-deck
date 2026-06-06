@@ -319,7 +319,7 @@ describe('ProjectTreeProvider', () => {
         command: expect.objectContaining({ command: 'deck.openTerminal' }),
       }),
       expect.objectContaining({
-        label: '+ Add Terminal',
+        label: 'Add Terminal',
         command: expect.objectContaining({ command: 'deck.addTerminal' }),
       }),
     ]);
@@ -361,7 +361,7 @@ describe('ProjectTreeProvider', () => {
     expect(Array.isArray(terminalRows)).toBe(true);
     expect((terminalRows as Array<{ label: string }>).map((row) => row.label)).toEqual([
       '1 zsh',
-      '+ Add Terminal',
+      'Add Terminal',
     ]);
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(tmux.listSessions).toHaveBeenCalledWith('wt-_work_alpha-main__term-');

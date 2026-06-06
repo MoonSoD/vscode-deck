@@ -14,7 +14,7 @@ export interface WorktreeTreeItemDescription {
 }
 
 export interface TerminalAddTreeItemDescription {
-  label: '+ Add Terminal';
+  label: 'Add Terminal';
   iconId: 'add';
   contextValue: 'deck.terminal.add';
 }
@@ -67,7 +67,7 @@ export function describeWorktreeTreeItem(
 
 export function describeTerminalAddTreeItem(): TerminalAddTreeItemDescription {
   return {
-    label: '+ Add Terminal',
+    label: 'Add Terminal',
     iconId: 'add',
     contextValue: 'deck.terminal.add',
   };
