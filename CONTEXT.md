@@ -19,6 +19,8 @@ folder.
 | **WorktreeRemoval** | Runs `git worktree remove <path>` (optionally `--force` when the worktree has uncommitted changes), and — only when the user opts in via a checkbox in the confirm dialog — also runs `git branch -d <branch>` afterwards. The branch-deletion checkbox's last value is remembered per-user. Mirrors superset's pattern; deliberately keeps branch and worktree as separate ref-counted things by default. |
 | **ProjectRemoval** | Delists a Project from ProjectRegistry and clears its per-Project Deck state (ActiveWorktree entry and remembered worktree root). Does **not** touch the git repository, its worktrees, or their files. The inverse of "Add Project." |
 | **WorktreeOrder** | The user-curated display order of Worktrees within a Project. Persisted per Project (`{ commonDir → orderedWorktreePaths[] }` in `globalState`). Reconciled lazily against `git worktree list`: unknown paths appended to the bottom, stale paths dropped. Projects without an entry render in git's order until the user drags. Project order is stored by ProjectRegistry. |
+| **DeckSocket** | The dedicated tmux server Deck owns: `tmux -L deck -f resources/deck.conf`. Isolated from the user's default tmux server and `~/.tmux.conf`. All Deck-managed Terminals live here; the user's existing tmux workflow on the default socket is untouched. |
+| **Terminal** | A persistent shell instance owned by Deck, rendered as a row under a Worktree node. Backed by a single-window tmux session on the DeckSocket, named `wt-<sanitized(worktree.path)>__term-N` (N allocated as max-existing-N + 1 per worktree, after sanctel's `allocate_window_name`). The row label is the tmux `#{window_name}`, which auto-renames to the foreground command (`zsh`, `claude`, …). Clicking the row attaches a VS Code terminal-in-editor to that session. The `+` row creates a new Terminal. Terminals survive VS Code reloads, worktree switches, and window closes — they only die on explicit Kill, on `exit` inside the shell, or on WorktreeRemoval/ProjectRemoval cascade. |
 
 ## Components
 
@@ -28,9 +30,12 @@ folder.
 │  ┌────────────────────────────────────────────────────┐  │
 │  │  Projects & Worktrees (TreeView)                   │  │
 │  │  ├── ProjectA  ●  ← marker = ActiveProject         │  │
-│  │  │   ├── main  ✓  ← marker = ActiveWorktree        │  │
-│  │  │   ├── feature/x   ← click = SwitchOperation     │  │
-│  │  │   └── bugfix/y                                  │  │
+│  │  │   ├─▾ main  ✓  ← marker = ActiveWorktree        │  │
+│  │  │   │   ├─ 1 zsh    ← Terminal (attach in editor) │  │
+│  │  │   │   ├─ 2 claude                               │  │
+│  │  │   │   └─ + Add Terminal                         │  │
+│  │  │   ├─▸ feature/x   ← click label = SwitchOp      │  │
+│  │  │   └─▸ bugfix/y                                  │  │
 │  │  └── ProjectB                                      │  │
 │  │      ├── main                                      │  │
 │  │      └── refactor                                  │  │
@@ -58,7 +63,7 @@ Code layout:
 
 ## Out of scope (deliberately, for now)
 
-- **Per-worktree terminals (tmux-backed).** Out-of-band today; users run agents in tmux to survive reloads.
+- ~~**Per-worktree terminals (tmux-backed).**~~ Now in scope (Terminal vocab above); ADR-0008.
 - **Per-worktree agent chat session.** TBD.
 - ~~**Multi-root mounting.**~~ Rejected by ADR-0003: one folder is mounted at a time. Multi-root + a per-Project `MountReconciliation` were explored in ADR-0002 (now superseded).
 - ~~**Per-worktree tab snapshot/restore.**~~ Provided by VS Code: each folder URI has its own workspace storage, so tabs, dirty buffers, layout, cursor positions all restore per Worktree automatically.
