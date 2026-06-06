@@ -51,11 +51,14 @@ export class AddTerminalCommand {
       cacheKey,
       toCachedTerminalSessions(node.worktree.path, refreshed),
     );
-    // No `name` — VS Code's `TerminalOptions.name` is sticky and ignores OSC
-    // title-set sequences. Letting it default + enabling tmux's `set-titles`
-    // (in deck.conf) makes the editor tab title track the foreground command
-    // dynamically (zsh → claude when the user runs claude).
+    // Tab title is the index (`Deck 1`, `Deck 2`, …). It correlates with the
+    // sidebar's `1 zsh` / `2 claude` rows by number, never goes stale, and
+    // doesn't fight VS Code's terminal title machinery: `Terminal.name` is
+    // sticky after creation, `${sequence}` (the OSC route) requires users to
+    // edit `terminal.integrated.tabs.title`. Sidebar is the canonical
+    // "what's running" surface.
     const terminal = vscode.window.createTerminal({
+      name: `Deck ${termN}`,
       shellPath: 'tmux',
       shellArgs: this.tmux.attachShellArgs(session),
       location: { viewColumn: vscode.ViewColumn.Active },

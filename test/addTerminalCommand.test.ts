@@ -59,6 +59,7 @@ describe('AddTerminalCommand', () => {
       '/work/repo',
     );
     expect(vscodeState.createTerminal).toHaveBeenCalledWith({
+      name: 'Deck 4',
       shellPath: 'tmux',
       shellArgs: [
         '-L',

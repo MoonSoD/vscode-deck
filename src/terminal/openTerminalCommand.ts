@@ -10,6 +10,7 @@ interface TerminalNodeLike {
     sessionName: string;
     windowName: string;
   };
+  n: number;
 }
 
 export class OpenTerminalCommand {
@@ -28,9 +29,9 @@ export class OpenTerminalCommand {
       return;
     }
 
-    // No `name` — see AddTerminalCommand for why. tmux's set-titles drives
-    // the editor tab title dynamically.
+    // Tab title is the index — see AddTerminalCommand for the rationale.
     const terminal = vscode.window.createTerminal({
+      name: `Deck ${node.n}`,
       shellPath: 'tmux',
       shellArgs: this.tmux.attachShellArgs(node.terminal.sessionName),
       location: { viewColumn: vscode.ViewColumn.Active },

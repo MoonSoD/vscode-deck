@@ -29,9 +29,11 @@ describe('OpenTerminalCommand', () => {
 
     await new OpenTerminalCommand(tmux, registry).run({
       terminal: { sessionName: 'wt-_work_repo__term-1', windowName: 'zsh' },
+      n: 1,
     });
 
     expect(vscodeState.createTerminal).toHaveBeenCalledWith({
+      name: 'Deck 1',
       shellPath: 'tmux',
       shellArgs: ['attach-session', '-t', '=wt-_work_repo__term-1'],
       location: { viewColumn: -1 },
@@ -50,6 +52,7 @@ describe('OpenTerminalCommand', () => {
 
     await new OpenTerminalCommand(tmux, registry).run({
       terminal: { sessionName: 'wt-_work_repo__term-1', windowName: 'zsh' },
+      n: 1,
     });
 
     expect(vscodeState.createTerminal).not.toHaveBeenCalled();

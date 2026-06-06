@@ -84,7 +84,7 @@ class TerminalAddNode extends vscode.TreeItem {
 class TerminalNode extends vscode.TreeItem {
   constructor(
     public readonly terminal: TmuxSession,
-    n: number,
+    public readonly n: number,
   ) {
     const item = describeTerminalTreeItem(n, terminal.windowName);
     super(item.label, vscode.TreeItemCollapsibleState.None);
