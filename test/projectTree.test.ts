@@ -83,7 +83,9 @@ vi.mock('../src/git/worktrees', () => ({
 
 import { ActiveWorktreeStore } from '../src/switch/activeWorktreeStore';
 import { ProjectTreeProvider } from '../src/tree/projectTree';
+import { WorktreeListCacheStore } from '../src/worktree/worktreeListCacheStore';
 import { WorktreeOrderStore } from '../src/worktree/worktreeOrderStore';
+import { ProjectCommonDirCache } from '../src/project/projectCommonDirCache';
 
 describe('ProjectTreeProvider', () => {
   it('marks only the currently mounted worktree as active', async () => {
@@ -141,6 +143,64 @@ describe('ProjectTreeProvider', () => {
     expect(worktreeNodes.map((node) => node.contextValue)).toEqual([
       'deck.worktree',
       'deck.worktree.main',
+    ]);
+  });
+
+  it('renders warm cached worktrees synchronously and refreshes in the background only on diff', async () => {
+    const activeWorktrees = {
+      get: vi.fn(),
+    } as unknown as ActiveWorktreeStore;
+    const worktreeOrders = {
+      get: vi.fn(),
+    } as unknown as WorktreeOrderStore;
+    const worktreeListCache = {
+      get: vi.fn(() => [
+        {
+          path: '/work/alpha-main',
+          head: 'a',
+          bare: false,
+          detached: false,
+          branch: 'main',
+        },
+      ]),
+      set: vi.fn(async () => undefined),
+    } as unknown as WorktreeListCacheStore;
+    const projectCommonDirCache = {
+      get: vi.fn(() => '/git/alpha'),
+      set: vi.fn(async () => undefined),
+    } as unknown as ProjectCommonDirCache;
+    const provider = new ProjectTreeProvider(
+      activeWorktrees,
+      worktreeOrders,
+      worktreeListCache,
+      projectCommonDirCache,
+    );
+
+    const projectNode = provider.getChildren();
+    if (!Array.isArray(projectNode)) throw new Error('expected sync project roots');
+
+    const worktreeNodes = provider.getChildren(projectNode[0]);
+
+    expect(Array.isArray(worktreeNodes)).toBe(true);
+    expect((worktreeNodes as Array<{ worktree: { path: string } }>).map((node) => node.worktree.path)).toEqual([
+      '/work/alpha-main',
+    ]);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(worktreeListCache.set).toHaveBeenCalledWith('/git/alpha', [
+      {
+        path: '/work/alpha-main',
+        head: 'a',
+        bare: false,
+        detached: false,
+        branch: 'main',
+      },
+      {
+        path: '/work/alpha-feature',
+        head: 'aa',
+        bare: false,
+        detached: false,
+        branch: 'feature',
+      },
     ]);
   });
 });

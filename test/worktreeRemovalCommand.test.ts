@@ -86,6 +86,32 @@ describe('WorktreeRemovalCommand', () => {
     expect(refresh).toHaveBeenCalledOnce();
   });
 
+  it('updates the worktree-list cache after successful removal', async () => {
+    const activeWorktrees = {
+      get: vi.fn(() => undefined),
+      clear: vi.fn(async () => undefined),
+    };
+    const refresh = vi.fn();
+    const worktreeListCache = {
+      remove: vi.fn(async () => undefined),
+    };
+    const command = new WorktreeRemovalCommand(
+      activeWorktrees,
+      refresh,
+      undefined,
+      worktreeListCache,
+    );
+
+    vi.mocked(vscode.window.showWarningMessage).mockResolvedValue(
+      'Remove (keep branch)' as never,
+    );
+
+    await command.run(node);
+
+    expect(worktreeListCache.remove).toHaveBeenCalledWith('/git/repo', '/repo/feature');
+    expect(refresh).toHaveBeenCalledOnce();
+  });
+
   it('removes the worktree and then deletes the branch when accepted', async () => {
     const activeWorktrees = {
       get: vi.fn(() => undefined),

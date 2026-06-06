@@ -29,6 +29,19 @@ interface WorktreeRootStoreLike {
   set(commonDir: string, rootPath: string): Promise<void>;
 }
 
+interface WorktreeListCacheLike {
+  add(
+    commonDir: string,
+    worktree: {
+      path: string;
+      head: string;
+      bare: boolean;
+      detached: boolean;
+      branch?: string;
+    },
+  ): Promise<void>;
+}
+
 interface WorktreeRequest {
   path: string;
   branch: string;
@@ -54,6 +67,9 @@ export class AddWorktreeCommand {
     private readonly worktreeRoots: WorktreeRootStoreLike = {
       get: () => undefined,
       set: async () => undefined,
+    },
+    private readonly worktreeListCache: WorktreeListCacheLike = {
+      add: async () => undefined,
     },
   ) {}
 
@@ -84,6 +100,13 @@ export class AddWorktreeCommand {
     }
 
     await this.worktreeRoots.set(commonDir, path.dirname(request.path));
+    await this.worktreeListCache.add(commonDir, {
+      path: request.path,
+      head: '',
+      bare: false,
+      detached: false,
+      branch: request.branch,
+    });
     this.refresh();
 
     const postCreateAction = await vscode.window.showInformationMessage(

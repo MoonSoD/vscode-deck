@@ -4,8 +4,10 @@ import { ActiveWorktreeStore } from './switch/activeWorktreeStore';
 import { DetachedOpener } from './switch/detachedOpener';
 import { WorktreeSwitcher } from './switch/worktreeSwitcher';
 import { ProjectRemovalCommand } from './project/projectRemovalCommand';
+import { ProjectCommonDirCache } from './project/projectCommonDirCache';
 import { AddWorktreeCommand } from './worktree/addWorktreeCommand';
 import { BranchDeletionPreferenceStore } from './worktree/branchDeletionPreferenceStore';
+import { WorktreeListCacheStore } from './worktree/worktreeListCacheStore';
 import { WorktreeRemovalCommand } from './worktree/worktreeRemovalCommand';
 import { WorktreeRootStore } from './worktree/worktreeRootStore';
 import { DeckTreeDragAndDropController } from './tree/deckTreeDragAndDropController';
@@ -15,15 +17,23 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const activeWorktrees = new ActiveWorktreeStore(context.globalState);
   const worktreeRoots = new WorktreeRootStore(context.globalState);
   const worktreeOrders = new WorktreeOrderStore(context.globalState);
+  const worktreeListCache = new WorktreeListCacheStore(context.globalState);
+  const projectCommonDirCache = new ProjectCommonDirCache(context.globalState);
   const branchDeletionPreferences = new BranchDeletionPreferenceStore(context.globalState);
   const switcher = new WorktreeSwitcher(activeWorktrees);
   const detachedOpener = new DetachedOpener(activeWorktrees);
-  const tree = new ProjectTreeProvider(activeWorktrees, worktreeOrders);
+  const tree = new ProjectTreeProvider(
+    activeWorktrees,
+    worktreeOrders,
+    worktreeListCache,
+    projectCommonDirCache,
+  );
   const addWorktree = new AddWorktreeCommand(
     switcher,
     detachedOpener,
     () => tree.refresh(),
     worktreeRoots,
+    worktreeListCache,
   );
   const dragAndDropController = new DeckTreeDragAndDropController(
     () => tree.refresh(),
@@ -33,6 +43,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     activeWorktrees,
     () => tree.refresh(),
     branchDeletionPreferences,
+    worktreeListCache,
   );
   const removeProject = new ProjectRemovalCommand(
     activeWorktrees,

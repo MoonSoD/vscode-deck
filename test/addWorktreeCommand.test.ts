@@ -85,11 +85,21 @@ function createCommand(rootPath?: string) {
     get: vi.fn(() => rootPath),
     set: vi.fn(async () => undefined),
   };
+  const worktreeListCache = {
+    add: vi.fn(async () => undefined),
+  };
   return {
-    command: new AddWorktreeCommand(switcher, detachedOpener, refresh, worktreeRoots),
+    command: new AddWorktreeCommand(
+      switcher,
+      detachedOpener,
+      refresh,
+      worktreeRoots,
+      worktreeListCache,
+    ),
     detachedOpener,
     refresh,
     switcher,
+    worktreeListCache,
     worktreeRoots,
   };
 }
@@ -229,6 +239,24 @@ describe('AddWorktreeCommand', () => {
     });
     expect(worktreeRoots.set).toHaveBeenCalledWith('/git/myrepo', '/custom/worktrees');
     expect(switcher.switchTo).toHaveBeenCalledWith('/custom/worktrees/feature-foo');
+  });
+
+  it('updates the worktree-list cache after successful creation', async () => {
+    const { command, worktreeListCache } = createCommand('/custom/worktrees');
+    const input = createAcceptingInputBox();
+
+    pickExistingBranch();
+    vi.mocked(vscode.window.createInputBox).mockReturnValue(input as vscode.InputBox);
+
+    await command.run({ projectPath: '/work/myrepo' });
+
+    expect(worktreeListCache.add).toHaveBeenCalledWith('/git/myrepo', {
+      path: '/custom/worktrees/feature-foo',
+      head: '',
+      bare: false,
+      detached: false,
+      branch: 'feature/foo',
+    });
   });
 
   it('lets the inline folder picker replace the parent while preserving the branch slug', async () => {

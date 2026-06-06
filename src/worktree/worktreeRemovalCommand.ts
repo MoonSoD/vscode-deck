@@ -24,6 +24,10 @@ interface BranchDeletionPreferenceStoreLike {
   set(value: boolean): Promise<void>;
 }
 
+interface WorktreeListCacheLike {
+  remove(commonDir: string, worktreePath: string): Promise<void>;
+}
+
 const REMOVE_LABEL = 'Remove';
 const FORCE_REMOVE_LABEL = 'Force Remove';
 
@@ -40,6 +44,9 @@ export class WorktreeRemovalCommand {
     private readonly branchDeletionPreferences: BranchDeletionPreferenceStoreLike = {
       get: () => false,
       set: async () => undefined,
+    },
+    private readonly worktreeListCache: WorktreeListCacheLike = {
+      remove: async () => undefined,
     },
   ) {}
 
@@ -111,6 +118,7 @@ export class WorktreeRemovalCommand {
     if (this.activeWorktrees.get(commonDir) === node.worktree.path) {
       await this.activeWorktrees.clear(commonDir);
     }
+    await this.worktreeListCache.remove(commonDir, node.worktree.path);
     this.refresh();
   }
 }
