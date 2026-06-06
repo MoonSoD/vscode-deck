@@ -16,6 +16,7 @@ const vscodeState = vi.hoisted(() => ({
   closeTerminalArgs: undefined as unknown[] | undefined,
   onDidCloseTerminal: vi.fn(() => ({ dispose: vi.fn() })),
   onDidChangeWorkspaceFolders: vi.fn(() => ({ dispose: vi.fn() })),
+  openTerminalInNewWindowRun: vi.fn(),
   openTerminalRun: vi.fn(),
   projectTreeArgs: undefined as unknown[] | undefined,
   projectTreeInstances: [] as Array<{ refresh: ReturnType<typeof vi.fn>; getChildren: ReturnType<typeof vi.fn> }>,
@@ -169,6 +170,12 @@ vi.mock('../src/terminal/addTerminalCommand', () => ({
 vi.mock('../src/terminal/openTerminalCommand', () => ({
   OpenTerminalCommand: class {
     run = vscodeState.openTerminalRun;
+  },
+}));
+
+vi.mock('../src/terminal/openTerminalInNewWindowCommand', () => ({
+  OpenTerminalInNewWindowCommand: class {
+    run = vscodeState.openTerminalInNewWindowRun;
   },
 }));
 
@@ -354,6 +361,27 @@ describe('activate', () => {
 
     expect(vscodeState.closeTerminalRun).toHaveBeenCalledWith({
       terminal: { sessionName: 's', windowName: 'zsh' },
+    });
+  });
+
+  it('registers deck.openTerminalInNewWindow through OpenTerminalInNewWindowCommand', async () => {
+    const context = createContext();
+
+    await activate(context as never);
+    const openTerminalInNewWindowRegistration = vscodeState.registerCommand.mock.calls.find(
+      ([command]) => command === 'deck.openTerminalInNewWindow',
+    );
+    if (!openTerminalInNewWindowRegistration) {
+      throw new Error('missing deck.openTerminalInNewWindow registration');
+    }
+    await openTerminalInNewWindowRegistration[1]({
+      terminal: { sessionName: 's', windowName: 'zsh' },
+      worktreePath: '/work/repo',
+    });
+
+    expect(vscodeState.openTerminalInNewWindowRun).toHaveBeenCalledWith({
+      terminal: { sessionName: 's', windowName: 'zsh' },
+      worktreePath: '/work/repo',
     });
   });
 

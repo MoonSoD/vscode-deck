@@ -160,4 +160,25 @@ describe('package contributions', () => {
       when: 'false',
     });
   });
+
+  it('contributes open Terminal in new window as a Terminal context-only action', () => {
+    expect(pkg.contributes.commands).toContainEqual({
+      command: 'deck.openTerminalInNewWindow',
+      title: 'Deck: Open Terminal in New Window',
+    });
+
+    expect(
+      pkg.contributes.menus['view/item/context'].filter(
+        (item: { command: string }) => item.command === 'deck.openTerminalInNewWindow',
+      ),
+    ).toEqual([{
+      command: 'deck.openTerminalInNewWindow',
+      when: 'view == deck.projects && viewItem == deck.terminal && deck.tmuxAvailable',
+      group: 'navigation',
+    }]);
+    expect(pkg.contributes.menus.commandPalette).toContainEqual({
+      command: 'deck.openTerminalInNewWindow',
+      when: 'false',
+    });
+  });
 });
