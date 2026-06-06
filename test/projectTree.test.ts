@@ -553,6 +553,7 @@ describe('ProjectTreeProvider', () => {
   it('handleActiveTerminalChange renames to the cached label and refreshes', () => {
     const terminal: { show: ReturnType<typeof vi.fn> } = { show: vi.fn() };
     const renameIfActive = vi.fn(async () => undefined);
+    const revealNode = vi.fn();
     const terminalRegistry = {
       findSession: vi.fn(() => 'wt-_work_alpha-main__term-1'),
       renameIfActive,
@@ -580,17 +581,26 @@ describe('ProjectTreeProvider', () => {
       terminalSessionListCache,
       terminalRegistry,
     );
+    provider.setRevealNode(revealNode);
     const fire = (provider as unknown as { _onDidChangeTreeData: { fire: ReturnType<typeof vi.fn> } })._onDidChangeTreeData.fire;
     fire.mockClear();
 
     provider.handleActiveTerminalChange(terminal);
 
     expect(terminalRegistry.findSession).toHaveBeenCalledWith(terminal);
+    expect(revealNode).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'terminal::wt-_work_alpha-main__term-1',
+        label: '1 claude',
+        terminal: { sessionName: 'wt-_work_alpha-main__term-1', n: 1, windowName: 'claude' },
+      }),
+    );
     expect(renameIfActive).toHaveBeenCalledWith('wt-_work_alpha-main__term-1', '1 claude');
     expect(fire).toHaveBeenCalledWith(undefined);
   });
 
   it('handleActiveTerminalChange no-ops for terminals not in the registry', () => {
+    const revealNode = vi.fn();
     const terminalRegistry = {
       findSession: vi.fn(() => undefined),
       renameIfActive: vi.fn(async () => undefined),
@@ -606,9 +616,11 @@ describe('ProjectTreeProvider', () => {
       { get: vi.fn(), set: vi.fn(async () => undefined) } as unknown as TerminalSessionListCacheStore,
       terminalRegistry,
     );
+    provider.setRevealNode(revealNode);
 
     provider.handleActiveTerminalChange({ show: vi.fn() });
 
+    expect(revealNode).not.toHaveBeenCalled();
     expect(terminalRegistry.renameIfActive).not.toHaveBeenCalled();
   });
 

@@ -103,6 +103,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     dragAndDropController,
     canSelectMany: false,
   });
+  tree.setRevealNode(async (node) => {
+    try {
+      await treeView.reveal(node, { select: true, focus: false, expand: false });
+    } catch (error) {
+      // Best-effort only; focus must stay with the editor terminal.
+      console.warn('Deck: TreeView.reveal failed', error);
+    }
+  });
   const addProject = new AddProjectCommand(
     new VsCodeProjectFolderPicker(),
     projectRegistry,

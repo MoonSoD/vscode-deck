@@ -17,6 +17,7 @@ const vscodeState = vi.hoisted(() => ({
   onDidChangeWorkspaceFolders: vi.fn(() => ({ dispose: vi.fn() })),
   openTerminalRun: vi.fn(),
   projectTreeArgs: undefined as unknown[] | undefined,
+  projectTreeRevealNode: undefined as ((node: unknown) => Promise<void> | void) | undefined,
   registerCommand: vi.fn(() => ({ dispose: vi.fn() })),
   settingsProjects: ['/settings/repo'],
   tmuxPreflight: vi.fn(async () => ({ available: true })),
@@ -104,6 +105,9 @@ vi.mock('../src/tree/projectTree', () => ({
 
     refresh = vi.fn();
     getChildren = vi.fn(() => [{ projectPath: '/settings/repo' }]);
+    setRevealNode = vi.fn((revealNode: (node: unknown) => Promise<void> | void) => {
+      vscodeState.projectTreeRevealNode = revealNode;
+    });
   },
 }));
 
@@ -159,6 +163,7 @@ describe('activate', () => {
     vscodeState.addTerminalArgs = undefined;
     vscodeState.killTerminalArgs = undefined;
     vscodeState.projectTreeArgs = undefined;
+    vscodeState.projectTreeRevealNode = undefined;
     vscodeState.settingsProjects = ['/settings/repo'];
     vscodeState.configUpdate.mockResolvedValue(undefined);
     vscodeState.tmuxPreflight.mockResolvedValue({ available: true });
@@ -193,6 +198,19 @@ describe('activate', () => {
       }),
     );
     expect(context.subscriptions[0]).toBe(vscodeState.createTreeView.mock.results[0].value);
+  });
+
+  it('wires active terminal row reveal without stealing focus or expanding', async () => {
+    const context = createContext();
+
+    await activate(context as never);
+    const node = { id: 'terminal::wt-_work_repo__term-1' };
+    await vscodeState.projectTreeRevealNode?.(node);
+
+    expect(vscodeState.createTreeView.mock.results[0].value.reveal).toHaveBeenCalledWith(
+      node,
+      { select: true, focus: false, expand: false },
+    );
   });
 
   it('migrates deck.projects settings to ProjectRegistryStore and clears settings', async () => {

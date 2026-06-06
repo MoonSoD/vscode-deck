@@ -114,6 +114,7 @@ class TmuxUnavailableNode extends vscode.TreeItem {
 export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
   private readonly _onDidChangeTreeData = new vscode.EventEmitter<Node | undefined>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
+  private revealNode: ((node: vscode.TreeItem) => Promise<void> | void) | undefined;
   private activeProjectCommonDir: string | null = null;
   private resolvingActiveProject = false;
   private readonly projectCommonDirs = new Map<string, string | null>();
@@ -160,6 +161,10 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
 
   getTreeItem(element: Node): vscode.TreeItem {
     return element;
+  }
+
+  setRevealNode(revealNode: (node: vscode.TreeItem) => Promise<void> | void): void {
+    this.revealNode = revealNode;
   }
 
   getParent(_element: Node): Node | undefined {
@@ -363,6 +368,9 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
     // cache itself is stale.
     const cached = this.findCachedTerminal(session);
     if (cached) {
+      if (this.revealNode) {
+        void Promise.resolve(this.revealNode(new TerminalNode(cached, cached.n))).catch(() => undefined);
+      }
       void this.terminalRegistry.renameIfActive(session, `${cached.n} ${cached.windowName}`);
     }
     this.refresh();
