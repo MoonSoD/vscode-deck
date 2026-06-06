@@ -73,6 +73,13 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
     return element;
   }
 
+  getParent(_element: Node): Node | undefined {
+    // ProjectNodes are roots; WorktreeNodes aren't revealed programmatically
+    // today, so undefined is correct for both. TreeView.reveal requires this
+    // method to exist on the provider.
+    return undefined;
+  }
+
   getChildren(element?: Node): vscode.ProviderResult<Node[]> {
     if (!element) {
       // Sync return: any `await` here would yield to the event loop and let
