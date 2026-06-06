@@ -22,7 +22,7 @@ export interface TerminalAddTreeItemDescription {
 export interface TerminalTreeItemDescription {
   label: string;
   iconId: 'terminal';
-  contextValue: 'deck.terminal';
+  contextValue: 'deck.terminal.active' | 'deck.terminal.foreign';
 }
 
 export interface TmuxUnavailableTreeItemDescription {
@@ -73,11 +73,15 @@ export function describeTerminalAddTreeItem(): TerminalAddTreeItemDescription {
   };
 }
 
-export function describeTerminalTreeItem(n: number, windowName: string): TerminalTreeItemDescription {
+export function describeTerminalTreeItem(
+  n: number,
+  windowName: string,
+  isActive: boolean,
+): TerminalTreeItemDescription {
   return {
     label: `${n} ${windowName}`,
     iconId: 'terminal',
-    contextValue: 'deck.terminal',
+    contextValue: isActive ? 'deck.terminal.active' : 'deck.terminal.foreign',
   };
 }
 

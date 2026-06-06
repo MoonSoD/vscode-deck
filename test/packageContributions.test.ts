@@ -152,7 +152,7 @@ describe('package contributions', () => {
       ),
     ).toEqual([{
       command: 'deck.killTerminal',
-      when: 'view == deck.projects && viewItem == deck.terminal && deck.tmuxAvailable',
+      when: 'view == deck.projects && (viewItem == deck.terminal.active || viewItem == deck.terminal.foreign) && deck.tmuxAvailable',
       group: 'inline',
     }]);
     expect(pkg.contributes.menus.commandPalette).toContainEqual({
@@ -173,7 +173,7 @@ describe('package contributions', () => {
       ),
     ).toEqual([{
       command: 'deck.openTerminalInNewWindow',
-      when: 'view == deck.projects && viewItem == deck.terminal && deck.tmuxAvailable',
+      when: 'view == deck.projects && viewItem == deck.terminal.foreign && deck.tmuxAvailable',
       group: 'navigation',
     }]);
     expect(pkg.contributes.menus.commandPalette).toContainEqual({

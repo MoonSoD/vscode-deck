@@ -1,3 +1,4 @@
+import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { getCommonDir, listWorktrees, Worktree } from '../git/worktrees';
 import { ProjectCommonDirCache, resolveCommonDirSafe } from '../project/projectCommonDirCache';
@@ -87,8 +88,9 @@ class TerminalNode extends vscode.TreeItem {
     public readonly terminal: TmuxSession,
     public readonly n: number,
     public readonly worktreePath: string,
+    isActiveWorktree: boolean,
   ) {
-    const item = describeTerminalTreeItem(n, terminal.windowName);
+    const item = describeTerminalTreeItem(n, terminal.windowName, isActiveWorktree);
     super(item.label, vscode.TreeItemCollapsibleState.None);
     this.id = `terminal::${terminal.sessionName}`;
     this.contextValue = item.contextValue;
@@ -380,7 +382,9 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
     const worktreePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
     if (!worktreePath) return;
     try {
-      void Promise.resolve(this.revealNode(new TerminalNode(terminal, terminal.n, worktreePath))).catch(() => undefined);
+      // Reveal targets a node by id; the active flag only affects context
+      // menus, irrelevant for reveal — pass true to satisfy the type.
+      void Promise.resolve(this.revealNode(new TerminalNode(terminal, terminal.n, worktreePath, true))).catch(() => undefined);
     } catch {
       // Reveal is best-effort; rename and refresh must still run.
     }
@@ -401,7 +405,13 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
     // The Worktree row's inline `+` icon is the always-available add affordance.
     // Show the explicit "Add Terminal" row only as the empty-state hint.
     if (terminals.length === 0) return [new TerminalAddNode(element)];
-    return terminals.map((terminal) => new TerminalNode(terminal, terminal.n, element.worktree.path));
+    const activeWorktreePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    const isActiveWorktree =
+      activeWorktreePath !== undefined &&
+      path.resolve(element.worktree.path) === path.resolve(activeWorktreePath);
+    return terminals.map(
+      (terminal) => new TerminalNode(terminal, terminal.n, element.worktree.path, isActiveWorktree),
+    );
   }
 
   private refreshWorktreesInBackground(

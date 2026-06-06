@@ -314,14 +314,42 @@ describe('ProjectTreeProvider', () => {
         label: '1 zsh',
         command: expect.objectContaining({ command: 'deck.openTerminal' }),
         worktreePath: '/work/alpha-main',
+        contextValue: 'deck.terminal.foreign',
       }),
       expect.objectContaining({
         label: '2 claude',
         command: expect.objectContaining({ command: 'deck.openTerminal' }),
         worktreePath: '/work/alpha-main',
+        contextValue: 'deck.terminal.foreign',
       }),
     ]);
     expect(tmux.listSessions).toHaveBeenCalledWith('wt-_work_alpha-main__term-');
+  });
+
+  it('marks terminals in the current workspace folder as active', async () => {
+    const tmux = {
+      listSessions: vi.fn(async () => [
+        { sessionName: 'wt-_work_beta-main__term-1', windowName: 'zsh' },
+      ]),
+    };
+    const provider = new ProjectTreeProvider(
+      registry(['/work/beta-main']),
+      { get: vi.fn() } as unknown as ActiveWorktreeStore,
+      { get: vi.fn() } as unknown as WorktreeOrderStore,
+      { get: vi.fn(), set: vi.fn(async () => undefined) } as unknown as WorktreeListCacheStore,
+      { get: vi.fn(() => '/git/beta'), set: vi.fn(async () => undefined) } as unknown as ProjectCommonDirCache,
+      tmux,
+      true,
+    );
+    const projects = provider.getChildren();
+    if (!Array.isArray(projects)) throw new Error('expected sync project roots');
+    const worktrees = await provider.getChildren(projects[0]);
+    if (!Array.isArray(worktrees)) throw new Error('expected worktree children');
+    const terminalRows = await provider.getChildren(worktrees[0]);
+
+    expect((terminalRows as Array<{ contextValue: string }>).map((r) => r.contextValue)).toEqual([
+      'deck.terminal.active',
+    ]);
   });
 
   it('renders the Add Terminal row only as the empty-state hint when no terminals exist', async () => {

@@ -175,12 +175,12 @@
         },
         {
           "command": "deck.killTerminal",
-          "when": "view == deck.projects && viewItem == deck.terminal && deck.tmuxAvailable",
+          "when": "view == deck.projects && (viewItem == deck.terminal.active || viewItem == deck.terminal.foreign) && deck.tmuxAvailable",
           "group": "inline"
         },
         {
           "command": "deck.openTerminalInNewWindow",
-          "when": "view == deck.projects && viewItem == deck.terminal && deck.tmuxAvailable",
+          "when": "view == deck.projects && viewItem == deck.terminal.foreign && deck.tmuxAvailable",
           "group": "navigation"
         }
       ],
