@@ -1,6 +1,8 @@
 import * as vscode from 'vscode';
 import { getCommonDir, getCommonDirSafe, listWorktrees, Worktree } from '../git/worktrees';
+import { ProjectCommonDirCache } from '../project/projectCommonDirCache';
 import { ActiveWorktreeStore } from '../switch/activeWorktreeStore';
+import { WorktreeListCacheStore } from '../worktree/worktreeListCacheStore';
 import { WorktreeOrderStore } from '../worktree/worktreeOrderStore';
 import { reconcileWorktreeOrder } from './reconcileWorktreeOrder';
 import { describeProjectTreeItem, describeWorktreeTreeItem } from './worktreeTreeItem';
@@ -49,6 +51,14 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
   constructor(
     private readonly activeWorktrees: ActiveWorktreeStore,
     private readonly worktreeOrders: WorktreeOrderStore,
+    private readonly worktreeListCache: Pick<WorktreeListCacheStore, 'get' | 'set'> = {
+      get: () => undefined,
+      set: async () => undefined,
+    },
+    private readonly projectCommonDirCache: Pick<ProjectCommonDirCache, 'get' | 'set'> = {
+      get: () => undefined,
+      set: async () => undefined,
+    },
   ) {}
 
   refresh(): void {
@@ -85,16 +95,27 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
     return [];
   }
 
-  private async getWorktreeChildren(element: ProjectNode): Promise<Node[]> {
+  private getWorktreeChildren(element: ProjectNode): Node[] | Promise<Node[]> {
     const activeWorktreePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-    const gitWorktrees = await listWorktrees(element.projectPath);
-    const commonDir = await getCommonDirSafe(element.projectPath);
-    const worktrees = reconcileWorktreeOrder(
-      commonDir === null ? undefined : this.worktreeOrders.get(commonDir),
-      gitWorktrees,
-    );
-    const mainWorktreePath = gitWorktrees.find((w) => !w.bare)?.path;
-    return worktrees.map((w) => new WorktreeNode(element.projectPath, w, activeWorktreePath, mainWorktreePath));
+    const commonDir =
+      this.projectCommonDirCache.get(element.projectPath) ??
+      this.projectCommonDirs.get(element.projectPath) ??
+      undefined;
+
+    if (commonDir !== undefined) {
+      const cached = this.worktreeListCache.get(commonDir);
+      if (cached !== undefined) {
+        this.refreshWorktreesInBackground(element.projectPath, commonDir, cached);
+        return this.toWorktreeNodes(
+          element.projectPath,
+          cached,
+          commonDir,
+          activeWorktreePath,
+        );
+      }
+    }
+
+    return this.loadWorktreeChildren(element.projectPath, commonDir, activeWorktreePath);
   }
 
   async addProject(): Promise<void> {
@@ -106,7 +127,7 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
     });
     if (!picked || picked.length === 0) return;
     const seedPath = picked[0].fsPath;
-    const commonDir = await getCommonDirSafe(seedPath);
+    const commonDir = await this.getCommonDirSafeCached(seedPath);
     if (commonDir === null) {
       vscode.window.showErrorMessage(
         `Cannot add ${seedPath}: not a git repository.`,
@@ -133,51 +154,132 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
     // getCommonDirSafe: a stale registered entry returns null and is skipped,
     // so dedup never throws and a single bad entry doesn't block Add Project.
     for (const projectPath of projects) {
-      const registered = await getCommonDirSafe(projectPath);
+      const registered = await this.getCommonDirSafeCached(projectPath);
       if (registered !== null && registered === commonDir) return true;
     }
     return false;
   }
 
   private resolveActiveProject(): void {
-    if (this.resolvingActiveProject) return;
     const folder = vscode.workspace.workspaceFolders?.[0];
     if (!folder) {
       this.setActiveProjectCommonDir(null);
       return;
     }
 
+    const cached = this.projectCommonDirCache.get(folder.uri.fsPath);
+    if (cached !== undefined) this.setActiveProjectCommonDir(cached, false);
+    if (this.resolvingActiveProject) return;
+
     this.resolvingActiveProject = true;
     void getCommonDirSafe(folder.uri.fsPath)
-      .then((commonDir) => this.setActiveProjectCommonDir(commonDir))
+      .then(async (commonDir) => {
+        if (commonDir !== null) await this.projectCommonDirCache.set(folder.uri.fsPath, commonDir);
+        this.setActiveProjectCommonDir(commonDir);
+      })
       .finally(() => {
         this.resolvingActiveProject = false;
       });
   }
 
   private resolveProjectCommonDir(projectPath: string): void {
-    if (this.projectCommonDirs.has(projectPath) || this.resolvingProjectPaths.has(projectPath)) {
+    const cached = this.projectCommonDirCache.get(projectPath);
+    if (cached !== undefined) {
+      this.projectCommonDirs.set(projectPath, cached);
+      this.refreshProjectCommonDirInBackground(projectPath, cached);
       return;
     }
+    if (this.projectCommonDirs.has(projectPath) || this.resolvingProjectPaths.has(projectPath)) return;
 
+    this.refreshProjectCommonDirInBackground(projectPath, undefined);
+  }
+
+  private refreshProjectCommonDirInBackground(projectPath: string, previous: string | undefined): void {
+    if (this.resolvingProjectPaths.has(projectPath)) return;
     this.resolvingProjectPaths.add(projectPath);
     void getCommonDir(projectPath)
-      .then((commonDir) => {
+      .then(async (commonDir) => {
+        await this.projectCommonDirCache.set(projectPath, commonDir);
         this.projectCommonDirs.set(projectPath, commonDir);
-        this._onDidChangeTreeData.fire(undefined);
+        if (previous !== commonDir) this._onDidChangeTreeData.fire(undefined);
       })
       .catch(() => {
-        this.projectCommonDirs.set(projectPath, null);
-        this._onDidChangeTreeData.fire(undefined);
+        if (previous === undefined) {
+          this.projectCommonDirs.set(projectPath, null);
+          this._onDidChangeTreeData.fire(undefined);
+        }
       })
       .finally(() => {
         this.resolvingProjectPaths.delete(projectPath);
       });
   }
 
-  private setActiveProjectCommonDir(commonDir: string | null): void {
+  private setActiveProjectCommonDir(commonDir: string | null, fire = true): void {
     if (this.activeProjectCommonDir === commonDir) return;
     this.activeProjectCommonDir = commonDir;
-    this._onDidChangeTreeData.fire(undefined);
+    if (fire) this._onDidChangeTreeData.fire(undefined);
   }
+
+  private async getCommonDirSafeCached(projectPath: string): Promise<string | null> {
+    const cached = this.projectCommonDirCache.get(projectPath);
+    if (cached !== undefined) return cached;
+    const commonDir = await getCommonDirSafe(projectPath);
+    if (commonDir !== null) await this.projectCommonDirCache.set(projectPath, commonDir);
+    return commonDir;
+  }
+
+  private async loadWorktreeChildren(
+    projectPath: string,
+    knownCommonDir: string | undefined,
+    activeWorktreePath: string | undefined,
+  ): Promise<Node[]> {
+    const gitWorktrees = await listWorktrees(projectPath);
+    const commonDir = knownCommonDir ?? (await this.getCommonDirSafeCached(projectPath)) ?? undefined;
+    if (commonDir !== undefined) await this.worktreeListCache.set(commonDir, gitWorktrees);
+    return this.toWorktreeNodes(projectPath, gitWorktrees, commonDir, activeWorktreePath);
+  }
+
+  private refreshWorktreesInBackground(
+    projectPath: string,
+    commonDir: string,
+    previous: readonly Worktree[],
+  ): void {
+    void listWorktrees(projectPath)
+      .then(async (worktrees) => {
+        if (sameWorktrees(previous, worktrees)) return;
+        await this.worktreeListCache.set(commonDir, worktrees);
+        this._onDidChangeTreeData.fire(undefined);
+      })
+      .catch(() => undefined);
+  }
+
+  private toWorktreeNodes(
+    projectPath: string,
+    gitWorktrees: readonly Worktree[],
+    commonDir: string | undefined,
+    activeWorktreePath: string | undefined,
+  ): WorktreeNode[] {
+    const worktrees = reconcileWorktreeOrder(
+      commonDir === undefined ? undefined : this.worktreeOrders.get(commonDir),
+      [...gitWorktrees],
+    );
+    const mainWorktreePath = gitWorktrees.find((w) => !w.bare)?.path;
+    return worktrees.map((w) => new WorktreeNode(projectPath, w, activeWorktreePath, mainWorktreePath));
+  }
+}
+
+function sameWorktrees(left: readonly Worktree[], right: readonly Worktree[]): boolean {
+  if (left.length !== right.length) return false;
+  return left.every((worktree, index) => sameWorktree(worktree, right[index]));
+}
+
+function sameWorktree(left: Worktree, right: Worktree): boolean {
+  return (
+    left.path === right.path &&
+    left.head === right.head &&
+    left.branch === right.branch &&
+    left.bare === right.bare &&
+    left.detached === right.detached &&
+    left.locked === right.locked
+  );
 }

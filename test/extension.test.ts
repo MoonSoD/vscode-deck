@@ -30,6 +30,14 @@ vi.mock('../src/worktree/branchDeletionPreferenceStore', () => ({
   BranchDeletionPreferenceStore: class {},
 }));
 
+vi.mock('../src/worktree/worktreeListCacheStore', () => ({
+  WorktreeListCacheStore: class {},
+}));
+
+vi.mock('../src/project/projectCommonDirCache', () => ({
+  ProjectCommonDirCache: class {},
+}));
+
 vi.mock('../src/switch/worktreeSwitcher', () => ({
   WorktreeSwitcher: class {},
 }));

@@ -5,6 +5,7 @@ import {
   getCommonDir,
   listBranches,
   type AddWorktreeOptions,
+  type Worktree,
 } from '../git/worktrees';
 import { branchWorktreeName, defaultWorktreePath } from './defaultWorktreePath';
 
@@ -27,6 +28,10 @@ interface DetachedOpenerLike {
 interface WorktreeRootStoreLike {
   get(commonDir: string): string | undefined;
   set(commonDir: string, rootPath: string): Promise<void>;
+}
+
+interface WorktreeListCacheLike {
+  add(commonDir: string, worktree: Worktree): Promise<void>;
 }
 
 interface WorktreeRequest {
@@ -54,6 +59,9 @@ export class AddWorktreeCommand {
     private readonly worktreeRoots: WorktreeRootStoreLike = {
       get: () => undefined,
       set: async () => undefined,
+    },
+    private readonly worktreeListCache: WorktreeListCacheLike = {
+      add: async () => undefined,
     },
   ) {}
 
@@ -84,6 +92,13 @@ export class AddWorktreeCommand {
     }
 
     await this.worktreeRoots.set(commonDir, path.dirname(request.path));
+    await this.worktreeListCache.add(commonDir, {
+      path: request.path,
+      head: '',
+      bare: false,
+      detached: false,
+      branch: request.branch,
+    });
     this.refresh();
 
     const postCreateAction = await vscode.window.showInformationMessage(
