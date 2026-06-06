@@ -183,6 +183,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.window.onDidCloseTerminal(async (terminal) => {
       const session = terminalRegistry.findSession(terminal);
       if (!session) return;
+      // Only kill on deliberate close. Window reloads (worktree switches,
+      // extension host restarts) dispose all editor terminals with
+      // reason=Shutdown — killing them there would cascade-destroy every
+      // tmux session on every switch, defeating reattach.
+      if (terminal.exitStatus?.reason !== vscode.TerminalExitReason.User) {
+        terminalRegistry.deleteSession(session);
+        return;
+      }
       await tmux.killSession(session);
       await terminalSessionListCache.removeSession(session);
       terminalRegistry.deleteSession(session);

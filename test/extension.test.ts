@@ -37,6 +37,13 @@ vi.mock('vscode', () => ({
   ConfigurationTarget: {
     Global: 1,
   },
+  TerminalExitReason: {
+    Unknown: 0,
+    Shutdown: 1,
+    Process: 2,
+    User: 3,
+    Extension: 4,
+  },
   commands: {
     executeCommand: vscodeState.executeCommand,
     registerCommand: vscodeState.registerCommand,
@@ -506,11 +513,11 @@ describe('activate', () => {
     expect(tmux.listSessions).not.toHaveBeenCalled();
   });
 
-  it('kills a Deck-managed tmux session when VS Code closes its terminal', async () => {
+  it('kills a Deck-managed tmux session when the user deliberately closes its terminal', async () => {
     const context = createContext();
 
     await activate(context as never);
-    const terminal = { show: vi.fn() };
+    const terminal = { show: vi.fn(), exitStatus: { reason: 3 } };
     vscodeState.terminalSessionRegistryInstances[0].findSession.mockReturnValue('wt-_work_repo__term-1');
     await vscodeState.onDidCloseTerminal.mock.calls[0][0](terminal);
 
@@ -525,11 +532,28 @@ describe('activate', () => {
     expect(vscodeState.projectTreeInstances[0].refresh).toHaveBeenCalledOnce();
   });
 
+  it('does not kill the tmux session on a Shutdown close (window reload)', async () => {
+    const context = createContext();
+
+    await activate(context as never);
+    const terminal = { show: vi.fn(), exitStatus: { reason: 1 } };
+    vscodeState.terminalSessionRegistryInstances[0].findSession.mockReturnValue('wt-_work_repo__term-1');
+    await vscodeState.onDidCloseTerminal.mock.calls[0][0](terminal);
+
+    expect(vscodeState.tmuxInstances[0].killSession).not.toHaveBeenCalled();
+    expect(vscodeState.terminalSessionListCacheInstances[0].removeSession).not.toHaveBeenCalled();
+    // Registry entry is still cleared so the next attach in the new window
+    // starts fresh.
+    expect(vscodeState.terminalSessionRegistryInstances[0].deleteSession).toHaveBeenCalledWith(
+      'wt-_work_repo__term-1',
+    );
+  });
+
   it('ignores VS Code close events for foreign terminals', async () => {
     const context = createContext();
 
     await activate(context as never);
-    const terminal = { show: vi.fn() };
+    const terminal = { show: vi.fn(), exitStatus: { reason: 3 } };
     vscodeState.terminalSessionRegistryInstances[0].findSession.mockReturnValue(undefined);
     await vscodeState.onDidCloseTerminal.mock.calls[0][0](terminal);
 
