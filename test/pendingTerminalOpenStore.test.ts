@@ -7,17 +7,18 @@ import {
 
 function createStore(now = vi.fn(() => 1_000)) {
   const values: Record<string, unknown> = {};
+  const update = vi.fn(async (key: string, value: unknown) => {
+    values[key] = value;
+  });
   const store = new PendingTerminalOpenStore(
     {
       get: <T>(key: string, defaultValue: T) => (values[key] as T | undefined) ?? defaultValue,
-      update: async (key: string, value: unknown) => {
-        values[key] = value;
-      },
+      update,
     },
     now,
   );
 
-  return { store, values, now };
+  return { store, values, now, update };
 }
 
 describe('PendingTerminalOpenStore', () => {
@@ -72,5 +73,42 @@ describe('PendingTerminalOpenStore', () => {
 
     expect(await store.consume('/work/beta-main')).toBeUndefined();
     expect(await store.consume('/work/alpha-main')).toBe('wt-_work_alpha-main__term-1');
+  });
+
+  it('peek returns the intent without deleting it', async () => {
+    const { store } = createStore();
+    await store.set('/work/alpha-main', 'wt-_work_alpha-main__term-1');
+
+    expect(await store.peek('/work/alpha-main')).toBe('wt-_work_alpha-main__term-1');
+    expect(await store.peek('/work/alpha-main')).toBe('wt-_work_alpha-main__term-1');
+    expect(await store.consume('/work/alpha-main')).toBe('wt-_work_alpha-main__term-1');
+  });
+
+  it('peek prunes expired entries', async () => {
+    const now = vi.fn(() => 1_000);
+    const { store, values } = createStore(now);
+    await store.set('/work/alpha-main', 'wt-_work_alpha-main__term-1');
+    now.mockReturnValue(61_001);
+
+    expect(await store.peek('/work/alpha-main')).toBeUndefined();
+    expect(values[PENDING_TERMINAL_OPEN_KEY]).toEqual({
+      schemaVersion: 1,
+      entries: {},
+    });
+  });
+
+  it('normalizes worktree paths across trailing slashes', async () => {
+    const { store } = createStore();
+    await store.set('/work/alpha-main/', 'wt-_work_alpha-main__term-1');
+
+    expect(await store.peek('/work/alpha-main')).toBe('wt-_work_alpha-main__term-1');
+    expect(await store.consume('/work/alpha-main')).toBe('wt-_work_alpha-main__term-1');
+  });
+
+  it('does not write back when consume misses with nothing to prune', async () => {
+    const { store, update } = createStore();
+
+    expect(await store.consume('/work/beta-main')).toBeUndefined();
+    expect(update).not.toHaveBeenCalled();
   });
 });

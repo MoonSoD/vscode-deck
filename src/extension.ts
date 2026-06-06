@@ -207,6 +207,7 @@ async function migrateProjects(projectRegistry: ProjectRegistryStore): Promise<v
 }
 
 interface PendingTerminalOpenConsumer {
+  peek(worktreePath: string): Promise<string | undefined>;
   consume(worktreePath: string): Promise<string | undefined>;
 }
 
@@ -226,16 +227,21 @@ export async function openPendingTerminalForCurrentWorktree(
   const worktreePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   if (!worktreePath) return;
 
-  const sessionName = await pendingTerminalOpens.consume(worktreePath);
+  // Peek before consume: if the target tmux session is gone (killed
+  // externally during reload), we leave the intent in place rather than
+  // silently dropping it. TTL eventually prunes if the session never returns.
+  const sessionName = await pendingTerminalOpens.peek(worktreePath);
   if (!sessionName) return;
 
   const terminals = toCachedTerminalSessions(
     worktreePath,
     await tmux.listSessions(terminalSessionPrefix(worktreePath)),
   );
-  await terminalSessionListCache.set(terminalWorktreePrefix(worktreePath), terminals);
   const terminal = terminals.find((candidate) => candidate.sessionName === sessionName);
   if (!terminal) return;
+
+  await pendingTerminalOpens.consume(worktreePath);
+  await terminalSessionListCache.set(terminalWorktreePrefix(worktreePath), terminals);
 
   await vscode.commands.executeCommand('deck.openTerminal', {
     terminal,

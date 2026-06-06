@@ -387,6 +387,7 @@ describe('activate', () => {
 
   it('opens a consumed pending terminal for the current worktree after loading terminal cache', async () => {
     const pendingTerminalOpens = {
+      peek: vi.fn(async () => 'wt-_work_alpha-main__term-1'),
       consume: vi.fn(async () => 'wt-_work_alpha-main__term-1'),
     };
     const terminalSessionListCache = {
@@ -404,6 +405,7 @@ describe('activate', () => {
       tmux,
     );
 
+    expect(pendingTerminalOpens.peek).toHaveBeenCalledWith('/work/alpha-main');
     expect(pendingTerminalOpens.consume).toHaveBeenCalledWith('/work/alpha-main');
     expect(terminalSessionListCache.set).toHaveBeenCalledWith('wt-_work_alpha-main__', [
       { sessionName: 'wt-_work_alpha-main__term-1', n: 1, windowName: 'zsh' },
@@ -423,6 +425,7 @@ describe('activate', () => {
 
   it('does nothing when no pending terminal intent matches the current worktree', async () => {
     const pendingTerminalOpens = {
+      peek: vi.fn(async () => undefined),
       consume: vi.fn(async () => undefined),
     };
     const terminalSessionListCache = {
@@ -443,6 +446,33 @@ describe('activate', () => {
       expect.anything(),
     );
     expect(tmux.listSessions).not.toHaveBeenCalled();
+    expect(pendingTerminalOpens.consume).not.toHaveBeenCalled();
+  });
+
+  it('leaves the pending intent in place when the target session has vanished', async () => {
+    const pendingTerminalOpens = {
+      peek: vi.fn(async () => 'wt-_work_alpha-main__term-1'),
+      consume: vi.fn(async () => undefined),
+    };
+    const terminalSessionListCache = {
+      set: vi.fn(async () => undefined),
+    };
+    const tmux = {
+      listSessions: vi.fn(async () => []),
+    };
+
+    await openPendingTerminalForCurrentWorktree(
+      pendingTerminalOpens,
+      terminalSessionListCache,
+      tmux,
+    );
+
+    expect(pendingTerminalOpens.consume).not.toHaveBeenCalled();
+    expect(terminalSessionListCache.set).not.toHaveBeenCalled();
+    expect(vscode.commands.executeCommand).not.toHaveBeenCalledWith(
+      'deck.openTerminal',
+      expect.anything(),
+    );
   });
 
   it('ignores expired pending terminal intents on activation', async () => {

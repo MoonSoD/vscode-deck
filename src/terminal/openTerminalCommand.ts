@@ -1,3 +1,4 @@
+import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { TerminalSessionRegistry } from './terminalSessionRegistry';
 
@@ -58,9 +59,9 @@ export class OpenTerminalCommand {
 
   private async switchForForeignWorktree(node: TerminalNodeLike): Promise<boolean> {
     const currentWorktreePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-    if (!currentWorktreePath || !node.worktreePath || node.worktreePath === currentWorktreePath) {
-      return false;
-    }
+    if (!currentWorktreePath || !node.worktreePath) return false;
+    // Normalize so a trailing slash on one side doesn't trigger a spurious switch.
+    if (path.resolve(node.worktreePath) === path.resolve(currentWorktreePath)) return false;
     if (!this.options.pendingTerminalOpens || !this.options.switcher) return false;
 
     await this.options.pendingTerminalOpens.set(node.worktreePath, node.terminal.sessionName);
