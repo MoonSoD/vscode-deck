@@ -25,7 +25,7 @@ export class PendingTerminalOpenStore {
 
   async set(worktreePath: string, sessionName: string): Promise<void> {
     const key = normalizeKey(worktreePath);
-    const stored = this.read();
+    const { stored } = this.read();
     await this.write({
       schemaVersion: PENDING_TERMINAL_OPEN_SCHEMA_VERSION,
       entries: {
