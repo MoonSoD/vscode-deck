@@ -127,6 +127,39 @@ describe('ProjectRemovalCommand', () => {
     );
   });
 
+  it('falls back to the worktree-list cache when git enumeration fails', async () => {
+    const activeWorktrees = { clear: vi.fn(async () => undefined) };
+    const projectRegistry = { remove: vi.fn(async () => undefined) };
+    const worktreeRoots = { clear: vi.fn(async () => undefined) };
+    const worktreeOrders = { clear: vi.fn(async () => undefined) };
+    const terminalCascade = { killWorktree: vi.fn(async () => undefined) };
+    const worktreeListCache = {
+      get: vi.fn((commonDir: string) =>
+        commonDir === '/git/repo'
+          ? [{ path: '/repo/main' }, { path: '/repo/feature' }]
+          : undefined,
+      ),
+    };
+    vi.mocked(listWorktrees).mockRejectedValueOnce(new Error('corrupt git dir'));
+
+    const command = new ProjectRemovalCommand(
+      projectRegistry,
+      activeWorktrees,
+      worktreeRoots,
+      worktreeOrders,
+      vi.fn(),
+      terminalCascade,
+      worktreeListCache,
+    );
+
+    await command.run({ projectPath: '/repo/main' });
+
+    expect(worktreeListCache.get).toHaveBeenCalledWith('/git/repo');
+    expect(terminalCascade.killWorktree).toHaveBeenCalledWith('/repo/main');
+    expect(terminalCascade.killWorktree).toHaveBeenCalledWith('/repo/feature');
+    expect(projectRegistry.remove).toHaveBeenCalledWith('/repo/main');
+  });
+
   it('continues removing the Project when terminal cascade fails', async () => {
     const activeWorktrees = { clear: vi.fn(async () => undefined) };
     const projectRegistry = { remove: vi.fn(async () => undefined) };

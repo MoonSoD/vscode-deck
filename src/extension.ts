@@ -94,6 +94,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     worktreeOrders,
     () => tree.refresh(),
     terminalCascade,
+    worktreeListCache,
   );
 
   const treeView = vscode.window.createTreeView('deck.projects', {

@@ -17,6 +17,10 @@ interface TerminalCascadeLike {
   killWorktree(worktreePath: string): Promise<void>;
 }
 
+interface WorktreeListCacheLike {
+  get(commonDir: string): ReadonlyArray<{ path: string }> | undefined;
+}
+
 const REMOVE_LABEL = 'Remove from Deck';
 const BASE_DETAIL = 'This only removes the Project from Deck. Files and git history are untouched.';
 const ACTIVE_PROJECT_DETAIL =
@@ -32,6 +36,7 @@ export class ProjectRemovalCommand {
     private readonly terminalCascade: TerminalCascadeLike = {
       killWorktree: async () => undefined,
     },
+    private readonly worktreeListCache: WorktreeListCacheLike | undefined = undefined,
   ) {}
 
   async run(node: ProjectNodeLike | undefined): Promise<void> {
@@ -55,7 +60,7 @@ export class ProjectRemovalCommand {
     );
     if (picked !== REMOVE_LABEL) return;
 
-    await this.killProjectTerminals(node.projectPath);
+    await this.killProjectTerminals(node.projectPath, commonDir);
     await this.projectRegistry.remove(node.projectPath);
 
     if (commonDir !== null) {
@@ -66,17 +71,26 @@ export class ProjectRemovalCommand {
     this.refresh();
   }
 
-  private async killProjectTerminals(projectPath: string): Promise<void> {
-    let worktrees;
+  private async killProjectTerminals(
+    projectPath: string,
+    commonDir: string | null,
+  ): Promise<void> {
+    // Fall back to the cached worktree list when `git worktree list` fails
+    // (corrupt git dir, dangling worktree refs). Cache is hydrated sync from
+    // globalState on activation, so previous successful enumerations survive.
+    let worktreePaths: readonly string[];
     try {
-      worktrees = await listWorktrees(projectPath);
+      const worktrees = await listWorktrees(projectPath);
+      worktreePaths = worktrees.map((w) => w.path);
     } catch {
-      return;
+      const cached = commonDir !== null ? this.worktreeListCache?.get(commonDir) : undefined;
+      if (!cached || cached.length === 0) return;
+      worktreePaths = cached.map((w) => w.path);
     }
 
-    for (const worktree of worktrees) {
+    for (const worktreePath of worktreePaths) {
       try {
-        await this.terminalCascade.killWorktree(worktree.path);
+        await this.terminalCascade.killWorktree(worktreePath);
       } catch {
         // Tmux cleanup must not block ProjectRemoval.
       }

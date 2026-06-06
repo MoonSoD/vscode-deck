@@ -372,6 +372,47 @@ describe('ProjectTreeProvider', () => {
     expect(fire).toHaveBeenCalledWith(undefined);
   });
 
+  it('detects a window-name change with no list-shape change as a diff', async () => {
+    // Locks the windowName-sensitivity invariant: if a row's underlying
+    // tmux window auto-renames (zsh → claude) but the session set is
+    // otherwise identical, the cache MUST update and the tree MUST fire.
+    const tmux = {
+      listSessions: vi.fn(async () => [
+        { sessionName: 'wt-_work_alpha-main__term-1', windowName: 'claude' },
+      ]),
+    };
+    const terminalSessionListCache = {
+      get: vi.fn(() => [
+        { sessionName: 'wt-_work_alpha-main__term-1', n: 1, windowName: 'zsh' },
+      ]),
+      set: vi.fn(async () => undefined),
+    } as unknown as TerminalSessionListCacheStore;
+    const provider = new ProjectTreeProvider(
+      registry(['/work/alpha-main']),
+      { get: vi.fn() } as unknown as ActiveWorktreeStore,
+      { get: vi.fn() } as unknown as WorktreeOrderStore,
+      { get: vi.fn(), set: vi.fn(async () => undefined) } as unknown as WorktreeListCacheStore,
+      { get: vi.fn(() => '/git/alpha'), set: vi.fn(async () => undefined) } as unknown as ProjectCommonDirCache,
+      tmux,
+      true,
+      terminalSessionListCache,
+    );
+    const projects = provider.getChildren();
+    if (!Array.isArray(projects)) throw new Error('expected sync project roots');
+    const worktrees = await provider.getChildren(projects[0]);
+    if (!Array.isArray(worktrees)) throw new Error('expected worktree children');
+    const fire = (provider as unknown as { _onDidChangeTreeData: { fire: { mockClear(): void } } })._onDidChangeTreeData.fire;
+    fire.mockClear();
+
+    provider.getChildren(worktrees[0]);
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(terminalSessionListCache.set).toHaveBeenCalledWith('wt-_work_alpha-main__', [
+      { sessionName: 'wt-_work_alpha-main__term-1', n: 1, windowName: 'claude' },
+    ]);
+    expect(fire).toHaveBeenCalledWith(undefined);
+  });
+
   it('keeps warm cached terminals when the background refresh has no logical diff', async () => {
     const terminals = [
       { sessionName: 'wt-_work_alpha-main__term-1', n: 1, windowName: 'zsh' },
