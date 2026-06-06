@@ -59,7 +59,6 @@ describe('AddTerminalCommand', () => {
       '/work/repo',
     );
     expect(vscodeState.createTerminal).toHaveBeenCalledWith({
-      name: 'Deck zsh',
       shellPath: 'tmux',
       shellArgs: [
         '-L',

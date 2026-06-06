@@ -32,7 +32,6 @@ describe('OpenTerminalCommand', () => {
     });
 
     expect(vscodeState.createTerminal).toHaveBeenCalledWith({
-      name: 'Deck zsh',
       shellPath: 'tmux',
       shellArgs: ['attach-session', '-t', '=wt-_work_repo__term-1'],
       location: { viewColumn: -1 },

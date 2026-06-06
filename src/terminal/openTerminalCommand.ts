@@ -28,8 +28,9 @@ export class OpenTerminalCommand {
       return;
     }
 
+    // No `name` — see AddTerminalCommand for why. tmux's set-titles drives
+    // the editor tab title dynamically.
     const terminal = vscode.window.createTerminal({
-      name: `Deck ${node.terminal.windowName}`,
       shellPath: 'tmux',
       shellArgs: this.tmux.attachShellArgs(node.terminal.sessionName),
       location: { viewColumn: vscode.ViewColumn.Active },
