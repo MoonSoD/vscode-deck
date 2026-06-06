@@ -11,16 +11,32 @@ interface TerminalNodeLike {
     windowName: string;
   };
   n: number;
+  worktreePath?: string;
+}
+
+interface PendingTerminalOpenStoreLike {
+  set(worktreePath: string, sessionName: string): Promise<void>;
+}
+
+interface WorktreeSwitcherLike {
+  switchTo(worktreePath: string): Promise<void>;
+}
+
+interface OpenTerminalCommandOptions {
+  pendingTerminalOpens?: PendingTerminalOpenStoreLike;
+  switcher?: WorktreeSwitcherLike;
 }
 
 export class OpenTerminalCommand {
   constructor(
     private readonly tmux: OpenTerminalTmuxCli,
     private readonly registry: TerminalSessionRegistry,
+    private readonly options: OpenTerminalCommandOptions = {},
   ) {}
 
   async run(node: TerminalNodeLike | undefined): Promise<void> {
     if (!node) return;
+    if (await this.switchForForeignWorktree(node)) return;
 
     const existing = this.registry.get(node.terminal.sessionName);
     if (existing) {
@@ -38,5 +54,17 @@ export class OpenTerminalCommand {
     });
     this.registry.set(node.terminal.sessionName, terminal);
     terminal.show(false);
+  }
+
+  private async switchForForeignWorktree(node: TerminalNodeLike): Promise<boolean> {
+    const currentWorktreePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    if (!currentWorktreePath || !node.worktreePath || node.worktreePath === currentWorktreePath) {
+      return false;
+    }
+    if (!this.options.pendingTerminalOpens || !this.options.switcher) return false;
+
+    await this.options.pendingTerminalOpens.set(node.worktreePath, node.terminal.sessionName);
+    await this.options.switcher.switchTo(node.worktreePath);
+    return true;
   }
 }

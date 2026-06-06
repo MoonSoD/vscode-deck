@@ -19,6 +19,7 @@ const vscodeState = vi.hoisted(() => ({
   projectTreeArgs: undefined as unknown[] | undefined,
   registerCommand: vi.fn(() => ({ dispose: vi.fn() })),
   settingsProjects: ['/settings/repo'],
+  workspaceFolders: [{ uri: { fsPath: '/work/alpha-main' } }],
   tmuxPreflight: vi.fn(async () => ({ available: true })),
 }));
 
@@ -42,6 +43,9 @@ vi.mock('vscode', () => ({
       update: vscodeState.configUpdate,
     }),
     onDidChangeWorkspaceFolders: vscodeState.onDidChangeWorkspaceFolders,
+    get workspaceFolders() {
+      return vscodeState.workspaceFolders;
+    },
   },
 }));
 
@@ -63,6 +67,14 @@ vi.mock('../src/worktree/worktreeListCacheStore', () => ({
 
 vi.mock('../src/terminal/terminalSessionListCacheStore', () => ({
   TerminalSessionListCacheStore: class {},
+  toCachedTerminalSessions: (
+    worktreePath: string,
+    sessions: Array<{ sessionName: string; windowName: string }>,
+  ) =>
+    sessions.map((session) => ({
+      ...session,
+      n: Number(session.sessionName.slice(`wt-${worktreePath.replace(/[:./]/g, '_')}__term-`.length)),
+    })),
 }));
 
 vi.mock('../src/project/projectCommonDirCache', () => ({
@@ -150,7 +162,8 @@ vi.mock('../src/terminal/terminalSessionRegistry', () => ({
 }));
 
 import * as vscode from 'vscode';
-import { activate } from '../src/extension';
+import { activate, openPendingTerminalForCurrentWorktree } from '../src/extension';
+import { PendingTerminalOpenStore } from '../src/terminal/pendingTerminalOpenStore';
 
 describe('activate', () => {
   beforeEach(() => {
@@ -160,6 +173,7 @@ describe('activate', () => {
     vscodeState.killTerminalArgs = undefined;
     vscodeState.projectTreeArgs = undefined;
     vscodeState.settingsProjects = ['/settings/repo'];
+    vscodeState.workspaceFolders = [{ uri: { fsPath: '/work/alpha-main' } }];
     vscodeState.configUpdate.mockResolvedValue(undefined);
     vscodeState.tmuxPreflight.mockResolvedValue({ available: true });
   });
@@ -291,5 +305,96 @@ describe('activate', () => {
     expect(vscodeState.killTerminalRun).toHaveBeenCalledWith({
       terminal: { sessionName: 's', windowName: 'zsh' },
     });
+  });
+
+  it('opens a consumed pending terminal for the current worktree after loading terminal cache', async () => {
+    const pendingTerminalOpens = {
+      consume: vi.fn(async () => 'wt-_work_alpha-main__term-1'),
+    };
+    const terminalSessionListCache = {
+      set: vi.fn(async () => undefined),
+    };
+    const tmux = {
+      listSessions: vi.fn(async () => [
+        { sessionName: 'wt-_work_alpha-main__term-1', windowName: 'zsh' },
+      ]),
+    };
+
+    await openPendingTerminalForCurrentWorktree(
+      pendingTerminalOpens,
+      terminalSessionListCache,
+      tmux,
+    );
+
+    expect(pendingTerminalOpens.consume).toHaveBeenCalledWith('/work/alpha-main');
+    expect(terminalSessionListCache.set).toHaveBeenCalledWith('wt-_work_alpha-main__', [
+      { sessionName: 'wt-_work_alpha-main__term-1', n: 1, windowName: 'zsh' },
+    ]);
+    expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
+      'deck.openTerminal',
+      expect.objectContaining({
+        n: 1,
+        worktreePath: '/work/alpha-main',
+        terminal: expect.objectContaining({
+          sessionName: 'wt-_work_alpha-main__term-1',
+          windowName: 'zsh',
+        }),
+      }),
+    );
+  });
+
+  it('does nothing when no pending terminal intent matches the current worktree', async () => {
+    const pendingTerminalOpens = {
+      consume: vi.fn(async () => undefined),
+    };
+    const terminalSessionListCache = {
+      set: vi.fn(async () => undefined),
+    };
+    const tmux = {
+      listSessions: vi.fn(async () => []),
+    };
+
+    await openPendingTerminalForCurrentWorktree(
+      pendingTerminalOpens,
+      terminalSessionListCache,
+      tmux,
+    );
+
+    expect(vscode.commands.executeCommand).not.toHaveBeenCalledWith(
+      'deck.openTerminal',
+      expect.anything(),
+    );
+    expect(tmux.listSessions).not.toHaveBeenCalled();
+  });
+
+  it('ignores expired pending terminal intents on activation', async () => {
+    const values: Record<string, unknown> = {};
+    const now = vi.fn(() => 1_000);
+    const pendingTerminalOpens = new PendingTerminalOpenStore(
+      {
+        get: <T>(key: string, defaultValue: T) => (values[key] as T | undefined) ?? defaultValue,
+        update: async (key: string, value: unknown) => {
+          values[key] = value;
+        },
+      },
+      now,
+    );
+    await pendingTerminalOpens.set('/work/alpha-main', 'wt-_work_alpha-main__term-1');
+    now.mockReturnValue(61_001);
+    const tmux = {
+      listSessions: vi.fn(async () => []),
+    };
+
+    await openPendingTerminalForCurrentWorktree(
+      pendingTerminalOpens,
+      { set: vi.fn(async () => undefined) },
+      tmux,
+    );
+
+    expect(vscode.commands.executeCommand).not.toHaveBeenCalledWith(
+      'deck.openTerminal',
+      expect.anything(),
+    );
+    expect(tmux.listSessions).not.toHaveBeenCalled();
   });
 });

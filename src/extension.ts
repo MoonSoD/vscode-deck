@@ -19,10 +19,15 @@ import { WorktreeOrderStore } from './worktree/worktreeOrderStore';
 import { AddTerminalCommand } from './terminal/addTerminalCommand';
 import { KillTerminalCommand } from './terminal/killTerminalCommand';
 import { OpenTerminalCommand } from './terminal/openTerminalCommand';
+import { PendingTerminalOpenStore } from './terminal/pendingTerminalOpenStore';
 import { TerminalCascade } from './terminal/terminalCascade';
 import { TerminalSessionRegistry } from './terminal/terminalSessionRegistry';
-import { TerminalSessionListCacheStore } from './terminal/terminalSessionListCacheStore';
-import { TmuxCli } from './terminal/tmuxCli';
+import {
+  TerminalSessionListCacheStore,
+  toCachedTerminalSessions,
+} from './terminal/terminalSessionListCacheStore';
+import { TmuxCli, TmuxSession } from './terminal/tmuxCli';
+import { terminalSessionPrefix, terminalWorktreePrefix } from './terminal/tmuxSafe';
 import { tmuxPreflight } from './terminal/tmuxPreflight';
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
@@ -38,6 +43,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const worktreeOrders = new WorktreeOrderStore(context.globalState);
   const worktreeListCache = new WorktreeListCacheStore(context.globalState);
   const terminalSessionListCache = new TerminalSessionListCacheStore(context.globalState);
+  const pendingTerminalOpens = new PendingTerminalOpenStore(context.globalState);
   const projectCommonDirCache = new ProjectCommonDirCache(context.globalState);
   const branchDeletionPreferences = new BranchDeletionPreferenceStore(context.globalState);
   const switcher = new WorktreeSwitcher(activeWorktrees);
@@ -60,7 +66,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     () => tree.refresh(),
     terminalSessionListCache,
   );
-  const openTerminal = new OpenTerminalCommand(tmux, terminalRegistry);
+  const openTerminal = new OpenTerminalCommand(tmux, terminalRegistry, {
+    pendingTerminalOpens,
+    switcher,
+  });
   const killTerminal = new KillTerminalCommand(
     tmux,
     () => tree.refresh(),
@@ -156,6 +165,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       tree.handleActiveTerminalChange(active);
     }),
   );
+  if (tmuxAvailability.available) {
+    await openPendingTerminalForCurrentWorktree(pendingTerminalOpens, terminalSessionListCache, tmux);
+  }
 }
 
 export function deactivate(): void {}
@@ -169,4 +181,42 @@ async function migrateProjects(projectRegistry: ProjectRegistryStore): Promise<v
   if (migration.clearSettings) {
     await cfg.update('projects', undefined, vscode.ConfigurationTarget.Global);
   }
+}
+
+interface PendingTerminalOpenConsumer {
+  consume(worktreePath: string): Promise<string | undefined>;
+}
+
+interface TerminalSessionCacheWriter {
+  set(prefix: string, terminals: ReturnType<typeof toCachedTerminalSessions>): Promise<void>;
+}
+
+interface TerminalSessionLister {
+  listSessions(prefix?: string): Promise<TmuxSession[]>;
+}
+
+export async function openPendingTerminalForCurrentWorktree(
+  pendingTerminalOpens: PendingTerminalOpenConsumer,
+  terminalSessionListCache: TerminalSessionCacheWriter,
+  tmux: TerminalSessionLister,
+): Promise<void> {
+  const worktreePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  if (!worktreePath) return;
+
+  const sessionName = await pendingTerminalOpens.consume(worktreePath);
+  if (!sessionName) return;
+
+  const terminals = toCachedTerminalSessions(
+    worktreePath,
+    await tmux.listSessions(terminalSessionPrefix(worktreePath)),
+  );
+  await terminalSessionListCache.set(terminalWorktreePrefix(worktreePath), terminals);
+  const terminal = terminals.find((candidate) => candidate.sessionName === sessionName);
+  if (!terminal) return;
+
+  await vscode.commands.executeCommand('deck.openTerminal', {
+    terminal,
+    n: terminal.n,
+    worktreePath,
+  });
 }

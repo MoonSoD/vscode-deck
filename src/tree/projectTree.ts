@@ -86,6 +86,7 @@ class TerminalNode extends vscode.TreeItem {
   constructor(
     public readonly terminal: TmuxSession,
     public readonly n: number,
+    public readonly worktreePath: string,
   ) {
     const item = describeTerminalTreeItem(n, terminal.windowName);
     super(item.label, vscode.TreeItemCollapsibleState.None);
@@ -383,7 +384,7 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
     // The Worktree row's inline `+` icon is the always-available add affordance.
     // Show the explicit "Add Terminal" row only as the empty-state hint.
     if (terminals.length === 0) return [new TerminalAddNode(element)];
-    return terminals.map((terminal) => new TerminalNode(terminal, terminal.n));
+    return terminals.map((terminal) => new TerminalNode(terminal, terminal.n, element.worktree.path));
   }
 
   private refreshWorktreesInBackground(

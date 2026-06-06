@@ -2,12 +2,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const vscodeState = vi.hoisted(() => ({
   createTerminal: vi.fn(() => ({ show: vi.fn() })),
+  workspaceFolders: [{ uri: { fsPath: '/work/alpha-main' } }],
 }));
 
 vi.mock('vscode', () => ({
   ViewColumn: { Active: -1 },
   window: {
     createTerminal: vscodeState.createTerminal,
+  },
+  workspace: {
+    workspaceFolders: vscodeState.workspaceFolders,
   },
 }));
 
@@ -17,6 +21,7 @@ import { TerminalSessionRegistry } from '../src/terminal/terminalSessionRegistry
 describe('OpenTerminalCommand', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vscodeState.workspaceFolders = [{ uri: { fsPath: '/work/alpha-main' } }];
   });
 
   it('attaches a new editor terminal on registry miss', async () => {
@@ -30,6 +35,7 @@ describe('OpenTerminalCommand', () => {
     await new OpenTerminalCommand(tmux, registry).run({
       terminal: { sessionName: 'wt-_work_repo__term-1', windowName: 'zsh' },
       n: 1,
+      worktreePath: '/work/alpha-main',
     });
 
     expect(vscodeState.createTerminal).toHaveBeenCalledWith({
@@ -53,9 +59,36 @@ describe('OpenTerminalCommand', () => {
     await new OpenTerminalCommand(tmux, registry).run({
       terminal: { sessionName: 'wt-_work_repo__term-1', windowName: 'zsh' },
       n: 1,
+      worktreePath: '/work/alpha-main',
     });
 
     expect(vscodeState.createTerminal).not.toHaveBeenCalled();
     expect(terminal.show).toHaveBeenCalledWith(false);
+  });
+
+  it('stores a pending intent and switches worktree for cross-worktree terminal clicks', async () => {
+    const tmux = {
+      attachShellArgs: vi.fn(),
+    };
+    const registry = new TerminalSessionRegistry();
+    const pendingTerminalOpens = {
+      set: vi.fn(async () => undefined),
+    };
+    const switcher = {
+      switchTo: vi.fn(async () => undefined),
+    };
+
+    await new OpenTerminalCommand(tmux, registry, { pendingTerminalOpens, switcher }).run({
+      terminal: { sessionName: 'wt-_work_beta-main__term-1', windowName: 'zsh' },
+      n: 1,
+      worktreePath: '/work/beta-main',
+    });
+
+    expect(pendingTerminalOpens.set).toHaveBeenCalledWith(
+      '/work/beta-main',
+      'wt-_work_beta-main__term-1',
+    );
+    expect(switcher.switchTo).toHaveBeenCalledWith('/work/beta-main');
+    expect(vscodeState.createTerminal).not.toHaveBeenCalled();
   });
 });

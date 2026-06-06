@@ -313,10 +313,12 @@ describe('ProjectTreeProvider', () => {
       expect.objectContaining({
         label: '1 zsh',
         command: expect.objectContaining({ command: 'deck.openTerminal' }),
+        worktreePath: '/work/alpha-main',
       }),
       expect.objectContaining({
         label: '2 claude',
         command: expect.objectContaining({ command: 'deck.openTerminal' }),
+        worktreePath: '/work/alpha-main',
       }),
     ]);
     expect(tmux.listSessions).toHaveBeenCalledWith('wt-_work_alpha-main__term-');

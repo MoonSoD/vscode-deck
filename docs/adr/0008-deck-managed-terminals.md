@@ -153,6 +153,24 @@ state, not the user's whole tmux. Sanctel solved this with `-L sanctel -f
     lazily on the next refresh trigger — acceptable, since users look at
     the tree right before they interact with it.
 
+14. **Cross-worktree click.** Clicking a Terminal row whose Worktree is
+    not the currently mounted workspace folder records a pending
+    "open this session after activation" intent, then runs the existing
+    Worktree switch path. The current window reloads into the target
+    Worktree; on activation, Deck consumes the intent for that Worktree,
+    refreshes that Worktree's terminal-session cache from tmux, and
+    dispatches `deck.openTerminal` for the clicked session. Same-Worktree
+    Terminal clicks keep attaching directly as before.
+
+15. **Pending terminal-open persistence.** Pending cross-worktree Terminal
+    clicks live in `globalState` under `deck.pendingTerminalOpen`:
+    `{ schemaVersion: 1, entries: { [worktreePath]: { sessionName,
+    createdAt } } }`. `consume(worktreePath)` is read-and-delete: it
+    returns the matching session once, removes it, and prunes all entries
+    older than 60 seconds on every read. Schema-version mismatch resets
+    the store to empty. There is no cross-window collision check; ADR-0008's
+    existing multi-window collision note applies.
+
 ## Consequences
 
 - **The screenshot's "windows-in-a-session" UX is not what Deck shows.**
