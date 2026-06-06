@@ -9,7 +9,7 @@ export class TerminalSessionRegistry {
   private readonly terminals = new Map<string, TerminalLike>();
 
   get(session: string): TerminalLike | undefined {
-    return this.terminals.get(session);
+    return this.getTerminal(session);
   }
 
   getTerminal(session: string): TerminalLike | undefined {

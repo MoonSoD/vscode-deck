@@ -1,7 +1,7 @@
 import type { TerminalSessionListCacheStore } from './terminalSessionListCacheStore';
 import type { TerminalSessionRegistry } from './terminalSessionRegistry';
 
-export interface KillTerminalTmuxCli {
+export interface CloseTerminalTmuxCli {
   killSession(session: string): Promise<void>;
 }
 
@@ -13,7 +13,7 @@ interface TerminalNodeLike {
 
 export class CloseTerminalCommand {
   constructor(
-    private readonly tmux: KillTerminalTmuxCli,
+    private readonly tmux: CloseTerminalTmuxCli,
     private readonly registry: Pick<TerminalSessionRegistry, 'getTerminal' | 'deleteSession'>,
     private readonly refresh: () => void = () => undefined,
     private readonly terminalSessionListCache: Pick<TerminalSessionListCacheStore, 'removeSession'> = {
@@ -34,4 +34,5 @@ export class CloseTerminalCommand {
   }
 }
 
+export type KillTerminalTmuxCli = CloseTerminalTmuxCli;
 export { CloseTerminalCommand as KillTerminalCommand };

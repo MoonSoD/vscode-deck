@@ -61,7 +61,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     terminalSessionListCache,
   );
   const openTerminal = new OpenTerminalCommand(tmux, terminalRegistry);
-  const killTerminal = new CloseTerminalCommand(
+  const closeTerminal = new CloseTerminalCommand(
     tmux,
     terminalRegistry,
     () => tree.refresh(),
@@ -137,7 +137,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand('deck.addWorktree', (node) => addWorktree.run(node)),
     vscode.commands.registerCommand('deck.addTerminal', (node) => addTerminal.run(node)),
     vscode.commands.registerCommand('deck.openTerminal', (node) => openTerminal.run(node)),
-    vscode.commands.registerCommand('deck.killTerminal', (node) => killTerminal.run(node)),
+    vscode.commands.registerCommand('deck.killTerminal', (node) => closeTerminal.run(node)),
     vscode.commands.registerCommand('deck.removeProject', (node) => removeProject.run(node)),
     vscode.commands.registerCommand('deck.removeWorktree', (node) => removeWorktree.run(node)),
     vscode.commands.registerCommand('deck.openWorktreeInNewWindow', (node: { worktree: { path: string } }) =>
