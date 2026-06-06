@@ -33,7 +33,7 @@ describe('OpenTerminalCommand', () => {
     });
 
     expect(vscodeState.createTerminal).toHaveBeenCalledWith({
-      name: '1 zsh',
+      name: '1',
       shellPath: 'tmux',
       shellArgs: ['attach-session', '-t', '=wt-_work_repo__term-1'],
       location: { viewColumn: -1 },
