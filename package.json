@@ -187,7 +187,7 @@
   "devDependencies": {
     "@ai-hero/sandcastle": "^0.5.12",
     "@types/node": "^20.x",
-    "@types/vscode": "^1.95.0",
+    "@types/vscode": "^1.106.0",
     "typescript": "^5.7.2",
     "vitest": "^4.1.8"
   }
