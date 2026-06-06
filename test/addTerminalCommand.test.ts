@@ -1,7 +1,8 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const vscodeState = vi.hoisted(() => ({
   createTerminal: vi.fn(() => ({ show: vi.fn() })),
+  workspaceFolders: [{ uri: { fsPath: '/work/repo' } }],
 }));
 
 vi.mock('vscode', () => ({
@@ -9,12 +10,22 @@ vi.mock('vscode', () => ({
   window: {
     createTerminal: vscodeState.createTerminal,
   },
+  workspace: {
+    get workspaceFolders() {
+      return vscodeState.workspaceFolders;
+    },
+  },
 }));
 
 import { AddTerminalCommand } from '../src/terminal/addTerminalCommand';
 import { TerminalSessionRegistry } from '../src/terminal/terminalSessionRegistry';
 
 describe('AddTerminalCommand', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vscodeState.workspaceFolders = [{ uri: { fsPath: '/work/repo' } }];
+  });
+
   it('allocates the next terminal in tmux and opens it in editor view focused', async () => {
     const existing = [
       { sessionName: 'wt-_work_repo__term-1', windowName: 'zsh' },
@@ -80,5 +91,44 @@ describe('AddTerminalCommand', () => {
       { sessionName: 'wt-_work_repo__term-4', n: 4, windowName: 'zsh' },
     ]);
     expect(refresh).toHaveBeenCalledOnce();
+  });
+
+  it('creates the tmux session, stores a pending intent, and switches for cross-worktree adds', async () => {
+    vscodeState.workspaceFolders = [{ uri: { fsPath: '/work/alpha-main' } }];
+    const tmux = {
+      listSessions: vi
+        .fn()
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([
+          { sessionName: 'wt-_work_beta-main__term-1', windowName: 'zsh' },
+        ]),
+      ensureSession: vi.fn(async () => undefined),
+      attachShellArgs: vi.fn(),
+    };
+    const registry = new TerminalSessionRegistry();
+    const refresh = vi.fn();
+    const terminalSessionListCache = { set: vi.fn(async () => undefined) };
+    const pendingTerminalOpens = { set: vi.fn(async () => undefined) };
+    const switcher = { switchTo: vi.fn(async () => undefined) };
+
+    await new AddTerminalCommand(
+      tmux,
+      registry,
+      refresh,
+      terminalSessionListCache,
+      { pendingTerminalOpens, switcher },
+    ).run({ worktree: { path: '/work/beta-main' } });
+
+    expect(tmux.ensureSession).toHaveBeenCalledWith(
+      'wt-_work_beta-main__term-1',
+      '/work/beta-main',
+    );
+    expect(pendingTerminalOpens.set).toHaveBeenCalledWith(
+      '/work/beta-main',
+      'wt-_work_beta-main__term-1',
+    );
+    expect(switcher.switchTo).toHaveBeenCalledWith('/work/beta-main');
+    expect(vscodeState.createTerminal).not.toHaveBeenCalled();
+    expect(refresh).not.toHaveBeenCalled();
   });
 });

@@ -313,7 +313,7 @@ describe('activate', () => {
 
     const terminalSessionListCache = vscodeState.projectTreeArgs?.at(-2);
     expect(terminalSessionListCache).toBeDefined();
-    expect(vscodeState.addTerminalArgs?.at(-1)).toBe(terminalSessionListCache);
+    expect(vscodeState.addTerminalArgs?.at(-2)).toBe(terminalSessionListCache);
     expect(vscodeState.closeTerminalArgs?.at(-1)).toBe(terminalSessionListCache);
   });
 

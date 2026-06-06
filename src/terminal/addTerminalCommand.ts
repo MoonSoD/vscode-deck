@@ -1,3 +1,4 @@
+import * as path from 'node:path';
 import * as vscode from 'vscode';
 import {
   allocateTermN,
@@ -24,6 +25,19 @@ interface WorktreeNodeLike {
   };
 }
 
+interface PendingTerminalOpenStoreLike {
+  set(worktreePath: string, sessionName: string): Promise<void>;
+}
+
+interface WorktreeSwitcherLike {
+  switchTo(worktreePath: string): Promise<void>;
+}
+
+interface AddTerminalCommandOptions {
+  pendingTerminalOpens?: PendingTerminalOpenStoreLike;
+  switcher?: WorktreeSwitcherLike;
+}
+
 export class AddTerminalCommand {
   constructor(
     private readonly tmux: AddTerminalTmuxCli,
@@ -32,6 +46,7 @@ export class AddTerminalCommand {
     private readonly terminalSessionListCache: Pick<TerminalSessionListCacheStore, 'set'> = {
       set: async () => undefined,
     },
+    private readonly options: AddTerminalCommandOptions = {},
   ) {}
 
   async run(node: WorktreeNodeLike | undefined): Promise<void> {
@@ -43,15 +58,15 @@ export class AddTerminalCommand {
     const termN = allocateTermN(node.worktree.path, existing.map((session) => session.sessionName));
     const session = terminalSessionName(node.worktree.path, termN);
     await this.tmux.ensureSession(session, node.worktree.path);
-    // Re-list after creation. tmux's `#{pane_current_command}` is read fresh
-    // from the OS on every query, so the new session's row is correct on the
-    // first observation — no deferred refresh needed.
     const refreshed = await this.tmux.listSessions(prefix);
     const cached = toCachedTerminalSessions(node.worktree.path, refreshed);
     await this.terminalSessionListCache.set(cacheKey, cached);
-    // Mirror the sidebar's `<n> <command>` format. Rename only fires while
-    // the terminal is focused, so the creation-time label is what stale
-    // background tabs will show.
+
+    // Foreign worktree: don't attach a vscode.Terminal in this window — it
+    // would land in the wrong workspace folder. Persist the new session as
+    // a pending-open intent and switch; post-reload activation opens it.
+    if (await this.switchForForeignWorktree(node, session)) return;
+
     const newRow = cached.find((row) => row.sessionName === session);
     const tabName = newRow ? `${newRow.n} ${newRow.windowName}` : `${termN}`;
     const terminal = vscode.window.createTerminal({
@@ -61,8 +76,21 @@ export class AddTerminalCommand {
       location: { viewColumn: vscode.ViewColumn.Active },
     });
     this.registry.set(session, terminal);
-    // VS Code: Terminal.show(preserveFocus). false → focus moves to the terminal.
     terminal.show(false);
     this.refresh();
+  }
+
+  private async switchForForeignWorktree(
+    node: WorktreeNodeLike,
+    sessionName: string,
+  ): Promise<boolean> {
+    const currentWorktreePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    if (!currentWorktreePath) return false;
+    if (path.resolve(node.worktree.path) === path.resolve(currentWorktreePath)) return false;
+    if (!this.options.pendingTerminalOpens || !this.options.switcher) return false;
+
+    await this.options.pendingTerminalOpens.set(node.worktree.path, sessionName);
+    await this.options.switcher.switchTo(node.worktree.path);
+    return true;
   }
 }
