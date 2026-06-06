@@ -3,10 +3,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const vscodeState = vi.hoisted(() => ({
   addProjectArgs: undefined as unknown[] | undefined,
   addProjectRun: vi.fn(),
+  addTerminalRun: vi.fn(),
   configUpdate: vi.fn(),
   createTreeView: vi.fn(() => ({ dispose: vi.fn(), reveal: vi.fn(async () => undefined) })),
+  executeCommand: vi.fn(),
+  projectTreeArgs: undefined as unknown[] | undefined,
   registerCommand: vi.fn(() => ({ dispose: vi.fn() })),
   settingsProjects: ['/settings/repo'],
+  tmuxPreflight: vi.fn(async () => ({ available: true })),
 }));
 
 vi.mock('vscode', () => ({
@@ -14,7 +18,7 @@ vi.mock('vscode', () => ({
     Global: 1,
   },
   commands: {
-    executeCommand: vi.fn(),
+    executeCommand: vscodeState.executeCommand,
     registerCommand: vscodeState.registerCommand,
   },
   window: {
@@ -78,6 +82,10 @@ vi.mock('../src/project/projectRemovalCommand', () => ({
 
 vi.mock('../src/tree/projectTree', () => ({
   ProjectTreeProvider: class {
+    constructor(...args: unknown[]) {
+      vscodeState.projectTreeArgs = args;
+    }
+
     refresh = vi.fn();
     getChildren = vi.fn(() => [{ projectPath: '/settings/repo' }]);
   },
@@ -87,6 +95,20 @@ vi.mock('../src/tree/deckTreeDragAndDropController', () => ({
   DeckTreeDragAndDropController: class {},
 }));
 
+vi.mock('../src/terminal/tmuxPreflight', () => ({
+  tmuxPreflight: vscodeState.tmuxPreflight,
+}));
+
+vi.mock('../src/terminal/tmuxCli', () => ({
+  TmuxCli: class {},
+}));
+
+vi.mock('../src/terminal/addTerminalCommand', () => ({
+  AddTerminalCommand: class {
+    run = vscodeState.addTerminalRun;
+  },
+}));
+
 import * as vscode from 'vscode';
 import { activate } from '../src/extension';
 
@@ -94,8 +116,10 @@ describe('activate', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vscodeState.addProjectArgs = undefined;
+    vscodeState.projectTreeArgs = undefined;
     vscodeState.settingsProjects = ['/settings/repo'];
     vscodeState.configUpdate.mockResolvedValue(undefined);
+    vscodeState.tmuxPreflight.mockResolvedValue({ available: true });
   });
 
   function createContext(globalProjects: string[] = []) {
@@ -108,6 +132,7 @@ describe('activate', () => {
         }),
       },
       subscriptions: [] as Array<{ dispose(): void }>,
+      extensionPath: '/ext',
       values,
     };
   }
@@ -152,5 +177,32 @@ describe('activate', () => {
     await addProjectRegistration[1]();
 
     expect(vscodeState.addProjectRun).toHaveBeenCalledOnce();
+  });
+
+  it('sets tmux availability context and passes it to the tree', async () => {
+    vscodeState.tmuxPreflight.mockResolvedValue({ available: false });
+    const context = createContext();
+
+    await activate(context as never);
+
+    expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
+      'setContext',
+      'deck.tmuxAvailable',
+      false,
+    );
+    expect(vscodeState.projectTreeArgs?.at(-1)).toBe(false);
+  });
+
+  it('registers deck.addTerminal through AddTerminalCommand', async () => {
+    const context = createContext();
+
+    await activate(context as never);
+    const addTerminalRegistration = vscodeState.registerCommand.mock.calls.find(
+      ([command]) => command === 'deck.addTerminal',
+    );
+    if (!addTerminalRegistration) throw new Error('missing deck.addTerminal registration');
+    await addTerminalRegistration[1]({ worktree: { path: '/work/repo' } });
+
+    expect(vscodeState.addTerminalRun).toHaveBeenCalledWith({ worktree: { path: '/work/repo' } });
   });
 });

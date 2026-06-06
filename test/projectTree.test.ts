@@ -23,6 +23,8 @@ vi.mock('vscode', () => ({
     ) {}
   },
   TreeItemCollapsibleState: {
+    None: 0,
+    Collapsed: 1,
     Expanded: 2,
   },
   Uri: {
@@ -277,5 +279,58 @@ describe('ProjectTreeProvider', () => {
       '/work/beta-main',
     ]);
     expect(vscode.workspace.getConfiguration).not.toHaveBeenCalled();
+  });
+
+  it('renders Worktree terminal children when tmux is available', async () => {
+    const provider = new ProjectTreeProvider(
+      registry(['/work/alpha-main']),
+      { get: vi.fn() } as unknown as ActiveWorktreeStore,
+      { get: vi.fn() } as unknown as WorktreeOrderStore,
+      { get: vi.fn(), set: vi.fn(async () => undefined) } as unknown as WorktreeListCacheStore,
+      { get: vi.fn(() => '/git/alpha'), set: vi.fn(async () => undefined) } as unknown as ProjectCommonDirCache,
+      true,
+    );
+    const projects = provider.getChildren();
+    if (!Array.isArray(projects)) throw new Error('expected sync project roots');
+
+    const worktrees = await provider.getChildren(projects[0]);
+    if (!Array.isArray(worktrees)) throw new Error('expected worktree children');
+
+    expect(worktrees[0].collapsibleState).toBe(1);
+    expect(worktrees[0].command).toMatchObject({ command: 'deck.switchWorktree' });
+    const terminalRows = provider.getChildren(worktrees[0]);
+
+    expect(Array.isArray(terminalRows)).toBe(true);
+    expect((terminalRows as Array<{ label: string; command?: { command: string } }>)).toEqual([
+      expect.objectContaining({
+        label: '+ Add Terminal',
+        command: expect.objectContaining({ command: 'deck.addTerminal' }),
+      }),
+    ]);
+  });
+
+  it('renders tmux install placeholder when tmux is unavailable', async () => {
+    const provider = new ProjectTreeProvider(
+      registry(['/work/alpha-main']),
+      { get: vi.fn() } as unknown as ActiveWorktreeStore,
+      { get: vi.fn() } as unknown as WorktreeOrderStore,
+      { get: vi.fn(), set: vi.fn(async () => undefined) } as unknown as WorktreeListCacheStore,
+      { get: vi.fn(() => '/git/alpha'), set: vi.fn(async () => undefined) } as unknown as ProjectCommonDirCache,
+      false,
+    );
+    const projects = provider.getChildren();
+    if (!Array.isArray(projects)) throw new Error('expected sync project roots');
+
+    const worktrees = await provider.getChildren(projects[0]);
+    if (!Array.isArray(worktrees)) throw new Error('expected worktree children');
+    const terminalRows = provider.getChildren(worktrees[0]);
+
+    expect(Array.isArray(terminalRows)).toBe(true);
+    expect((terminalRows as Array<{ label: string; command?: unknown }>)).toEqual([
+      expect.objectContaining({
+        label: 'tmux ≥3.1 not found · install ↗',
+        command: undefined,
+      }),
+    ]);
   });
 });
