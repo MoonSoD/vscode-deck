@@ -88,15 +88,7 @@ export class EditorTerminalHydrator {
   }
 
   private sessionNameFor(terminal: vscode.Terminal): string | undefined {
-    const n = parseDeckTerminalNumber(terminal.name);
-    if (!n) return undefined;
-
-    const cwd = terminalCwd(terminal);
-    const currentWorktreePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-    if (!cwd || !currentWorktreePath) return undefined;
-    if (path.resolve(cwd) !== path.resolve(currentWorktreePath)) return undefined;
-
-    return terminalSessionName(cwd, n);
+    return sessionNameForTerminal(terminal);
   }
 
   private async recreateTerminal(
@@ -128,6 +120,18 @@ export class EditorTerminalHydrator {
       await this.pidStore.set(sessionName, pid);
     }
   }
+}
+
+export function sessionNameForTerminal(terminal: vscode.Terminal): string | undefined {
+  const n = parseDeckTerminalNumber(terminal.name);
+  if (!n) return undefined;
+
+  const cwd = terminalCwd(terminal);
+  const currentWorktreePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  if (!cwd || !currentWorktreePath) return undefined;
+  if (path.resolve(cwd) !== path.resolve(currentWorktreePath)) return undefined;
+
+  return terminalSessionName(cwd, n);
 }
 
 function parseDeckTerminalNumber(name: string): number | undefined {
