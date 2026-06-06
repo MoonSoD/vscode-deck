@@ -12,6 +12,8 @@ Reference repos live as **siblings** in `~/code/`. Local paths are tracked in `.
 | **vscode-project-manager** | 7.28M installs. Reference for multi-repo discovery and the "list of projects" UX in the Activity Bar. |
 | **tabstronaut** | Manual tab snapshot/restore extension. Reference for the per-tab serialization we automate per-worktree. |
 | **superset** | Electron + own pty-daemon. The over-architected predecessor; reference for PTY/terminal-runtime patterns that vscode-deck's per-worktree terminals will need to handle. |
+| **vscode** | microsoft/vscode source. Reference for VS Code API internals — verifying contribution-point gates (e.g. `secondarySidebar`), built-in command names, and how VS Code itself implements tree views, view containers, and walkthroughs. |
+| **sanctel** | Tauri + tmux Arc-shaped workspace. Reference for per-worktree PTY/tmux persistence patterns and multi-context workspace UX (profiles / spaces / tabs / agent flows). |
 
 ## By subsystem
 
@@ -37,6 +39,20 @@ tree hierarchy. |
 |---|---|
 | `tabstronaut:src/` | `vscode.window.tabGroups` capture + `openTextDocument` + `showTextDocument` restore. The exact APIs we use. |
 
+### VS Code API behavior & contribution points
+
+| File | What it teaches |
+|---|---|
+| `vscode:src/vs/workbench/api/common/extHostApiCommands.ts` | Built-in command names extensions can invoke (e.g. `workbench.action.toggleAuxiliaryBar`). |
+| `vscode:src/vs/workbench/api/common/configurationExtensionPoint.ts` | How contribution-point gates work; useful when verifying when a contribution became stable. |
+
+### PTY / per-worktree terminal persistence
+
+| File | What it teaches |
+|---|---|
+| `sanctel:src-tauri/src/` | tmux-backed PTY persistence wired to a workspace shell. Lighter-weight alternative to `superset`'s pty-daemon. |
+| `sanctel:src/` | Profiles / spaces / tabs UX over a workspace surface — adjacent UX for multi-worktree agent flows. |
+
 ## Cloning fresh
 
 These are not vendored. Clone as siblings of `vscode-deck/`:
@@ -48,4 +64,6 @@ git clone --depth 1 https://github.com/jackiotyu/git-worktree-manager
 git clone --depth 1 https://github.com/alefragnani/vscode-project-manager
 git clone --depth 1 https://github.com/jhhtaylor/Tabstronaut tabstronaut
 git clone --depth 1 git@github.com:superset-sh/superset.git
+git clone --depth 1 https://github.com/microsoft/vscode
+git clone --depth 1 git@github.com:sanctel/sanctel.git
 ```
