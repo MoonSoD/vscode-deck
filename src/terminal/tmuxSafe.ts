@@ -11,12 +11,17 @@ export function terminalSessionPrefix(worktreePath: string): string {
 }
 
 export function allocateTermN(worktreePath: string, existingSessions: readonly string[]): number {
-  const prefix = terminalSessionPrefix(worktreePath);
   let max = 0;
   for (const session of existingSessions) {
-    if (!session.startsWith(prefix)) continue;
-    const n = Number(session.slice(prefix.length));
-    if (Number.isInteger(n) && n > max) max = n;
+    const n = terminalSessionNumber(worktreePath, session);
+    if (n > max) max = n;
   }
   return max + 1;
+}
+
+export function terminalSessionNumber(worktreePath: string, sessionName: string): number {
+  const prefix = terminalSessionPrefix(worktreePath);
+  if (!sessionName.startsWith(prefix)) return 0;
+  const n = Number(sessionName.slice(prefix.length));
+  return Number.isInteger(n) ? n : 0;
 }

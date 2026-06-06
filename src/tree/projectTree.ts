@@ -5,7 +5,7 @@ import { ProjectRegistryStore } from '../project/projectRegistryStore';
 import { ActiveWorktreeStore } from '../switch/activeWorktreeStore';
 import { WorktreeListCacheStore } from '../worktree/worktreeListCacheStore';
 import { WorktreeOrderStore } from '../worktree/worktreeOrderStore';
-import { terminalSessionPrefix } from '../terminal/tmuxSafe';
+import { terminalSessionNumber, terminalSessionPrefix } from '../terminal/tmuxSafe';
 import type { TmuxSession } from '../terminal/tmuxCli';
 import { reconcileWorktreeOrder } from './reconcileWorktreeOrder';
 import {
@@ -69,10 +69,9 @@ class TerminalAddNode extends vscode.TreeItem {
 
 class TerminalNode extends vscode.TreeItem {
   constructor(
-    worktreeNode: WorktreeNode,
     public readonly terminal: TmuxSession,
+    n: number,
   ) {
-    const n = terminalN(terminal.sessionName, terminalSessionPrefix(worktreeNode.worktree.path));
     const item = describeTerminalTreeItem(n, terminal.windowName);
     super(item.label, vscode.TreeItemCollapsibleState.None);
     this.contextValue = item.contextValue;
@@ -121,10 +120,14 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
     tmuxOrAvailable: TerminalSessionLister | boolean = true,
     tmuxAvailable?: boolean,
   ) {
-    this.tmux = typeof tmuxOrAvailable === 'boolean'
-      ? { listSessions: async () => [] }
-      : tmuxOrAvailable;
-    this.tmuxAvailable = tmuxAvailable ?? (typeof tmuxOrAvailable === 'boolean' ? tmuxOrAvailable : true);
+    if (typeof tmuxOrAvailable === 'boolean') {
+      this.tmux = { listSessions: async () => [] };
+      this.tmuxAvailable = tmuxAvailable ?? tmuxOrAvailable;
+      return;
+    }
+
+    this.tmux = tmuxOrAvailable;
+    this.tmuxAvailable = tmuxAvailable ?? true;
   }
 
   refresh(): void {
@@ -173,10 +176,13 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
   private async getTerminalChildren(element: WorktreeNode): Promise<Node[]> {
     const prefix = terminalSessionPrefix(element.worktree.path);
     const terminals = (await this.tmux.listSessions(prefix))
-      .map((session) => ({ session, n: terminalN(session.sessionName, prefix) }))
+      .map((session) => ({
+        session,
+        n: terminalSessionNumber(element.worktree.path, session.sessionName),
+      }))
       .filter((item) => item.n > 0)
       .sort((left, right) => left.n - right.n)
-      .map((item) => new TerminalNode(element, item.session));
+      .map((item) => new TerminalNode(item.session, item.n));
     return [...terminals, new TerminalAddNode(element)];
   }
 
@@ -324,10 +330,4 @@ function sameWorktree(left: Worktree, right: Worktree): boolean {
     left.detached === right.detached &&
     left.locked === right.locked
   );
-}
-
-function terminalN(sessionName: string, prefix: string): number {
-  if (!sessionName.startsWith(prefix)) return 0;
-  const n = Number(sessionName.slice(prefix.length));
-  return Number.isInteger(n) ? n : 0;
 }
