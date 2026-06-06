@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
-import { getCommonDir, getCommonDirSafe, listWorktrees, Worktree } from '../git/worktrees';
-import { ProjectCommonDirCache } from '../project/projectCommonDirCache';
+import { getCommonDir, listWorktrees, Worktree } from '../git/worktrees';
+import { ProjectCommonDirCache, resolveCommonDirSafe } from '../project/projectCommonDirCache';
 import { ProjectRegistryStore } from '../project/projectRegistryStore';
 import { ActiveWorktreeStore } from '../switch/activeWorktreeStore';
 import { WorktreeListCacheStore } from '../worktree/worktreeListCacheStore';
@@ -48,6 +48,7 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
   private resolvingActiveProject = false;
   private readonly projectCommonDirs = new Map<string, string | null>();
   private readonly resolvingProjectPaths = new Set<string>();
+  private readonly refreshingWorktrees = new Set<string>();
 
   constructor(
     private readonly projectRegistry: Pick<ProjectRegistryStore, 'list'>,
@@ -130,9 +131,8 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
     if (this.resolvingActiveProject) return;
 
     this.resolvingActiveProject = true;
-    void getCommonDirSafe(folder.uri.fsPath)
-      .then(async (commonDir) => {
-        if (commonDir !== null) await this.projectCommonDirCache.set(folder.uri.fsPath, commonDir);
+    void resolveCommonDirSafe(this.projectCommonDirCache, folder.uri.fsPath)
+      .then((commonDir) => {
         this.setActiveProjectCommonDir(commonDir);
       })
       .finally(() => {
@@ -178,21 +178,16 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
     if (fire) this._onDidChangeTreeData.fire(undefined);
   }
 
-  private async getCommonDirSafeCached(projectPath: string): Promise<string | null> {
-    const cached = this.projectCommonDirCache.get(projectPath);
-    if (cached !== undefined) return cached;
-    const commonDir = await getCommonDirSafe(projectPath);
-    if (commonDir !== null) await this.projectCommonDirCache.set(projectPath, commonDir);
-    return commonDir;
-  }
-
   private async loadWorktreeChildren(
     projectPath: string,
     knownCommonDir: string | undefined,
     activeWorktreePath: string | undefined,
   ): Promise<Node[]> {
     const gitWorktrees = await listWorktrees(projectPath);
-    const commonDir = knownCommonDir ?? (await this.getCommonDirSafeCached(projectPath)) ?? undefined;
+    const commonDir =
+      knownCommonDir ??
+      (await resolveCommonDirSafe(this.projectCommonDirCache, projectPath)) ??
+      undefined;
     if (commonDir !== undefined) await this.worktreeListCache.set(commonDir, gitWorktrees);
     return this.toWorktreeNodes(projectPath, gitWorktrees, commonDir, activeWorktreePath);
   }
@@ -202,13 +197,18 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
     commonDir: string,
     previous: readonly Worktree[],
   ): void {
+    if (this.refreshingWorktrees.has(commonDir)) return;
+    this.refreshingWorktrees.add(commonDir);
     void listWorktrees(projectPath)
       .then(async (worktrees) => {
         if (sameWorktrees(previous, worktrees)) return;
         await this.worktreeListCache.set(commonDir, worktrees);
         this._onDidChangeTreeData.fire(undefined);
       })
-      .catch(() => undefined);
+      .catch(() => undefined)
+      .finally(() => {
+        this.refreshingWorktrees.delete(commonDir);
+      });
   }
 
   private toWorktreeNodes(

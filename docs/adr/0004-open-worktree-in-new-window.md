@@ -1,5 +1,9 @@
 # ADR-0004: Window-per-Worktree as an opt-in no-reload escape hatch
 
+> **Note:** The FocusIntent mechanism described below was retired in
+> [ADR-0006](./0006-deck-lives-in-secondary-sidebar.md). The DetachedOpen
+> behavior otherwise stands.
+
 ## Context
 
 ADR-0003 declared `vscode.openFolder` (with its mandatory window reload) the

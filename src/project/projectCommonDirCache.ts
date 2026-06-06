@@ -1,3 +1,4 @@
+import { getCommonDir, getCommonDirSafe } from '../git/worktrees';
 import type { MementoLike } from '../switch/activeWorktreeStore';
 
 export const PROJECT_COMMON_DIR_CACHE_KEY = 'deck.projectCommonDirCache';
@@ -39,4 +40,33 @@ export class ProjectCommonDirCache {
       {},
     );
   }
+}
+
+export type CommonDirCacheLike = Pick<ProjectCommonDirCache, 'get' | 'set'>;
+
+export const PASS_THROUGH_COMMON_DIR_CACHE: CommonDirCacheLike = {
+  get: () => undefined,
+  set: async () => undefined,
+};
+
+export async function resolveCommonDir(
+  cache: CommonDirCacheLike,
+  projectPath: string,
+): Promise<string> {
+  const cached = cache.get(projectPath);
+  if (cached !== undefined) return cached;
+  const commonDir = await getCommonDir(projectPath);
+  await cache.set(projectPath, commonDir);
+  return commonDir;
+}
+
+export async function resolveCommonDirSafe(
+  cache: CommonDirCacheLike,
+  projectPath: string,
+): Promise<string | null> {
+  const cached = cache.get(projectPath);
+  if (cached !== undefined) return cached;
+  const commonDir = await getCommonDirSafe(projectPath);
+  if (commonDir !== null) await cache.set(projectPath, commonDir);
+  return commonDir;
 }

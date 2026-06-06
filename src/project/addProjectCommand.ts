@@ -1,6 +1,10 @@
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { getCommonDirSafe } from '../git/worktrees';
+import {
+  CommonDirCacheLike,
+  PASS_THROUGH_COMMON_DIR_CACHE,
+  resolveCommonDirSafe,
+} from './projectCommonDirCache';
 
 const SWITCH_LABEL = 'Switch';
 const OPEN_IN_NEW_WINDOW_LABEL = 'Open in New Window';
@@ -47,13 +51,14 @@ export class AddProjectCommand {
     private readonly detachedOpener: DetachedOpenerLike,
     private readonly refresh: () => void,
     private readonly reveal: (projectPath: string) => Promise<void>,
+    private readonly projectCommonDirCache: CommonDirCacheLike = PASS_THROUGH_COMMON_DIR_CACHE,
   ) {}
 
   async run(): Promise<void> {
     const seedPath = await this.picker.pick();
     if (!seedPath) return;
 
-    const commonDir = await getCommonDirSafe(seedPath);
+    const commonDir = await resolveCommonDirSafe(this.projectCommonDirCache, seedPath);
     if (commonDir === null) {
       vscode.window.showErrorMessage(`Cannot add ${seedPath}: not a git repository.`);
       return;
@@ -80,7 +85,7 @@ export class AddProjectCommand {
 
   private async hasRegisteredCommonDir(commonDir: string): Promise<boolean> {
     for (const projectPath of this.registry.list()) {
-      const registered = await getCommonDirSafe(projectPath);
+      const registered = await resolveCommonDirSafe(this.projectCommonDirCache, projectPath);
       if (registered !== null && registered === commonDir) return true;
     }
     return false;

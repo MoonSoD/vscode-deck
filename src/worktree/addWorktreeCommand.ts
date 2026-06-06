@@ -1,8 +1,12 @@
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 import {
+  CommonDirCacheLike,
+  PASS_THROUGH_COMMON_DIR_CACHE,
+  resolveCommonDir,
+} from '../project/projectCommonDirCache';
+import {
   addWorktree,
-  getCommonDir,
   listBranches,
   type AddWorktreeOptions,
   type Worktree,
@@ -63,6 +67,7 @@ export class AddWorktreeCommand {
     private readonly worktreeListCache: WorktreeListCacheLike = {
       add: async () => undefined,
     },
+    private readonly projectCommonDirCache: CommonDirCacheLike = PASS_THROUGH_COMMON_DIR_CACHE,
   ) {}
 
   async run(node: ProjectNodeLike | undefined): Promise<void> {
@@ -74,7 +79,7 @@ export class AddWorktreeCommand {
     });
     if (!picked) return;
 
-    const commonDir = await getCommonDir(node.projectPath);
+    const commonDir = await resolveCommonDir(this.projectCommonDirCache, node.projectPath);
     const rememberedRoot = this.worktreeRoots.get(commonDir);
     let request: WorktreeRequest | undefined;
     if (picked.action === 'create') {

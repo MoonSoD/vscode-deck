@@ -29,4 +29,20 @@ describe('projectsMigration', () => {
       clearSettings: true,
     });
   });
+
+  it('is idempotent on the second activation (settings empty after first migration)', () => {
+    const first = projectsMigration(['/repo/a', '/repo/b'], []);
+    const second = projectsMigration([], first.merged);
+    expect(second).toEqual({
+      merged: ['/repo/a', '/repo/b'],
+      clearSettings: false,
+    });
+  });
+
+  it('collapses duplicate paths within a single input list', () => {
+    expect(projectsMigration(['/repo/a', '/repo/a'], [])).toEqual({
+      merged: ['/repo/a'],
+      clearSettings: true,
+    });
+  });
 });

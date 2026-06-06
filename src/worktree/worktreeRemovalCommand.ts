@@ -1,7 +1,11 @@
 import * as vscode from 'vscode';
 import {
+  CommonDirCacheLike,
+  PASS_THROUGH_COMMON_DIR_CACHE,
+  resolveCommonDir,
+} from '../project/projectCommonDirCache';
+import {
   deleteBranch,
-  getCommonDir,
   getWorktreeStatus,
   removeWorktree,
   Worktree,
@@ -48,6 +52,7 @@ export class WorktreeRemovalCommand {
     private readonly worktreeListCache: WorktreeListCacheLike = {
       remove: async () => undefined,
     },
+    private readonly projectCommonDirCache: CommonDirCacheLike = PASS_THROUGH_COMMON_DIR_CACHE,
   ) {}
 
   async run(node: WorktreeNodeLike | undefined): Promise<void> {
@@ -100,7 +105,7 @@ export class WorktreeRemovalCommand {
 
     let commonDir: string;
     try {
-      commonDir = await getCommonDir(node.projectPath);
+      commonDir = await resolveCommonDir(this.projectCommonDirCache, node.projectPath);
       await removeWorktree(node.projectPath, node.worktree.path, { force });
     } catch (error) {
       vscode.window.showErrorMessage(`Cannot remove worktree: ${errorMessage(error)}`);

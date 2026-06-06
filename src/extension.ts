@@ -41,6 +41,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     () => tree.refresh(),
     worktreeRoots,
     worktreeListCache,
+    projectCommonDirCache,
   );
   const dragAndDropController = new DeckTreeDragAndDropController(
     () => tree.refresh(),
@@ -52,6 +53,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     () => tree.refresh(),
     branchDeletionPreferences,
     worktreeListCache,
+    projectCommonDirCache,
   );
   const removeProject = new ProjectRemovalCommand(
     projectRegistry,
@@ -79,6 +81,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       const project = roots.find((node) => node.projectPath === projectPath);
       if (project) await treeView.reveal(project, { expand: true, select: true });
     },
+    projectCommonDirCache,
   );
 
   context.subscriptions.push(
