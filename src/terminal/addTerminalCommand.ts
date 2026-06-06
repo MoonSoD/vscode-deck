@@ -2,15 +2,14 @@ import * as vscode from 'vscode';
 import {
   allocateTermN,
   terminalSessionName,
-  terminalSessionNumber,
   terminalSessionPrefix,
   terminalWorktreePrefix,
 } from './tmuxSafe';
 import { TerminalSessionRegistry } from './terminalSessionRegistry';
 import type { TmuxSession } from './tmuxCli';
-import type {
-  CachedTerminalSession,
-  TerminalSessionListCacheStore,
+import {
+  toCachedTerminalSessions,
+  type TerminalSessionListCacheStore,
 } from './terminalSessionListCacheStore';
 
 export interface AddTerminalTmuxCli {
@@ -63,18 +62,4 @@ export class AddTerminalCommand {
     terminal.show(true);
     this.refresh();
   }
-}
-
-function toCachedTerminalSessions(
-  worktreePath: string,
-  sessions: readonly TmuxSession[],
-): CachedTerminalSession[] {
-  return sessions
-    .map((tmuxSession) => ({
-      sessionName: tmuxSession.sessionName,
-      n: terminalSessionNumber(worktreePath, tmuxSession.sessionName),
-      windowName: tmuxSession.windowName,
-    }))
-    .filter((session) => session.n > 0)
-    .sort((left, right) => left.n - right.n);
 }

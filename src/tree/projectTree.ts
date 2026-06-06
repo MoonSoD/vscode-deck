@@ -6,7 +6,6 @@ import { ActiveWorktreeStore } from '../switch/activeWorktreeStore';
 import { WorktreeListCacheStore } from '../worktree/worktreeListCacheStore';
 import { WorktreeOrderStore } from '../worktree/worktreeOrderStore';
 import {
-  terminalSessionNumber,
   terminalSessionPrefix,
   terminalWorktreePrefix,
 } from '../terminal/tmuxSafe';
@@ -14,6 +13,7 @@ import type { TmuxSession } from '../terminal/tmuxCli';
 import {
   CachedTerminalSession,
   TerminalSessionListCacheStore,
+  toCachedTerminalSessions,
 } from '../terminal/terminalSessionListCacheStore';
 import { reconcileWorktreeOrder } from './reconcileWorktreeOrder';
 import {
@@ -299,7 +299,10 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
     prefix: string,
     cacheKey: string,
   ): Promise<Node[]> {
-    const terminals = this.terminalRowsFromSessions(element.worktree.path, await this.tmux.listSessions(prefix));
+    const terminals = toCachedTerminalSessions(
+      element.worktree.path,
+      await this.tmux.listSessions(prefix),
+    );
     await this.terminalSessionListCache.set(cacheKey, terminals);
     return this.toTerminalNodes(element, terminals);
   }
@@ -315,7 +318,7 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
     void this.tmux
       .listSessions(prefix)
       .then(async (sessions) => {
-        const terminals = this.terminalRowsFromSessions(element.worktree.path, sessions);
+        const terminals = toCachedTerminalSessions(element.worktree.path, sessions);
         if (sameTerminals(previous, terminals)) return;
         await this.terminalSessionListCache.set(cacheKey, terminals);
         this._onDidChangeTreeData.fire(undefined);
@@ -324,20 +327,6 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
       .finally(() => {
         this.refreshingTerminals.delete(prefix);
       });
-  }
-
-  private terminalRowsFromSessions(
-    worktreePath: string,
-    sessions: readonly TmuxSession[],
-  ): CachedTerminalSession[] {
-    return sessions
-      .map((session) => ({
-        sessionName: session.sessionName,
-        n: terminalSessionNumber(worktreePath, session.sessionName),
-        windowName: session.windowName,
-      }))
-      .filter((item) => item.n > 0)
-      .sort((left, right) => left.n - right.n);
   }
 
   private toTerminalNodes(element: WorktreeNode, terminals: readonly CachedTerminalSession[]): Node[] {

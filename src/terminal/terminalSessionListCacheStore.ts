@@ -1,4 +1,6 @@
 import type { MementoLike } from '../switch/activeWorktreeStore';
+import type { TmuxSession } from './tmuxCli';
+import { terminalSessionNumber } from './tmuxSafe';
 
 export const TERMINAL_SESSION_LIST_CACHE_KEY = 'deck.terminalSessionListCache';
 export const TERMINAL_SESSION_LIST_CACHE_SCHEMA_VERSION = 1;
@@ -7,6 +9,20 @@ export interface CachedTerminalSession {
   sessionName: string;
   n: number;
   windowName: string;
+}
+
+export function toCachedTerminalSessions(
+  worktreePath: string,
+  sessions: readonly TmuxSession[],
+): CachedTerminalSession[] {
+  return sessions
+    .map((session) => ({
+      sessionName: session.sessionName,
+      n: terminalSessionNumber(worktreePath, session.sessionName),
+      windowName: session.windowName,
+    }))
+    .filter((session) => session.n > 0)
+    .sort((left, right) => left.n - right.n);
 }
 
 interface TerminalSessionListCacheEntry {
