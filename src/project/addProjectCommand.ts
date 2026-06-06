@@ -10,7 +10,7 @@ export interface ProjectFolderPicker {
 }
 
 interface ProjectRegistryLike {
-  list(): string[];
+  list(): readonly string[];
   append(projectPath: string): Promise<void>;
 }
 

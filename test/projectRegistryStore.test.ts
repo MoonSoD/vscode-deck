@@ -34,6 +34,16 @@ describe('ProjectRegistryStore', () => {
     expect(store.list()).toEqual(['/repo/b', '/repo/a']);
   });
 
+  it('returns a snapshot of the registry', async () => {
+    const { store } = createStore();
+    await store.append('/repo/a');
+
+    const snapshot = store.list() as string[];
+    snapshot.push('/repo/b');
+
+    expect(store.list()).toEqual(['/repo/a']);
+  });
+
   it('contains and removes Projects from the registry', async () => {
     const { store } = createStore();
     await store.append('/repo/a');
