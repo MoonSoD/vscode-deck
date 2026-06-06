@@ -45,6 +45,7 @@ describe('OpenTerminalInNewWindowCommand', () => {
       { fsPath: '/work/beta-main' },
       { forceNewWindow: true },
     );
+    expect(vscode.commands.executeCommand).toHaveBeenCalledOnce();
     expect(vscodeState.createTerminal).not.toHaveBeenCalled();
   });
 });
