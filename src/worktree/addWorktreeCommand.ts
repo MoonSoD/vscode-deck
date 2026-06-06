@@ -171,7 +171,6 @@ export class AddWorktreeCommand {
     const rootPickerButton: vscode.QuickInputButton = {
       iconPath: new vscode.ThemeIcon('folder'),
       tooltip: 'Choose worktree root',
-      location: vscode.QuickInputButtonLocation.Inline,
     };
 
     input.prompt = 'Worktree path';

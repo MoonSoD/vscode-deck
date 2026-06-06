@@ -1,9 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('vscode', () => ({
-  QuickInputButtonLocation: {
-    Inline: 2,
-  },
   ThemeIcon: vi.fn(function ThemeIcon(this: { id: string }, id: string) {
     this.id = id;
   }),
@@ -231,7 +228,7 @@ describe('AddWorktreeCommand', () => {
     expect(switcher.switchTo).toHaveBeenCalledWith('/custom/worktrees/feature-foo');
   });
 
-  it('lets the inline folder picker replace the parent while preserving the branch slug', async () => {
+  it('lets the folder picker replace the parent while preserving the branch slug', async () => {
     const { command, worktreeRoots } = createCommand('/remembered/root');
     const input = createAcceptingInputBox(async (box) => {
       await box.triggerButton(box.buttons[0]);
@@ -248,7 +245,6 @@ describe('AddWorktreeCommand', () => {
     expect(input.buttons).toEqual([
       expect.objectContaining({
         iconPath: expect.objectContaining({ id: 'folder' }),
-        location: vscode.QuickInputButtonLocation.Inline,
       }),
     ]);
     expect(vscode.window.showOpenDialog).toHaveBeenCalledWith(
@@ -265,7 +261,7 @@ describe('AddWorktreeCommand', () => {
     expect(worktreeRoots.set).toHaveBeenCalledWith('/git/myrepo', '/picked/root');
   });
 
-  it('keeps the input value when the inline folder picker is cancelled', async () => {
+  it('keeps the input value when the folder picker is cancelled', async () => {
     const { command } = createCommand();
     const input = createAcceptingInputBox(async (box) => {
       await box.triggerButton(box.buttons[0]);
