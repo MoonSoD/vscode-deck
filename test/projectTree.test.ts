@@ -203,4 +203,50 @@ describe('ProjectTreeProvider', () => {
       },
     ]);
   });
+
+  it('keeps warm cached worktrees when the background refresh has no logical diff', async () => {
+    const activeWorktrees = {
+      get: vi.fn(),
+    } as unknown as ActiveWorktreeStore;
+    const worktreeOrders = {
+      get: vi.fn(),
+    } as unknown as WorktreeOrderStore;
+    const worktreeListCache = {
+      get: vi.fn(() => [
+        {
+          path: '/work/alpha-main',
+          head: 'a',
+          branch: 'main',
+          bare: false,
+          detached: false,
+        },
+        {
+          path: '/work/alpha-feature',
+          head: 'aa',
+          branch: 'feature',
+          bare: false,
+          detached: false,
+        },
+      ]),
+      set: vi.fn(async () => undefined),
+    } as unknown as WorktreeListCacheStore;
+    const projectCommonDirCache = {
+      get: vi.fn(() => '/git/alpha'),
+      set: vi.fn(async () => undefined),
+    } as unknown as ProjectCommonDirCache;
+    const provider = new ProjectTreeProvider(
+      activeWorktrees,
+      worktreeOrders,
+      worktreeListCache,
+      projectCommonDirCache,
+    );
+
+    const projectNode = provider.getChildren();
+    if (!Array.isArray(projectNode)) throw new Error('expected sync project roots');
+
+    provider.getChildren(projectNode[0]);
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(worktreeListCache.set).not.toHaveBeenCalled();
+  });
 });

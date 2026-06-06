@@ -269,5 +269,17 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
 }
 
 function sameWorktrees(left: readonly Worktree[], right: readonly Worktree[]): boolean {
-  return JSON.stringify(left) === JSON.stringify(right);
+  if (left.length !== right.length) return false;
+  return left.every((worktree, index) => sameWorktree(worktree, right[index]));
+}
+
+function sameWorktree(left: Worktree, right: Worktree): boolean {
+  return (
+    left.path === right.path &&
+    left.head === right.head &&
+    left.branch === right.branch &&
+    left.bare === right.bare &&
+    left.detached === right.detached &&
+    left.locked === right.locked
+  );
 }

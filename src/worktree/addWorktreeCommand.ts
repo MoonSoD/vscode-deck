@@ -5,6 +5,7 @@ import {
   getCommonDir,
   listBranches,
   type AddWorktreeOptions,
+  type Worktree,
 } from '../git/worktrees';
 import { branchWorktreeName, defaultWorktreePath } from './defaultWorktreePath';
 
@@ -30,16 +31,7 @@ interface WorktreeRootStoreLike {
 }
 
 interface WorktreeListCacheLike {
-  add(
-    commonDir: string,
-    worktree: {
-      path: string;
-      head: string;
-      bare: boolean;
-      detached: boolean;
-      branch?: string;
-    },
-  ): Promise<void>;
+  add(commonDir: string, worktree: Worktree): Promise<void>;
 }
 
 interface WorktreeRequest {
