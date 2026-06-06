@@ -19,6 +19,12 @@ export interface TerminalAddTreeItemDescription {
   contextValue: 'deck.terminal.add';
 }
 
+export interface TerminalTreeItemDescription {
+  label: string;
+  iconId: 'terminal';
+  contextValue: 'deck.terminal';
+}
+
 export interface TmuxUnavailableTreeItemDescription {
   label: 'tmux ≥3.1 not found · install ↗';
   iconId: 'warning';
@@ -64,6 +70,14 @@ export function describeTerminalAddTreeItem(): TerminalAddTreeItemDescription {
     label: '+ Add Terminal',
     iconId: 'add',
     contextValue: 'deck.terminal.add',
+  };
+}
+
+export function describeTerminalTreeItem(n: number, windowName: string): TerminalTreeItemDescription {
+  return {
+    label: `${n} ${windowName}`,
+    iconId: 'terminal',
+    contextValue: 'deck.terminal',
   };
 }
 

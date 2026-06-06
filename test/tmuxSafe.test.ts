@@ -21,15 +21,12 @@ describe('tmuxSafe', () => {
     expect(terminalSessionPrefix('/work/repo.feature')).toBe('wt-_work_repo_feature__term-');
   });
 
-  it('allocates the next terminal number from existing session names', () => {
-    expect(
-      allocateTermN('/work/repo', [
-        'wt-_work_repo__term-1',
-        'wt-_work_repo__term-3',
-        'wt-_work_other__term-9',
-        'not-a-deck-terminal',
-      ]),
-    ).toBe(4);
-    expect(allocateTermN('/work/repo', [])).toBe(1);
+  it.each([
+    ['empty input', [], 1],
+    ['contiguous input', ['wt-_work_repo__term-1', 'wt-_work_repo__term-2'], 3],
+    ['input with gaps', ['wt-_work_repo__term-1', 'wt-_work_repo__term-3'], 4],
+    ['non-term session names', ['wt-_work_repo__term-1', 'wt-_work_repo__term-x', 'other'], 2],
+  ])('allocates the next terminal number from %s', (_name, sessions, expected) => {
+    expect(allocateTermN('/work/repo', sessions)).toBe(expected);
   });
 });

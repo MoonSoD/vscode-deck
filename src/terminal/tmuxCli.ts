@@ -89,7 +89,7 @@ export class TmuxCli {
     throw new Error(result.stderr || result.stdout || `tmux kill-session failed: ${result.code}`);
   }
 
-  async listSessions(): Promise<TmuxSession[]> {
+  async listSessions(prefix?: string): Promise<TmuxSession[]> {
     const result = await this.runner.run('tmux', [
       ...this.baseArgs(),
       'list-sessions',
@@ -108,7 +108,8 @@ export class TmuxCli {
       .map((line) => {
         const [sessionName, windowName = ''] = line.split('\t');
         return { sessionName, windowName };
-      });
+      })
+      .filter((session) => prefix === undefined || session.sessionName.startsWith(prefix));
   }
 
   attachShellArgs(session: string): string[] {

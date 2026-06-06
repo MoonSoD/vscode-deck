@@ -5,15 +5,22 @@ import { ProjectRegistryStore } from '../project/projectRegistryStore';
 import { ActiveWorktreeStore } from '../switch/activeWorktreeStore';
 import { WorktreeListCacheStore } from '../worktree/worktreeListCacheStore';
 import { WorktreeOrderStore } from '../worktree/worktreeOrderStore';
+import { terminalSessionPrefix } from '../terminal/tmuxSafe';
+import type { TmuxSession } from '../terminal/tmuxCli';
 import { reconcileWorktreeOrder } from './reconcileWorktreeOrder';
 import {
   describeProjectTreeItem,
   describeTmuxUnavailableTreeItem,
   describeTerminalAddTreeItem,
+  describeTerminalTreeItem,
   describeWorktreeTreeItem,
 } from './worktreeTreeItem';
 
-type Node = ProjectNode | WorktreeNode | TerminalAddNode | TmuxUnavailableNode;
+type Node = ProjectNode | WorktreeNode | TerminalNode | TerminalAddNode | TmuxUnavailableNode;
+
+interface TerminalSessionLister {
+  listSessions(prefix?: string): Promise<TmuxSession[]>;
+}
 
 class ProjectNode extends vscode.TreeItem {
   constructor(public readonly projectPath: string, isActiveProject: boolean) {
@@ -60,6 +67,24 @@ class TerminalAddNode extends vscode.TreeItem {
   }
 }
 
+class TerminalNode extends vscode.TreeItem {
+  constructor(
+    worktreeNode: WorktreeNode,
+    public readonly terminal: TmuxSession,
+  ) {
+    const n = terminalN(terminal.sessionName, terminalSessionPrefix(worktreeNode.worktree.path));
+    const item = describeTerminalTreeItem(n, terminal.windowName);
+    super(item.label, vscode.TreeItemCollapsibleState.None);
+    this.contextValue = item.contextValue;
+    this.iconPath = new vscode.ThemeIcon(item.iconId);
+    this.command = {
+      command: 'deck.openTerminal',
+      title: 'Open Terminal',
+      arguments: [this],
+    };
+  }
+}
+
 class TmuxUnavailableNode extends vscode.TreeItem {
   constructor() {
     const item = describeTmuxUnavailableTreeItem();
@@ -78,6 +103,8 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
   private readonly projectCommonDirs = new Map<string, string | null>();
   private readonly resolvingProjectPaths = new Set<string>();
   private readonly refreshingWorktrees = new Set<string>();
+  private readonly tmux: TerminalSessionLister;
+  private readonly tmuxAvailable: boolean;
 
   constructor(
     private readonly projectRegistry: Pick<ProjectRegistryStore, 'list'>,
@@ -91,8 +118,14 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
       get: () => undefined,
       set: async () => undefined,
     },
-    private readonly tmuxAvailable = true,
-  ) {}
+    tmuxOrAvailable: TerminalSessionLister | boolean = true,
+    tmuxAvailable?: boolean,
+  ) {
+    this.tmux = typeof tmuxOrAvailable === 'boolean'
+      ? { listSessions: async () => [] }
+      : tmuxOrAvailable;
+    this.tmuxAvailable = tmuxAvailable ?? (typeof tmuxOrAvailable === 'boolean' ? tmuxOrAvailable : true);
+  }
 
   refresh(): void {
     this.resolveActiveProject();
@@ -131,9 +164,20 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
       return this.getWorktreeChildren(element);
     }
     if (element instanceof WorktreeNode) {
-      return this.tmuxAvailable ? [new TerminalAddNode(element)] : [new TmuxUnavailableNode()];
+      if (!this.tmuxAvailable) return [new TmuxUnavailableNode()];
+      return this.getTerminalChildren(element);
     }
     return [];
+  }
+
+  private async getTerminalChildren(element: WorktreeNode): Promise<Node[]> {
+    const prefix = terminalSessionPrefix(element.worktree.path);
+    const terminals = (await this.tmux.listSessions(prefix))
+      .map((session) => ({ session, n: terminalN(session.sessionName, prefix) }))
+      .filter((item) => item.n > 0)
+      .sort((left, right) => left.n - right.n)
+      .map((item) => new TerminalNode(element, item.session));
+    return [...terminals, new TerminalAddNode(element)];
   }
 
   private getWorktreeChildren(element: ProjectNode): Node[] | Promise<Node[]> {
@@ -280,4 +324,10 @@ function sameWorktree(left: Worktree, right: Worktree): boolean {
     left.detached === right.detached &&
     left.locked === right.locked
   );
+}
+
+function terminalN(sessionName: string, prefix: string): number {
+  if (!sessionName.startsWith(prefix)) return 0;
+  const n = Number(sessionName.slice(prefix.length));
+  return Number.isInteger(n) ? n : 0;
 }

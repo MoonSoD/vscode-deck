@@ -111,4 +111,26 @@ describe('TmuxCli', () => {
       '#{session_name}\t#{window_name}',
     ]);
   });
+
+  it('filters listed sessions by prefix and treats a missing server as empty', async () => {
+    const runner = new MockRunner([
+      {
+        code: 0,
+        stdout: [
+          'wt-_work_repo__term-2\tclaude',
+          'wt-_work_other__term-1\tzsh',
+          'wt-_work_repo__term-1\tterm-1',
+        ].join('\n'),
+        stderr: '',
+      },
+      { code: 1, stdout: '', stderr: 'no server running on /tmp/tmux-1000/deck' },
+    ]);
+    const tmux = new TmuxCli('/ext/resources/deck.conf', runner);
+
+    await expect(tmux.listSessions('wt-_work_repo__term-')).resolves.toEqual([
+      { sessionName: 'wt-_work_repo__term-2', windowName: 'claude' },
+      { sessionName: 'wt-_work_repo__term-1', windowName: 'term-1' },
+    ]);
+    await expect(tmux.listSessions('wt-_work_repo__term-')).resolves.toEqual([]);
+  });
 });

@@ -5,8 +5,14 @@ const vscodeState = vi.hoisted(() => ({
   addProjectRun: vi.fn(),
   addTerminalRun: vi.fn(),
   configUpdate: vi.fn(),
-  createTreeView: vi.fn(() => ({ dispose: vi.fn(), reveal: vi.fn(async () => undefined) })),
+  createTreeView: vi.fn(() => ({
+    dispose: vi.fn(),
+    onDidChangeVisibility: vi.fn(() => ({ dispose: vi.fn() })),
+    reveal: vi.fn(async () => undefined),
+  })),
   executeCommand: vi.fn(),
+  onDidChangeWorkspaceFolders: vi.fn(() => ({ dispose: vi.fn() })),
+  openTerminalRun: vi.fn(),
   projectTreeArgs: undefined as unknown[] | undefined,
   registerCommand: vi.fn(() => ({ dispose: vi.fn() })),
   settingsProjects: ['/settings/repo'],
@@ -23,6 +29,7 @@ vi.mock('vscode', () => ({
   },
   window: {
     createTreeView: vscodeState.createTreeView,
+    onDidCloseTerminal: vi.fn(() => ({ dispose: vi.fn() })),
   },
   workspace: {
     getConfiguration: () => ({
@@ -30,6 +37,7 @@ vi.mock('vscode', () => ({
         (vscodeState.settingsProjects as T | undefined) ?? defaultValue,
       update: vscodeState.configUpdate,
     }),
+    onDidChangeWorkspaceFolders: vscodeState.onDidChangeWorkspaceFolders,
   },
 }));
 
@@ -107,6 +115,16 @@ vi.mock('../src/terminal/addTerminalCommand', () => ({
   AddTerminalCommand: class {
     run = vscodeState.addTerminalRun;
   },
+}));
+
+vi.mock('../src/terminal/openTerminalCommand', () => ({
+  OpenTerminalCommand: class {
+    run = vscodeState.openTerminalRun;
+  },
+}));
+
+vi.mock('../src/terminal/terminalSessionRegistry', () => ({
+  TerminalSessionRegistry: class {},
 }));
 
 import * as vscode from 'vscode';
@@ -204,5 +222,24 @@ describe('activate', () => {
     await addTerminalRegistration[1]({ worktree: { path: '/work/repo' } });
 
     expect(vscodeState.addTerminalRun).toHaveBeenCalledWith({ worktree: { path: '/work/repo' } });
+  });
+
+  it('registers deck.openTerminal and refreshes on workspace/view visibility events', async () => {
+    const context = createContext();
+
+    await activate(context as never);
+    const openTerminalRegistration = vscodeState.registerCommand.mock.calls.find(
+      ([command]) => command === 'deck.openTerminal',
+    );
+    if (!openTerminalRegistration) throw new Error('missing deck.openTerminal registration');
+    await openTerminalRegistration[1]({ terminal: { sessionName: 's', windowName: 'zsh' } });
+
+    expect(vscodeState.openTerminalRun).toHaveBeenCalledWith({
+      terminal: { sessionName: 's', windowName: 'zsh' },
+    });
+    expect(vscodeState.onDidChangeWorkspaceFolders).toHaveBeenCalledWith(expect.any(Function));
+    expect(vscodeState.createTreeView.mock.results[0].value.onDidChangeVisibility).toHaveBeenCalledWith(
+      expect.any(Function),
+    );
   });
 });

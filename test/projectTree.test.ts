@@ -281,13 +281,20 @@ describe('ProjectTreeProvider', () => {
     expect(vscode.workspace.getConfiguration).not.toHaveBeenCalled();
   });
 
-  it('renders Worktree terminal children when tmux is available', async () => {
+  it('renders existing Worktree terminals above the add row when tmux is available', async () => {
+    const tmux = {
+      listSessions: vi.fn(async () => [
+        { sessionName: 'wt-_work_alpha-main__term-2', windowName: 'claude' },
+        { sessionName: 'wt-_work_alpha-main__term-1', windowName: 'zsh' },
+      ]),
+    };
     const provider = new ProjectTreeProvider(
       registry(['/work/alpha-main']),
       { get: vi.fn() } as unknown as ActiveWorktreeStore,
       { get: vi.fn() } as unknown as WorktreeOrderStore,
       { get: vi.fn(), set: vi.fn(async () => undefined) } as unknown as WorktreeListCacheStore,
       { get: vi.fn(() => '/git/alpha'), set: vi.fn(async () => undefined) } as unknown as ProjectCommonDirCache,
+      tmux,
       true,
     );
     const projects = provider.getChildren();
@@ -298,15 +305,24 @@ describe('ProjectTreeProvider', () => {
 
     expect(worktrees[0].collapsibleState).toBe(1);
     expect(worktrees[0].command).toMatchObject({ command: 'deck.switchWorktree' });
-    const terminalRows = provider.getChildren(worktrees[0]);
+    const terminalRows = await provider.getChildren(worktrees[0]);
 
     expect(Array.isArray(terminalRows)).toBe(true);
     expect((terminalRows as Array<{ label: string; command?: { command: string } }>)).toEqual([
+      expect.objectContaining({
+        label: '1 zsh',
+        command: expect.objectContaining({ command: 'deck.openTerminal' }),
+      }),
+      expect.objectContaining({
+        label: '2 claude',
+        command: expect.objectContaining({ command: 'deck.openTerminal' }),
+      }),
       expect.objectContaining({
         label: '+ Add Terminal',
         command: expect.objectContaining({ command: 'deck.addTerminal' }),
       }),
     ]);
+    expect(tmux.listSessions).toHaveBeenCalledWith('wt-_work_alpha-main__term-');
   });
 
   it('renders tmux install placeholder when tmux is unavailable', async () => {

@@ -17,6 +17,8 @@ import { WorktreeRootStore } from './worktree/worktreeRootStore';
 import { DeckTreeDragAndDropController } from './tree/deckTreeDragAndDropController';
 import { WorktreeOrderStore } from './worktree/worktreeOrderStore';
 import { AddTerminalCommand } from './terminal/addTerminalCommand';
+import { OpenTerminalCommand } from './terminal/openTerminalCommand';
+import { TerminalSessionRegistry } from './terminal/terminalSessionRegistry';
 import { TmuxCli } from './terminal/tmuxCli';
 import { tmuxPreflight } from './terminal/tmuxPreflight';
 
@@ -42,9 +44,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     worktreeOrders,
     worktreeListCache,
     projectCommonDirCache,
+    tmux,
     tmuxAvailability.available,
   );
-  const addTerminal = new AddTerminalCommand(tmux);
+  const terminalRegistry = new TerminalSessionRegistry(vscode.window.onDidCloseTerminal);
+  const addTerminal = new AddTerminalCommand(tmux, terminalRegistry, () => tree.refresh());
+  const openTerminal = new OpenTerminalCommand(tmux, terminalRegistry);
   const addWorktree = new AddWorktreeCommand(
     switcher,
     detachedOpener,
@@ -110,6 +115,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand('deck.addProject', () => addProject.run()),
     vscode.commands.registerCommand('deck.addWorktree', (node) => addWorktree.run(node)),
     vscode.commands.registerCommand('deck.addTerminal', (node) => addTerminal.run(node)),
+    vscode.commands.registerCommand('deck.openTerminal', (node) => openTerminal.run(node)),
     vscode.commands.registerCommand('deck.removeProject', (node) => removeProject.run(node)),
     vscode.commands.registerCommand('deck.removeWorktree', (node) => removeWorktree.run(node)),
     vscode.commands.registerCommand('deck.openWorktreeInNewWindow', (node: { worktree: { path: string } }) =>
@@ -118,6 +124,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand('deck.switchWorktree', async (worktreePath: string) => {
       await switcher.switchTo(worktreePath);
       tree.refresh();
+    }),
+    terminalRegistry,
+    vscode.workspace.onDidChangeWorkspaceFolders(() => tree.refresh()),
+    treeView.onDidChangeVisibility((event) => {
+      if (event.visible) tree.refresh();
     }),
   );
 }
