@@ -1,5 +1,6 @@
 import * as path from 'node:path';
 import * as vscode from 'vscode';
+import { awaitProcessId } from './awaitProcessId';
 import { TerminalSessionRegistry } from './terminalSessionRegistry';
 
 export interface OpenTerminalTmuxCli {
@@ -59,7 +60,7 @@ export class OpenTerminalCommand {
       location: { viewColumn: vscode.ViewColumn.Active },
     });
     this.registry.set(node.terminal.sessionName, terminal);
-    const pid = await terminal.processId;
+    const pid = await awaitProcessId(terminal);
     if (pid !== undefined) await this.options.pidStore?.set(node.terminal.sessionName, pid);
     terminal.show(false);
   }

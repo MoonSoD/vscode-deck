@@ -1,5 +1,6 @@
 import * as path from 'node:path';
 import * as vscode from 'vscode';
+import { awaitProcessId } from './awaitProcessId';
 import {
   allocateTermN,
   terminalSessionName,
@@ -81,7 +82,7 @@ export class AddTerminalCommand {
       location: { viewColumn: vscode.ViewColumn.Active },
     });
     this.registry.set(session, terminal);
-    const pid = await terminal.processId;
+    const pid = await awaitProcessId(terminal);
     if (pid !== undefined) await this.options.pidStore?.set(session, pid);
     terminal.show(false);
     this.refresh();

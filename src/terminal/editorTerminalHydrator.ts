@@ -1,5 +1,6 @@
 import * as path from 'node:path';
 import * as vscode from 'vscode';
+import { awaitProcessId } from './awaitProcessId';
 import { terminalSessionName } from './tmuxSafe';
 import type { TerminalLike, TerminalSessionRegistry } from './terminalSessionRegistry';
 import type { TmuxSession } from './tmuxCli';
@@ -63,7 +64,7 @@ export class EditorTerminalHydrator {
       return;
     }
 
-    const pid = await terminal.processId;
+    const pid = await awaitProcessId(terminal);
     const storedPid = this.pidStore.get(sessionName);
     const existing = this.registry.getTerminal(sessionName);
     const pidMatches = storedPid !== undefined && pid === storedPid;
@@ -104,6 +105,9 @@ export class EditorTerminalHydrator {
   ): Promise<void> {
     const originalPos = findTabPosition(terminal);
     if (originalPos === undefined) {
+      // Panel/no-group terminal: no editor strip slot to preserve, so the
+      // "only tab in column" footgun that motivates create-before-dispose
+      // doesn't apply. Dispose first.
       terminal.dispose?.();
     }
     const options: vscode.TerminalOptions = {
@@ -116,12 +120,10 @@ export class EditorTerminalHydrator {
     if (originalPos !== undefined) {
       recreated.show(false);
       await moveActiveEditorLeft(originalPos.groupSize - originalPos.tabIndex - 1);
-    }
-    if (originalPos !== undefined) {
       terminal.dispose?.();
     }
     this.registry.set(sessionName, recreated);
-    const pid = await recreated.processId;
+    const pid = await awaitProcessId(recreated);
     if (pid !== undefined) {
       await this.pidStore.set(sessionName, pid);
     }
