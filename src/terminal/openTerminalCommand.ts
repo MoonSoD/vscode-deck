@@ -23,7 +23,8 @@ export class OpenTerminalCommand {
 
     const existing = this.registry.get(node.terminal.sessionName);
     if (existing) {
-      existing.show(true);
+      // VS Code: Terminal.show(preserveFocus). false → focus moves to the terminal.
+      existing.show(false);
       return;
     }
 
@@ -34,6 +35,6 @@ export class OpenTerminalCommand {
       location: { viewColumn: vscode.ViewColumn.Active },
     });
     this.registry.set(node.terminal.sessionName, terminal);
-    terminal.show(true);
+    terminal.show(false);
   }
 }

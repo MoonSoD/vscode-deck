@@ -63,7 +63,7 @@ describe('AddTerminalCommand', () => {
       ],
       location: { viewColumn: -1 },
     });
-    expect(terminal.show).toHaveBeenCalledWith(true);
+    expect(terminal.show).toHaveBeenCalledWith(false);
     expect(registry.get('wt-_work_repo__term-4')).toBe(terminal);
     expect(terminalSessionListCache.set).toHaveBeenCalledWith('wt-_work_repo__', [
       { sessionName: 'wt-_work_repo__term-1', n: 1, windowName: 'zsh' },

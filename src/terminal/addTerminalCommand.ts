@@ -59,7 +59,8 @@ export class AddTerminalCommand {
       location: { viewColumn: vscode.ViewColumn.Active },
     });
     this.registry.set(session, terminal);
-    terminal.show(true);
+    // VS Code: Terminal.show(preserveFocus). false → focus moves to the terminal.
+    terminal.show(false);
     this.refresh();
   }
 }

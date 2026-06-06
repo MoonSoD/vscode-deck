@@ -37,7 +37,7 @@ describe('OpenTerminalCommand', () => {
       shellArgs: ['attach-session', '-t', '=wt-_work_repo__term-1'],
       location: { viewColumn: -1 },
     });
-    expect(terminal.show).toHaveBeenCalledWith(true);
+    expect(terminal.show).toHaveBeenCalledWith(false);
     expect(registry.get('wt-_work_repo__term-1')).toBe(terminal);
   });
 
@@ -54,6 +54,6 @@ describe('OpenTerminalCommand', () => {
     });
 
     expect(vscodeState.createTerminal).not.toHaveBeenCalled();
-    expect(terminal.show).toHaveBeenCalledWith(true);
+    expect(terminal.show).toHaveBeenCalledWith(false);
   });
 });
