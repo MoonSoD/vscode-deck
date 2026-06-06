@@ -30,10 +30,14 @@ interface TerminalSessionLister {
   listSessions(prefix?: string): Promise<TmuxSession[]>;
 }
 
+// Stable TreeItem.id values let VS Code persist expand/collapse + selection
+// across reloads (it stores state per id under workbench.tree.<viewId>).
+
 class ProjectNode extends vscode.TreeItem {
   constructor(public readonly projectPath: string, isActiveProject: boolean) {
     const item = describeProjectTreeItem(projectPath, isActiveProject);
     super(item.label, vscode.TreeItemCollapsibleState.Expanded);
+    this.id = `project::${projectPath}`;
     this.contextValue = 'deck.project';
     this.description = item.description;
     this.tooltip = projectPath;
@@ -50,6 +54,7 @@ class WorktreeNode extends vscode.TreeItem {
   ) {
     const item = describeWorktreeTreeItem(worktree, activeWorktreePath, mainWorktreePath);
     super(item.label, vscode.TreeItemCollapsibleState.Collapsed);
+    this.id = `worktree::${worktree.path}`;
     this.contextValue = item.contextValue;
     this.description = item.description;
     this.iconPath = new vscode.ThemeIcon(item.iconId);
@@ -65,6 +70,7 @@ class TerminalAddNode extends vscode.TreeItem {
   constructor(worktreeNode: WorktreeNode) {
     const item = describeTerminalAddTreeItem();
     super(item.label, vscode.TreeItemCollapsibleState.None);
+    this.id = `add-terminal::${worktreeNode.worktree.path}`;
     this.contextValue = item.contextValue;
     this.iconPath = new vscode.ThemeIcon(item.iconId);
     this.command = {
@@ -82,6 +88,7 @@ class TerminalNode extends vscode.TreeItem {
   ) {
     const item = describeTerminalTreeItem(n, terminal.windowName);
     super(item.label, vscode.TreeItemCollapsibleState.None);
+    this.id = `terminal::${terminal.sessionName}`;
     this.contextValue = item.contextValue;
     this.iconPath = new vscode.ThemeIcon(item.iconId);
     this.command = {
@@ -93,9 +100,10 @@ class TerminalNode extends vscode.TreeItem {
 }
 
 class TmuxUnavailableNode extends vscode.TreeItem {
-  constructor() {
+  constructor(worktreePath: string) {
     const item = describeTmuxUnavailableTreeItem();
     super(item.label, vscode.TreeItemCollapsibleState.None);
+    this.id = `tmux-unavailable::${worktreePath}`;
     this.contextValue = item.contextValue;
     this.tooltip = item.tooltip;
     this.iconPath = new vscode.ThemeIcon(item.iconId);
@@ -180,7 +188,7 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
       return this.getWorktreeChildren(element);
     }
     if (element instanceof WorktreeNode) {
-      if (!this.tmuxAvailable) return [new TmuxUnavailableNode()];
+      if (!this.tmuxAvailable) return [new TmuxUnavailableNode(element.worktree.path)];
       return this.getTerminalChildren(element);
     }
     return [];
