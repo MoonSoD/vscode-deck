@@ -26,32 +26,31 @@ export class EditorTerminalHydrator {
   ) {}
 
   async hydrateOne(terminal: HydratableTerminal): Promise<void> {
-    const liveSessions = await this.getLiveSessionNamesFor(terminal);
-    if (!liveSessions) return;
-    await this.hydrateTerminal(terminal, liveSessions);
+    const sessionName = this.sessionNameFor(terminal);
+    if (!sessionName) return;
+    await this.hydrateTerminal(terminal, sessionName, await this.liveSessionNames());
   }
 
   async hydrateSnapshot(terminals: readonly HydratableTerminal[]): Promise<void> {
     const liveSessionNames = (await this.tmux.listSessions()).map((session) => session.sessionName);
     const liveSessions = new Set(liveSessionNames);
     for (const terminal of terminals) {
-      await this.hydrateTerminal(terminal, liveSessions);
+      const sessionName = this.sessionNameFor(terminal);
+      if (!sessionName) continue;
+      await this.hydrateTerminal(terminal, sessionName, liveSessions);
     }
     await this.pidStore.prune(liveSessionNames);
   }
 
-  private async getLiveSessionNamesFor(terminal: HydratableTerminal): Promise<Set<string> | undefined> {
-    if (!this.sessionNameFor(terminal)) return undefined;
+  private async liveSessionNames(): Promise<Set<string>> {
     return new Set((await this.tmux.listSessions()).map((session) => session.sessionName));
   }
 
   private async hydrateTerminal(
     terminal: HydratableTerminal,
+    sessionName: string,
     liveSessions: ReadonlySet<string>,
   ): Promise<void> {
-    const sessionName = this.sessionNameFor(terminal);
-    if (!sessionName) return;
-
     if (!liveSessions.has(sessionName)) {
       await this.pidStore.remove(sessionName);
       terminal.dispose?.();
