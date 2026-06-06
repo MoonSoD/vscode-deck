@@ -115,6 +115,7 @@ class TmuxUnavailableNode extends vscode.TreeItem {
 export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
   private readonly _onDidChangeTreeData = new vscode.EventEmitter<Node | undefined>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
+  private revealNode: ((node: vscode.TreeItem) => Promise<void> | void) | undefined;
   private activeProjectCommonDir: string | null = null;
   private resolvingActiveProject = false;
   private readonly projectCommonDirs = new Map<string, string | null>();
@@ -161,6 +162,10 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
 
   getTreeItem(element: Node): vscode.TreeItem {
     return element;
+  }
+
+  setRevealNode(revealNode: (node: vscode.TreeItem) => Promise<void> | void): void {
+    this.revealNode = revealNode;
   }
 
   getParent(_element: Node): Node | undefined {
@@ -364,9 +369,21 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
     // cache itself is stale.
     const cached = this.findCachedTerminal(session);
     if (cached) {
+      this.revealCachedTerminal(cached);
       void this.terminalRegistry.renameIfActive(session, `${cached.n} ${cached.windowName}`);
     }
     this.refresh();
+  }
+
+  private revealCachedTerminal(terminal: CachedTerminalSession): void {
+    if (!this.revealNode) return;
+    const worktreePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    if (!worktreePath) return;
+    try {
+      void Promise.resolve(this.revealNode(new TerminalNode(terminal, terminal.n, worktreePath))).catch(() => undefined);
+    } catch {
+      // Reveal is best-effort; rename and refresh must still run.
+    }
   }
 
   private findCachedTerminal(sessionName: string): CachedTerminalSession | undefined {

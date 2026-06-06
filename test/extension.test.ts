@@ -19,6 +19,7 @@ const vscodeState = vi.hoisted(() => ({
   openTerminalRun: vi.fn(),
   projectTreeArgs: undefined as unknown[] | undefined,
   projectTreeInstances: [] as Array<{ refresh: ReturnType<typeof vi.fn>; getChildren: ReturnType<typeof vi.fn> }>,
+  projectTreeRevealNode: undefined as ((node: unknown) => Promise<void> | void) | undefined,
   registerCommand: vi.fn(() => ({ dispose: vi.fn() })),
   settingsProjects: ['/settings/repo'],
   terminalSessionListCacheInstances: [] as Array<{ removeSession: ReturnType<typeof vi.fn> }>,
@@ -126,6 +127,9 @@ vi.mock('../src/tree/projectTree', () => ({
   ProjectTreeProvider: class {
     refresh = vi.fn();
     getChildren = vi.fn(() => [{ projectPath: '/settings/repo' }]);
+    setRevealNode = vi.fn((revealNode: (node: unknown) => Promise<void> | void) => {
+      vscodeState.projectTreeRevealNode = revealNode;
+    });
 
     constructor(...args: unknown[]) {
       vscodeState.projectTreeArgs = args;
@@ -201,6 +205,7 @@ describe('activate', () => {
     vscodeState.closeTerminalArgs = undefined;
     vscodeState.projectTreeArgs = undefined;
     vscodeState.projectTreeInstances = [];
+    vscodeState.projectTreeRevealNode = undefined;
     vscodeState.settingsProjects = ['/settings/repo'];
     vscodeState.terminalSessionListCacheInstances = [];
     vscodeState.terminalSessionRegistryInstances = [];
@@ -239,6 +244,19 @@ describe('activate', () => {
       }),
     );
     expect(context.subscriptions[0]).toBe(vscodeState.createTreeView.mock.results[0].value);
+  });
+
+  it('wires active terminal row reveal without stealing focus or expanding', async () => {
+    const context = createContext();
+
+    await activate(context as never);
+    const node = { id: 'terminal::wt-_work_repo__term-1' };
+    await vscodeState.projectTreeRevealNode?.(node);
+
+    expect(vscodeState.createTreeView.mock.results[0].value.reveal).toHaveBeenCalledWith(
+      node,
+      { select: true, focus: false, expand: false },
+    );
   });
 
   it('migrates deck.projects settings to ProjectRegistryStore and clears settings', async () => {
