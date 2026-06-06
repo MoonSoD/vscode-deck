@@ -130,6 +130,14 @@ function isDuplicateSession(result: CommandResult): boolean {
 }
 
 function isMissingSession(result: CommandResult): boolean {
+  // Three shapes from tmux when the -L deck world is empty:
+  //   "session not found"  — server up, target absent
+  //   "no server running"  — server stopped but socket file lingered
+  //   "error connecting to …" — socket file itself absent (fresh boot, never new-session'd)
   const output = `${result.stdout}\n${result.stderr}`;
-  return output.includes('session not found') || output.includes('no server running');
+  return (
+    output.includes('session not found') ||
+    output.includes('no server running') ||
+    output.includes('error connecting')
+  );
 }

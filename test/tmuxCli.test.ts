@@ -134,6 +134,21 @@ describe('TmuxCli', () => {
     await expect(tmux.listSessions('wt-_work_repo__term-')).resolves.toEqual([]);
   });
 
+  it('treats a missing socket file (fresh boot, never new-session\'d) as empty', async () => {
+    // tmux emits this when `-L deck` has never been used since boot — the
+    // socket file under $TMPDIR/tmux-<uid>/deck doesn't exist yet.
+    const runner = new MockRunner([
+      {
+        code: 1,
+        stdout: '',
+        stderr: 'error connecting to /private/tmp/tmux-501/deck (No such file or directory)',
+      },
+    ]);
+    const tmux = new TmuxCli('/ext/resources/deck.conf', runner);
+
+    await expect(tmux.listSessions('wt-_work_repo__term-')).resolves.toEqual([]);
+  });
+
   it('kills an exact Deck session target', async () => {
     const runner = new MockRunner([{ code: 0, stdout: '', stderr: '' }]);
     const tmux = new TmuxCli('/ext/resources/deck.conf', runner);
