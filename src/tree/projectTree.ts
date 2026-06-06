@@ -368,12 +368,19 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
     // cache itself is stale.
     const cached = this.findCachedTerminal(session);
     if (cached) {
-      if (this.revealNode) {
-        void Promise.resolve(this.revealNode(new TerminalNode(cached, cached.n))).catch(() => undefined);
-      }
+      this.revealCachedTerminal(cached);
       void this.terminalRegistry.renameIfActive(session, `${cached.n} ${cached.windowName}`);
     }
     this.refresh();
+  }
+
+  private revealCachedTerminal(terminal: CachedTerminalSession): void {
+    if (!this.revealNode) return;
+    try {
+      void Promise.resolve(this.revealNode(new TerminalNode(terminal, terminal.n))).catch(() => undefined);
+    } catch {
+      // Reveal is best-effort; rename and refresh must still run.
+    }
   }
 
   private findCachedTerminal(sessionName: string): CachedTerminalSession | undefined {

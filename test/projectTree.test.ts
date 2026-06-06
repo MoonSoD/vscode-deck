@@ -599,6 +599,39 @@ describe('ProjectTreeProvider', () => {
     expect(fire).toHaveBeenCalledWith(undefined);
   });
 
+  it('handleActiveTerminalChange still renames when reveal throws', () => {
+    const terminal: { show: ReturnType<typeof vi.fn> } = { show: vi.fn() };
+    const renameIfActive = vi.fn(async () => undefined);
+    const terminalRegistry = {
+      findSession: vi.fn(() => 'wt-_work_alpha-main__term-1'),
+      renameIfActive,
+    };
+    const terminalSessionListCache = {
+      get: vi.fn(() => [
+        { sessionName: 'wt-_work_alpha-main__term-1', n: 1, windowName: 'claude' },
+      ]),
+      set: vi.fn(async () => undefined),
+    } as unknown as TerminalSessionListCacheStore;
+    const provider = new ProjectTreeProvider(
+      registry(['/work/alpha-main']),
+      { get: vi.fn() } as unknown as ActiveWorktreeStore,
+      { get: vi.fn() } as unknown as WorktreeOrderStore,
+      { get: vi.fn(), set: vi.fn(async () => undefined) } as unknown as WorktreeListCacheStore,
+      { get: vi.fn(() => '/git/alpha'), set: vi.fn(async () => undefined) } as unknown as ProjectCommonDirCache,
+      { listSessions: vi.fn(async () => []) },
+      true,
+      terminalSessionListCache,
+      terminalRegistry,
+    );
+    provider.setRevealNode(() => {
+      throw new Error('reveal failed');
+    });
+
+    provider.handleActiveTerminalChange(terminal);
+
+    expect(renameIfActive).toHaveBeenCalledWith('wt-_work_alpha-main__term-1', '1 claude');
+  });
+
   it('handleActiveTerminalChange no-ops for terminals not in the registry', () => {
     const revealNode = vi.fn();
     const terminalRegistry = {
