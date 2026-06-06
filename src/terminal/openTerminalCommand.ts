@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { TerminalSessionRegistry } from './terminalSessionRegistry';
+import { describeTerminalTreeItem } from '../tree/worktreeTreeItem';
 
 export interface OpenTerminalTmuxCli {
   attachShellArgs(session: string): string[];
@@ -29,9 +30,10 @@ export class OpenTerminalCommand {
       return;
     }
 
-    // Tab title is the index — see AddTerminalCommand for the rationale.
+    // Tab name mirrors the sidebar row label exactly — see AddTerminalCommand
+    // for staleness caveat.
     const terminal = vscode.window.createTerminal({
-      name: `Deck ${node.n}`,
+      name: describeTerminalTreeItem(node.n, node.terminal.windowName).label,
       shellPath: 'tmux',
       shellArgs: this.tmux.attachShellArgs(node.terminal.sessionName),
       location: { viewColumn: vscode.ViewColumn.Active },

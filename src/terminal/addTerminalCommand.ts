@@ -11,6 +11,7 @@ import {
   toCachedTerminalSessions,
   type TerminalSessionListCacheStore,
 } from './terminalSessionListCacheStore';
+import { describeTerminalTreeItem } from '../tree/worktreeTreeItem';
 
 export interface AddTerminalTmuxCli {
   listSessions(prefix?: string): Promise<TmuxSession[]>;
@@ -51,14 +52,15 @@ export class AddTerminalCommand {
       cacheKey,
       toCachedTerminalSessions(node.worktree.path, refreshed),
     );
-    // Tab title is the index (`Deck 1`, `Deck 2`, …). It correlates with the
-    // sidebar's `1 zsh` / `2 claude` rows by number, never goes stale, and
-    // doesn't fight VS Code's terminal title machinery: `Terminal.name` is
-    // sticky after creation, `${sequence}` (the OSC route) requires users to
-    // edit `terminal.integrated.tabs.title`. Sidebar is the canonical
-    // "what's running" surface.
+    // Tab name mirrors the sidebar row label exactly via the shared
+    // `describeTerminalTreeItem` helper (`1 zsh`, `2 claude`, …). Note:
+    // VS Code's `Terminal.name` is set at creation and has no setter, so
+    // the tab will go stale if the inner command changes (zsh → claude).
+    // The sidebar still updates correctly because it re-queries tmux.
+    const fresh = refreshed.find((s) => s.sessionName === session);
+    const windowName = fresh?.windowName ?? `term-${termN}`;
     const terminal = vscode.window.createTerminal({
-      name: `Deck ${termN}`,
+      name: describeTerminalTreeItem(termN, windowName).label,
       shellPath: 'tmux',
       shellArgs: this.tmux.attachShellArgs(session),
       location: { viewColumn: vscode.ViewColumn.Active },
