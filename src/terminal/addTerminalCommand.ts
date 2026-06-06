@@ -64,5 +64,27 @@ export class AddTerminalCommand {
     // VS Code: Terminal.show(preserveFocus). false → focus moves to the terminal.
     terminal.show(false);
     this.refresh();
+
+    // tmux reports #{window_name}=="tmux" briefly after new-session, before
+    // the shell finishes exec'ing — our immediate list-sessions catches that
+    // racy state. A deferred refresh re-lists once the shell has settled
+    // (~300ms is plenty for any reasonable shell on local hardware) so the
+    // row label updates from "tmux" → "zsh" without user action.
+    this.scheduleSettledRefresh(prefix, cacheKey, node.worktree.path);
+  }
+
+  private scheduleSettledRefresh(prefix: string, cacheKey: string, worktreePath: string): void {
+    setTimeout(() => {
+      void this.tmux
+        .listSessions(prefix)
+        .then(async (settled) => {
+          await this.terminalSessionListCache.set(
+            cacheKey,
+            toCachedTerminalSessions(worktreePath, settled),
+          );
+          this.refresh();
+        })
+        .catch(() => undefined);
+    }, 300);
   }
 }
