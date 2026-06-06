@@ -57,22 +57,46 @@ describe('package contributions', () => {
     });
   });
 
-  it('contributes delete worktree only for removable worktree rows', () => {
+  it('contributes delete worktree only via the right-click context menu', () => {
     expect(pkg.contributes.commands).toContainEqual({
       command: 'deck.removeWorktree',
       title: 'Deck: Delete Worktree…',
       icon: '$(trash)',
     });
 
-    expect(pkg.contributes.menus['view/item/context']).toContainEqual({
-      command: 'deck.removeWorktree',
-      when: 'view == deck.projects && viewItem == deck.worktree',
-      group: 'inline',
-    });
-    expect(pkg.contributes.menus['view/item/context']).toContainEqual({
+    // Worktree row's inline slot is reserved for the Add Terminal `+` icon;
+    // delete-worktree lives only in the right-click context menu.
+    expect(
+      pkg.contributes.menus['view/item/context'].filter(
+        (item: { command: string }) => item.command === 'deck.removeWorktree',
+      ),
+    ).toEqual([{
       command: 'deck.removeWorktree',
       when: 'view == deck.projects && viewItem == deck.worktree',
       group: 'navigation',
+    }]);
+  });
+
+  it('contributes add terminal as the inline `+` action on Worktree rows', () => {
+    expect(pkg.contributes.commands).toContainEqual({
+      command: 'deck.addTerminal',
+      title: 'Deck: Add Terminal',
+      icon: '$(add)',
+    });
+
+    expect(
+      pkg.contributes.menus['view/item/context'].filter(
+        (item: { command: string }) => item.command === 'deck.addTerminal',
+      ),
+    ).toEqual([{
+      command: 'deck.addTerminal',
+      when:
+        'view == deck.projects && (viewItem == deck.worktree || viewItem == deck.worktree.active || viewItem == deck.worktree.main) && deck.tmuxAvailable',
+      group: 'inline',
+    }]);
+    expect(pkg.contributes.menus.commandPalette).toContainEqual({
+      command: 'deck.addTerminal',
+      when: 'false',
     });
   });
 

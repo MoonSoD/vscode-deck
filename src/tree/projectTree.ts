@@ -330,10 +330,10 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
   }
 
   private toTerminalNodes(element: WorktreeNode, terminals: readonly CachedTerminalSession[]): Node[] {
-    return [
-      ...terminals.map((terminal) => new TerminalNode(terminal, terminal.n)),
-      new TerminalAddNode(element),
-    ];
+    // The Worktree row's inline `+` icon is the always-available add affordance.
+    // Show the explicit "Add Terminal" row only as the empty-state hint.
+    if (terminals.length === 0) return [new TerminalAddNode(element)];
+    return terminals.map((terminal) => new TerminalNode(terminal, terminal.n));
   }
 
   private refreshWorktreesInBackground(

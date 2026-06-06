@@ -282,7 +282,7 @@ describe('ProjectTreeProvider', () => {
     expect(vscode.workspace.getConfiguration).not.toHaveBeenCalled();
   });
 
-  it('renders existing Worktree terminals above the add row when tmux is available', async () => {
+  it('renders existing Worktree terminals without the add row when tmux is available', async () => {
     const tmux = {
       listSessions: vi.fn(async () => [
         { sessionName: 'wt-_work_alpha-main__term-2', windowName: 'claude' },
@@ -318,12 +318,30 @@ describe('ProjectTreeProvider', () => {
         label: '2 claude',
         command: expect.objectContaining({ command: 'deck.openTerminal' }),
       }),
-      expect.objectContaining({
-        label: 'Add Terminal',
-        command: expect.objectContaining({ command: 'deck.addTerminal' }),
-      }),
     ]);
     expect(tmux.listSessions).toHaveBeenCalledWith('wt-_work_alpha-main__term-');
+  });
+
+  it('renders the Add Terminal row only as the empty-state hint when no terminals exist', async () => {
+    const tmux = { listSessions: vi.fn(async () => []) };
+    const provider = new ProjectTreeProvider(
+      registry(['/work/alpha-main']),
+      { get: vi.fn() } as unknown as ActiveWorktreeStore,
+      { get: vi.fn() } as unknown as WorktreeOrderStore,
+      { get: vi.fn(), set: vi.fn(async () => undefined) } as unknown as WorktreeListCacheStore,
+      { get: vi.fn(() => '/git/alpha'), set: vi.fn(async () => undefined) } as unknown as ProjectCommonDirCache,
+      tmux,
+      true,
+    );
+    const projects = provider.getChildren();
+    if (!Array.isArray(projects)) throw new Error('expected sync project roots');
+    const worktrees = await provider.getChildren(projects[0]);
+    if (!Array.isArray(worktrees)) throw new Error('expected worktree children');
+
+    const terminalRows = await provider.getChildren(worktrees[0]);
+    expect((terminalRows as Array<{ label: string }>).map((r) => r.label)).toEqual([
+      'Add Terminal',
+    ]);
   });
 
   it('renders warm cached terminals synchronously and refreshes in the background only on diff', async () => {
@@ -361,7 +379,6 @@ describe('ProjectTreeProvider', () => {
     expect(Array.isArray(terminalRows)).toBe(true);
     expect((terminalRows as Array<{ label: string }>).map((row) => row.label)).toEqual([
       '1 zsh',
-      'Add Terminal',
     ]);
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(tmux.listSessions).toHaveBeenCalledWith('wt-_work_alpha-main__term-');

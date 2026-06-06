@@ -105,6 +105,15 @@
         "title": "Deck: Open Worktree in New Window"
       },
       {
+        "command": "deck.addTerminal",
+        "title": "Deck: Add Terminal",
+        "icon": "$(add)"
+      },
+      {
+        "command": "deck.openTerminal",
+        "title": "Deck: Open Terminal"
+      },
+      {
         "command": "deck.killTerminal",
         "title": "Kill Terminal",
         "icon": "$(trash)"
@@ -141,8 +150,8 @@
           "group": "inline"
         },
         {
-          "command": "deck.removeWorktree",
-          "when": "view == deck.projects && viewItem == deck.worktree",
+          "command": "deck.addTerminal",
+          "when": "view == deck.projects && (viewItem == deck.worktree || viewItem == deck.worktree.active || viewItem == deck.worktree.main) && deck.tmuxAvailable",
           "group": "inline"
         },
         {
@@ -173,6 +182,14 @@
         },
         {
           "command": "deck.killTerminal",
+          "when": "false"
+        },
+        {
+          "command": "deck.addTerminal",
+          "when": "false"
+        },
+        {
+          "command": "deck.openTerminal",
           "when": "false"
         }
       ]
