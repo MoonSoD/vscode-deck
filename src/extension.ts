@@ -17,6 +17,7 @@ import { WorktreeRootStore } from './worktree/worktreeRootStore';
 import { DeckTreeDragAndDropController } from './tree/deckTreeDragAndDropController';
 import { WorktreeOrderStore } from './worktree/worktreeOrderStore';
 import { AddTerminalCommand } from './terminal/addTerminalCommand';
+import { TerminalCascade } from './terminal/terminalCascade';
 import { TmuxCli } from './terminal/tmuxCli';
 import { tmuxPreflight } from './terminal/tmuxPreflight';
 
@@ -45,6 +46,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     tmuxAvailability.available,
   );
   const addTerminal = new AddTerminalCommand(tmux);
+  const terminalCascade = new TerminalCascade(tmux);
   const addWorktree = new AddWorktreeCommand(
     switcher,
     detachedOpener,
@@ -64,6 +66,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     branchDeletionPreferences,
     worktreeListCache,
     projectCommonDirCache,
+    terminalCascade,
   );
   const removeProject = new ProjectRemovalCommand(
     projectRegistry,
@@ -71,6 +74,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     worktreeRoots,
     worktreeOrders,
     () => tree.refresh(),
+    terminalCascade,
   );
 
   const treeView = vscode.window.createTreeView('deck.projects', {

@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { getCommonDirSafe } from '../git/worktrees';
+import { getCommonDirSafe, listWorktrees } from '../git/worktrees';
 
 interface ProjectNodeLike {
   projectPath: string;
@@ -11,6 +11,10 @@ interface PerProjectStoreLike {
 
 interface ProjectRegistryLike {
   remove(projectPath: string): Promise<void>;
+}
+
+interface TerminalCascadeLike {
+  killWorktree(worktreePath: string): Promise<void>;
 }
 
 const REMOVE_LABEL = 'Remove from Deck';
@@ -25,6 +29,9 @@ export class ProjectRemovalCommand {
     private readonly worktreeRoots: PerProjectStoreLike,
     private readonly worktreeOrders: PerProjectStoreLike,
     private readonly refresh: () => void,
+    private readonly terminalCascade: TerminalCascadeLike = {
+      killWorktree: async () => undefined,
+    },
   ) {}
 
   async run(node: ProjectNodeLike | undefined): Promise<void> {
@@ -48,6 +55,7 @@ export class ProjectRemovalCommand {
     );
     if (picked !== REMOVE_LABEL) return;
 
+    await this.killProjectTerminals(node.projectPath);
     await this.projectRegistry.remove(node.projectPath);
 
     if (commonDir !== null) {
@@ -56,5 +64,22 @@ export class ProjectRemovalCommand {
       await this.worktreeOrders.clear(commonDir);
     }
     this.refresh();
+  }
+
+  private async killProjectTerminals(projectPath: string): Promise<void> {
+    let worktrees;
+    try {
+      worktrees = await listWorktrees(projectPath);
+    } catch {
+      return;
+    }
+
+    for (const worktree of worktrees) {
+      try {
+        await this.terminalCascade.killWorktree(worktree.path);
+      } catch {
+        // Tmux cleanup must not block ProjectRemoval.
+      }
+    }
   }
 }

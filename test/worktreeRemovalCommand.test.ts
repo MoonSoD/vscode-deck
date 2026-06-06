@@ -86,6 +86,68 @@ describe('WorktreeRemovalCommand', () => {
     expect(refresh).toHaveBeenCalledOnce();
   });
 
+  it('kills matching Deck terminal sessions before removing the worktree', async () => {
+    const activeWorktrees = {
+      get: vi.fn(() => undefined),
+      clear: vi.fn(async () => undefined),
+    };
+    const terminalCascade = {
+      killWorktree: vi.fn(async () => undefined),
+    };
+    const command = new WorktreeRemovalCommand(
+      activeWorktrees,
+      vi.fn(),
+      undefined,
+      undefined,
+      undefined,
+      terminalCascade,
+    );
+
+    vi.mocked(vscode.window.showWarningMessage).mockResolvedValue(
+      'Remove (keep branch)' as never,
+    );
+
+    await command.run(node);
+
+    expect(terminalCascade.killWorktree).toHaveBeenCalledWith('/repo/feature');
+    expect(terminalCascade.killWorktree.mock.invocationCallOrder[0]).toBeLessThan(
+      removeWorktree.mock.invocationCallOrder[0],
+    );
+  });
+
+  it('continues removing the worktree when terminal cascade fails', async () => {
+    const activeWorktrees = {
+      get: vi.fn(() => undefined),
+      clear: vi.fn(async () => undefined),
+    };
+    const terminalCascade = {
+      killWorktree: vi.fn(async () => {
+        throw new Error('tmux socket busy');
+      }),
+    };
+    const command = new WorktreeRemovalCommand(
+      activeWorktrees,
+      vi.fn(),
+      undefined,
+      undefined,
+      undefined,
+      terminalCascade,
+    );
+
+    vi.mocked(vscode.window.showWarningMessage).mockResolvedValue(
+      'Remove (keep branch)' as never,
+    );
+
+    await command.run(node);
+
+    expect(removeWorktree).toHaveBeenCalledWith('/repo/main', '/repo/feature', {
+      force: false,
+    });
+    expect(vscode.window.showErrorMessage).not.toHaveBeenCalledWith(
+      'Cannot remove worktree: tmux socket busy',
+    );
+  });
+
   it('updates the worktree-list cache after successful removal', async () => {
     const activeWorktrees = {
       get: vi.fn(() => undefined),
