@@ -13,6 +13,19 @@ export interface WorktreeTreeItemDescription {
   contextValue: 'deck.worktree.active' | 'deck.worktree.main' | 'deck.worktree';
 }
 
+export interface TerminalAddTreeItemDescription {
+  label: '+ Add Terminal';
+  iconId: 'add';
+  contextValue: 'deck.terminal.add';
+}
+
+export interface TmuxUnavailableTreeItemDescription {
+  label: 'tmux ≥3.1 not found · install ↗';
+  iconId: 'warning';
+  contextValue: 'deck.tmux.unavailable';
+  tooltip: 'Install tmux 3.1 or newer to use Deck-managed Terminals.';
+}
+
 export function describeProjectTreeItem(
   projectPath: string,
   isActiveProject: boolean,
@@ -43,5 +56,22 @@ export function describeWorktreeTreeItem(
     description: worktree.path,
     iconId: isActive ? 'check' : 'git-branch',
     contextValue,
+  };
+}
+
+export function describeTerminalAddTreeItem(): TerminalAddTreeItemDescription {
+  return {
+    label: '+ Add Terminal',
+    iconId: 'add',
+    contextValue: 'deck.terminal.add',
+  };
+}
+
+export function describeTmuxUnavailableTreeItem(): TmuxUnavailableTreeItemDescription {
+  return {
+    label: 'tmux ≥3.1 not found · install ↗',
+    iconId: 'warning',
+    contextValue: 'deck.tmux.unavailable',
+    tooltip: 'Install tmux 3.1 or newer to use Deck-managed Terminals.',
   };
 }

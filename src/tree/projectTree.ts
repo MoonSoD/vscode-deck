@@ -6,9 +6,14 @@ import { ActiveWorktreeStore } from '../switch/activeWorktreeStore';
 import { WorktreeListCacheStore } from '../worktree/worktreeListCacheStore';
 import { WorktreeOrderStore } from '../worktree/worktreeOrderStore';
 import { reconcileWorktreeOrder } from './reconcileWorktreeOrder';
-import { describeProjectTreeItem, describeWorktreeTreeItem } from './worktreeTreeItem';
+import {
+  describeProjectTreeItem,
+  describeTmuxUnavailableTreeItem,
+  describeTerminalAddTreeItem,
+  describeWorktreeTreeItem,
+} from './worktreeTreeItem';
 
-type Node = ProjectNode | WorktreeNode;
+type Node = ProjectNode | WorktreeNode | TerminalAddNode | TmuxUnavailableNode;
 
 class ProjectNode extends vscode.TreeItem {
   constructor(public readonly projectPath: string, isActiveProject: boolean) {
@@ -29,7 +34,7 @@ class WorktreeNode extends vscode.TreeItem {
     public readonly mainWorktreePath: string | undefined,
   ) {
     const item = describeWorktreeTreeItem(worktree, activeWorktreePath, mainWorktreePath);
-    super(item.label);
+    super(item.label, vscode.TreeItemCollapsibleState.Collapsed);
     this.contextValue = item.contextValue;
     this.description = item.description;
     this.iconPath = new vscode.ThemeIcon(item.iconId);
@@ -38,6 +43,30 @@ class WorktreeNode extends vscode.TreeItem {
       title: 'Switch',
       arguments: [worktree.path],
     };
+  }
+}
+
+class TerminalAddNode extends vscode.TreeItem {
+  constructor(worktreeNode: WorktreeNode) {
+    const item = describeTerminalAddTreeItem();
+    super(item.label, vscode.TreeItemCollapsibleState.None);
+    this.contextValue = item.contextValue;
+    this.iconPath = new vscode.ThemeIcon(item.iconId);
+    this.command = {
+      command: 'deck.addTerminal',
+      title: 'Add Terminal',
+      arguments: [worktreeNode],
+    };
+  }
+}
+
+class TmuxUnavailableNode extends vscode.TreeItem {
+  constructor() {
+    const item = describeTmuxUnavailableTreeItem();
+    super(item.label, vscode.TreeItemCollapsibleState.None);
+    this.contextValue = item.contextValue;
+    this.tooltip = item.tooltip;
+    this.iconPath = new vscode.ThemeIcon(item.iconId);
   }
 }
 
@@ -62,6 +91,7 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
       get: () => undefined,
       set: async () => undefined,
     },
+    private readonly tmuxAvailable = true,
   ) {}
 
   refresh(): void {
@@ -99,6 +129,9 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
     }
     if (element instanceof ProjectNode) {
       return this.getWorktreeChildren(element);
+    }
+    if (element instanceof WorktreeNode) {
+      return this.tmuxAvailable ? [new TerminalAddNode(element)] : [new TmuxUnavailableNode()];
     }
     return [];
   }

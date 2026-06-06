@@ -1,3 +1,4 @@
+import { join } from 'node:path';
 import * as vscode from 'vscode';
 import { ProjectTreeProvider } from './tree/projectTree';
 import { ActiveWorktreeStore } from './switch/activeWorktreeStore';
@@ -15,8 +16,15 @@ import { WorktreeRemovalCommand } from './worktree/worktreeRemovalCommand';
 import { WorktreeRootStore } from './worktree/worktreeRootStore';
 import { DeckTreeDragAndDropController } from './tree/deckTreeDragAndDropController';
 import { WorktreeOrderStore } from './worktree/worktreeOrderStore';
+import { AddTerminalCommand } from './terminal/addTerminalCommand';
+import { TmuxCli } from './terminal/tmuxCli';
+import { tmuxPreflight } from './terminal/tmuxPreflight';
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
+  const tmux = new TmuxCli(join(context.extensionPath, 'resources', 'deck.conf'));
+  const tmuxAvailability = await tmuxPreflight();
+  await vscode.commands.executeCommand('setContext', 'deck.tmuxAvailable', tmuxAvailability.available);
+
   const projectRegistry = new ProjectRegistryStore(context.globalState);
   await migrateProjects(projectRegistry);
 
@@ -34,7 +42,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     worktreeOrders,
     worktreeListCache,
     projectCommonDirCache,
+    tmuxAvailability.available,
   );
+  const addTerminal = new AddTerminalCommand(tmux);
   const addWorktree = new AddWorktreeCommand(
     switcher,
     detachedOpener,
@@ -78,7 +88,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     async (projectPath) => {
       const roots = tree.getChildren();
       if (!Array.isArray(roots)) return;
-      const project = roots.find((node) => node.projectPath === projectPath);
+      const project = roots.find((node) => 'projectPath' in node && node.projectPath === projectPath);
       if (!project) return;
       try {
         await treeView.reveal(project, { expand: true, select: true });
@@ -99,6 +109,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }),
     vscode.commands.registerCommand('deck.addProject', () => addProject.run()),
     vscode.commands.registerCommand('deck.addWorktree', (node) => addWorktree.run(node)),
+    vscode.commands.registerCommand('deck.addTerminal', (node) => addTerminal.run(node)),
     vscode.commands.registerCommand('deck.removeProject', (node) => removeProject.run(node)),
     vscode.commands.registerCommand('deck.removeWorktree', (node) => removeWorktree.run(node)),
     vscode.commands.registerCommand('deck.openWorktreeInNewWindow', (node: { worktree: { path: string } }) =>
