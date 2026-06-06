@@ -1,7 +1,7 @@
 {
   "name": "deck",
   "displayName": "Deck",
-  "description": "Switch between git worktrees of multiple registered repositories from a single Activity Bar tree.",
+  "description": "Switch between git worktrees of multiple registered repositories from a single secondary sidebar tree.",
   "version": "0.0.9",
   "publisher": "a9a4k",
   "repository": {
@@ -22,7 +22,7 @@
     "monorepo"
   ],
   "engines": {
-    "vscode": "^1.95.0"
+    "vscode": "^1.106.0"
   },
   "categories": [
     "SCM Providers",
@@ -34,7 +34,7 @@
   "main": "./dist/extension.js",
   "contributes": {
     "viewsContainers": {
-      "activitybar": [
+      "secondarySidebar": [
         {
           "id": "deck",
           "title": "Deck",
@@ -54,6 +54,26 @@
       {
         "view": "deck.projects",
         "contents": "No projects yet.\n[Add Project](command:deck.addProject)"
+      }
+    ],
+    "walkthroughs": [
+      {
+        "id": "deck.getStarted",
+        "title": "Deck",
+        "description": "Open Deck from the secondary sidebar.",
+        "steps": [
+          {
+            "id": "deck.secondarySidebar",
+            "title": "Deck lives in the secondary sidebar.",
+            "description": "Open the secondary sidebar, then select Deck.",
+            "media": {
+              "markdown": "media/walkthroughs/secondary-sidebar.md"
+            },
+            "completionEvents": [
+              "onCommand:workbench.action.toggleAuxiliaryBar"
+            ]
+          }
+        ]
       }
     ],
     "commands": [

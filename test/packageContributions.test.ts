@@ -1,10 +1,43 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const pkg = JSON.parse(readFileSync(join(process.cwd(), 'package.json'), 'utf8'));
 
 describe('package contributions', () => {
+  it('contributes Deck to the secondary sidebar with first-install walkthrough', () => {
+    expect(pkg.engines.vscode).toBe('^1.106.0');
+    expect(pkg.contributes.viewsContainers.activitybar).toBeUndefined();
+    expect(pkg.contributes.viewsContainers.secondarySidebar).toEqual([{
+      id: 'deck',
+      title: 'Deck',
+      icon: '$(repo)',
+    }]);
+    expect(pkg.contributes.keybindings).toContainEqual({
+      command: 'workbench.view.extension.deck',
+      key: 'ctrl+alt+d',
+    });
+
+    expect(pkg.contributes.walkthroughs).toEqual([{
+      id: 'deck.getStarted',
+      title: 'Deck',
+      description: 'Open Deck from the secondary sidebar.',
+      steps: [{
+        id: 'deck.secondarySidebar',
+        title: 'Deck lives in the secondary sidebar.',
+        description: 'Open the secondary sidebar, then select Deck.',
+        media: { markdown: 'media/walkthroughs/secondary-sidebar.md' },
+        completionEvents: ['onCommand:workbench.action.toggleAuxiliaryBar'],
+      }],
+    }]);
+
+    const markdownPath = join(process.cwd(), 'media/walkthroughs/secondary-sidebar.md');
+    expect(existsSync(markdownPath)).toBe(true);
+    const markdown = readFileSync(markdownPath, 'utf8');
+    expect(markdown).toContain('secondary sidebar');
+    expect(markdown).toContain('command:workbench.action.toggleAuxiliaryBar');
+  });
+
   it('contributes add worktree as a project-only inline tree action', () => {
     expect(pkg.contributes.commands).toContainEqual({
       command: 'deck.addWorktree',
