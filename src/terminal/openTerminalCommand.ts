@@ -39,13 +39,8 @@ export class OpenTerminalCommand {
     if (!node) return;
     if (await this.switchForForeignWorktree(node)) return;
 
-    const existing =
-      this.registry.getTerminal(node.terminal.sessionName) ??
-      this.registry.findByCreationOptions(vscode.window.terminals, node.terminal.sessionName);
+    const existing = this.registry.getTerminal(node.terminal.sessionName);
     if (existing) {
-      // Cover the case where VS Code restored a tab attached to this session
-      // across reload — register it so future clicks short-circuit too.
-      this.registry.set(node.terminal.sessionName, existing);
       // VS Code: Terminal.show(preserveFocus). false → focus moves to the terminal.
       existing.show(false);
       return;

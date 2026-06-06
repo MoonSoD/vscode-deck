@@ -51,7 +51,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const switcher = new WorktreeSwitcher(activeWorktrees);
   const detachedOpener = new DetachedOpener();
   const terminalRegistry = new TerminalSessionRegistry();
-  terminalRegistry.hydrateFromWindow(vscode.window.terminals);
   const tree = new ProjectTreeProvider(
     projectRegistry,
     activeWorktrees,

@@ -3,16 +3,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const vscodeState = vi.hoisted(() => ({
   createTerminal: vi.fn(() => ({ show: vi.fn() })),
   workspaceFolders: [{ uri: { fsPath: '/work/alpha-main' } }],
-  windowTerminals: [] as unknown[],
 }));
 
 vi.mock('vscode', () => ({
   ViewColumn: { Active: -1 },
   window: {
     createTerminal: vscodeState.createTerminal,
-    get terminals() {
-      return vscodeState.windowTerminals;
-    },
   },
   workspace: {
     workspaceFolders: vscodeState.workspaceFolders,
@@ -26,7 +22,6 @@ describe('OpenTerminalCommand', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vscodeState.workspaceFolders = [{ uri: { fsPath: '/work/alpha-main' } }];
-    vscodeState.windowTerminals = [];
   });
 
   it('attaches a new editor terminal on registry miss', async () => {
@@ -69,30 +64,6 @@ describe('OpenTerminalCommand', () => {
 
     expect(vscodeState.createTerminal).not.toHaveBeenCalled();
     expect(terminal.show).toHaveBeenCalledWith(false);
-  });
-
-  it('reuses a restored editor terminal already attached to the target session', async () => {
-    const tmux = {
-      attachShellArgs: vi.fn(() => ['-L', 'deck', 'attach-session', '-t', '=wt-_work_repo__term-1']),
-    };
-    const restored = {
-      show: vi.fn(),
-      creationOptions: {
-        shellArgs: ['-L', 'deck', 'attach-session', '-t', '=wt-_work_repo__term-1'],
-      },
-    };
-    vscodeState.windowTerminals = [restored];
-    const registry = new TerminalSessionRegistry();
-
-    await new OpenTerminalCommand(tmux, registry).run({
-      terminal: { sessionName: 'wt-_work_repo__term-1', windowName: 'zsh' },
-      n: 1,
-      worktreePath: '/work/alpha-main',
-    });
-
-    expect(vscodeState.createTerminal).not.toHaveBeenCalled();
-    expect(restored.show).toHaveBeenCalledWith(false);
-    expect(registry.get('wt-_work_repo__term-1')).toBe(restored);
   });
 
   it('stores a pending intent and switches worktree for cross-worktree terminal clicks', async () => {
