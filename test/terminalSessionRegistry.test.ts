@@ -16,7 +16,7 @@ vi.mock('vscode', () => ({
   },
 }));
 
-import { TerminalSessionRegistry, type TerminalLike } from '../src/terminal/terminalSessionRegistry';
+import { TerminalSessionRegistry } from '../src/terminal/terminalSessionRegistry';
 
 describe('TerminalSessionRegistry', () => {
   beforeEach(() => {
@@ -24,12 +24,8 @@ describe('TerminalSessionRegistry', () => {
     vscodeState.executeCommand.mockClear();
   });
 
-  it('tracks live terminals by session and removes them on close', () => {
-    let closeListener: ((terminal: TerminalLike) => void) | undefined;
-    const registry = new TerminalSessionRegistry((listener) => {
-      closeListener = listener;
-      return { dispose: vi.fn() };
-    });
+  it('tracks live terminals by session and removes them explicitly', () => {
+    const registry = new TerminalSessionRegistry();
     const terminal = { show: vi.fn() };
 
     expect(registry.get('wt-_work_repo__term-1')).toBeUndefined();
@@ -37,7 +33,7 @@ describe('TerminalSessionRegistry', () => {
     registry.set('wt-_work_repo__term-1', terminal);
 
     expect(registry.get('wt-_work_repo__term-1')).toBe(terminal);
-    closeListener?.(terminal);
+    registry.deleteSession('wt-_work_repo__term-1');
     expect(registry.get('wt-_work_repo__term-1')).toBeUndefined();
   });
 
@@ -48,6 +44,15 @@ describe('TerminalSessionRegistry', () => {
 
     expect(registry.findSession(terminal)).toBe('wt-_work_repo__term-2');
     expect(registry.findSession({ show: vi.fn() })).toBeUndefined();
+  });
+
+  it('getTerminal returns the terminal registered for a session', () => {
+    const registry = new TerminalSessionRegistry();
+    const terminal = { show: vi.fn() };
+    registry.set('wt-_work_repo__term-2', terminal);
+
+    expect(registry.getTerminal('wt-_work_repo__term-2')).toBe(terminal);
+    expect(registry.getTerminal('unknown')).toBeUndefined();
   });
 
   it('renameIfActive runs the rename command only when the target is the active terminal', async () => {

@@ -14,11 +14,19 @@ const vscodeState = vi.hoisted(() => ({
   executeCommand: vi.fn(),
   killTerminalRun: vi.fn(),
   killTerminalArgs: undefined as unknown[] | undefined,
+  onDidCloseTerminal: vi.fn(() => ({ dispose: vi.fn() })),
   onDidChangeWorkspaceFolders: vi.fn(() => ({ dispose: vi.fn() })),
   openTerminalRun: vi.fn(),
   projectTreeArgs: undefined as unknown[] | undefined,
+  projectTreeInstances: [] as Array<{ refresh: ReturnType<typeof vi.fn>; getChildren: ReturnType<typeof vi.fn> }>,
   registerCommand: vi.fn(() => ({ dispose: vi.fn() })),
   settingsProjects: ['/settings/repo'],
+  terminalSessionListCacheInstances: [] as Array<{ removeSession: ReturnType<typeof vi.fn> }>,
+  terminalSessionRegistryInstances: [] as Array<{
+    findSession: ReturnType<typeof vi.fn>;
+    deleteSession: ReturnType<typeof vi.fn>;
+  }>,
+  tmuxInstances: [] as Array<{ killSession: ReturnType<typeof vi.fn> }>,
   tmuxPreflight: vi.fn(async () => ({ available: true })),
 }));
 
@@ -32,7 +40,7 @@ vi.mock('vscode', () => ({
   },
   window: {
     createTreeView: vscodeState.createTreeView,
-    onDidCloseTerminal: vi.fn(() => ({ dispose: vi.fn() })),
+    onDidCloseTerminal: vscodeState.onDidCloseTerminal,
     onDidChangeActiveTerminal: vi.fn(() => ({ dispose: vi.fn() })),
   },
   workspace: {
@@ -62,7 +70,13 @@ vi.mock('../src/worktree/worktreeListCacheStore', () => ({
 }));
 
 vi.mock('../src/terminal/terminalSessionListCacheStore', () => ({
-  TerminalSessionListCacheStore: class {},
+  TerminalSessionListCacheStore: class {
+    removeSession = vi.fn(async () => undefined);
+
+    constructor() {
+      vscodeState.terminalSessionListCacheInstances.push(this);
+    }
+  },
 }));
 
 vi.mock('../src/project/projectCommonDirCache', () => ({
@@ -98,12 +112,13 @@ vi.mock('../src/project/projectRemovalCommand', () => ({
 
 vi.mock('../src/tree/projectTree', () => ({
   ProjectTreeProvider: class {
-    constructor(...args: unknown[]) {
-      vscodeState.projectTreeArgs = args;
-    }
-
     refresh = vi.fn();
     getChildren = vi.fn(() => [{ projectPath: '/settings/repo' }]);
+
+    constructor(...args: unknown[]) {
+      vscodeState.projectTreeArgs = args;
+      vscodeState.projectTreeInstances.push(this);
+    }
   },
 }));
 
@@ -116,7 +131,13 @@ vi.mock('../src/terminal/tmuxPreflight', () => ({
 }));
 
 vi.mock('../src/terminal/tmuxCli', () => ({
-  TmuxCli: class {},
+  TmuxCli: class {
+    killSession = vi.fn(async () => undefined);
+
+    constructor() {
+      vscodeState.tmuxInstances.push(this);
+    }
+  },
 }));
 
 vi.mock('../src/terminal/addTerminalCommand', () => ({
@@ -136,7 +157,7 @@ vi.mock('../src/terminal/openTerminalCommand', () => ({
 }));
 
 vi.mock('../src/terminal/killTerminalCommand', () => ({
-  KillTerminalCommand: class {
+  CloseTerminalCommand: class {
     constructor(...args: unknown[]) {
       vscodeState.killTerminalArgs = args;
     }
@@ -146,7 +167,14 @@ vi.mock('../src/terminal/killTerminalCommand', () => ({
 }));
 
 vi.mock('../src/terminal/terminalSessionRegistry', () => ({
-  TerminalSessionRegistry: class {},
+  TerminalSessionRegistry: class {
+    findSession = vi.fn();
+    deleteSession = vi.fn();
+
+    constructor() {
+      vscodeState.terminalSessionRegistryInstances.push(this);
+    }
+  },
 }));
 
 import * as vscode from 'vscode';
@@ -159,7 +187,11 @@ describe('activate', () => {
     vscodeState.addTerminalArgs = undefined;
     vscodeState.killTerminalArgs = undefined;
     vscodeState.projectTreeArgs = undefined;
+    vscodeState.projectTreeInstances = [];
     vscodeState.settingsProjects = ['/settings/repo'];
+    vscodeState.terminalSessionListCacheInstances = [];
+    vscodeState.terminalSessionRegistryInstances = [];
+    vscodeState.tmuxInstances = [];
     vscodeState.configUpdate.mockResolvedValue(undefined);
     vscodeState.tmuxPreflight.mockResolvedValue({ available: true });
   });
@@ -291,5 +323,37 @@ describe('activate', () => {
     expect(vscodeState.killTerminalRun).toHaveBeenCalledWith({
       terminal: { sessionName: 's', windowName: 'zsh' },
     });
+  });
+
+  it('kills a Deck-managed tmux session when VS Code closes its terminal', async () => {
+    const context = createContext();
+
+    await activate(context as never);
+    const terminal = { show: vi.fn() };
+    vscodeState.terminalSessionRegistryInstances[0].findSession.mockReturnValue('wt-_work_repo__term-1');
+    await vscodeState.onDidCloseTerminal.mock.calls[0][0](terminal);
+
+    expect(vscodeState.terminalSessionRegistryInstances[0].findSession).toHaveBeenCalledWith(terminal);
+    expect(vscodeState.tmuxInstances[0].killSession).toHaveBeenCalledWith('wt-_work_repo__term-1');
+    expect(vscodeState.terminalSessionListCacheInstances[0].removeSession).toHaveBeenCalledWith(
+      'wt-_work_repo__term-1',
+    );
+    expect(vscodeState.terminalSessionRegistryInstances[0].deleteSession).toHaveBeenCalledWith(
+      'wt-_work_repo__term-1',
+    );
+    expect(vscodeState.projectTreeInstances[0].refresh).toHaveBeenCalledOnce();
+  });
+
+  it('ignores VS Code close events for foreign terminals', async () => {
+    const context = createContext();
+
+    await activate(context as never);
+    const terminal = { show: vi.fn() };
+    vscodeState.terminalSessionRegistryInstances[0].findSession.mockReturnValue(undefined);
+    await vscodeState.onDidCloseTerminal.mock.calls[0][0](terminal);
+
+    expect(vscodeState.tmuxInstances[0].killSession).not.toHaveBeenCalled();
+    expect(vscodeState.terminalSessionListCacheInstances[0].removeSession).not.toHaveBeenCalled();
+    expect(vscodeState.terminalSessionRegistryInstances[0].deleteSession).not.toHaveBeenCalled();
   });
 });

@@ -2,32 +2,26 @@ import * as vscode from 'vscode';
 
 export interface TerminalLike {
   show(preserveFocus?: boolean): void;
+  dispose?(): void;
 }
-
-interface DisposableLike {
-  dispose(): void;
-}
-
-type CloseTerminalEvent = (listener: (terminal: TerminalLike) => void) => DisposableLike;
 
 export class TerminalSessionRegistry {
   private readonly terminals = new Map<string, TerminalLike>();
-  private readonly closeDisposable?: DisposableLike;
-
-  constructor(onDidCloseTerminal?: CloseTerminalEvent) {
-    this.closeDisposable = onDidCloseTerminal?.((terminal) => {
-      for (const [session, registered] of this.terminals) {
-        if (registered === terminal) this.terminals.delete(session);
-      }
-    });
-  }
 
   get(session: string): TerminalLike | undefined {
     return this.terminals.get(session);
   }
 
+  getTerminal(session: string): TerminalLike | undefined {
+    return this.terminals.get(session);
+  }
+
   set(session: string, terminal: TerminalLike): void {
     this.terminals.set(session, terminal);
+  }
+
+  deleteSession(session: string): void {
+    this.terminals.delete(session);
   }
 
   findSession(terminal: TerminalLike): string | undefined {
@@ -49,6 +43,6 @@ export class TerminalSessionRegistry {
   }
 
   dispose(): void {
-    this.closeDisposable?.dispose();
+    // Registered as a VS Code subscription; no external resources to release.
   }
 }

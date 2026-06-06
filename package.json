@@ -115,8 +115,8 @@
       },
       {
         "command": "deck.killTerminal",
-        "title": "Kill Terminal",
-        "icon": "$(trash)"
+        "title": "Deck: Close Terminal",
+        "icon": "$(close)"
       },
       {
         "command": "deck.refresh",
@@ -172,7 +172,7 @@
         {
           "command": "deck.killTerminal",
           "when": "view == deck.projects && viewItem == deck.terminal && deck.tmuxAvailable",
-          "group": "navigation"
+          "group": "inline"
         }
       ],
       "commandPalette": [
