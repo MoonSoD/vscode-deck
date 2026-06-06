@@ -18,6 +18,7 @@ import { DeckTreeDragAndDropController } from './tree/deckTreeDragAndDropControl
 import { WorktreeOrderStore } from './worktree/worktreeOrderStore';
 import { AddTerminalCommand } from './terminal/addTerminalCommand';
 import { OpenTerminalCommand } from './terminal/openTerminalCommand';
+import { TerminalCascade } from './terminal/terminalCascade';
 import { TerminalSessionRegistry } from './terminal/terminalSessionRegistry';
 import { TmuxCli } from './terminal/tmuxCli';
 import { tmuxPreflight } from './terminal/tmuxPreflight';
@@ -50,6 +51,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const terminalRegistry = new TerminalSessionRegistry(vscode.window.onDidCloseTerminal);
   const addTerminal = new AddTerminalCommand(tmux, terminalRegistry, () => tree.refresh());
   const openTerminal = new OpenTerminalCommand(tmux, terminalRegistry);
+  const terminalCascade = new TerminalCascade(tmux);
   const addWorktree = new AddWorktreeCommand(
     switcher,
     detachedOpener,
@@ -69,6 +71,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     branchDeletionPreferences,
     worktreeListCache,
     projectCommonDirCache,
+    terminalCascade,
   );
   const removeProject = new ProjectRemovalCommand(
     projectRegistry,
@@ -76,6 +79,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     worktreeRoots,
     worktreeOrders,
     () => tree.refresh(),
+    terminalCascade,
   );
 
   const treeView = vscode.window.createTreeView('deck.projects', {

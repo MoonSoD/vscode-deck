@@ -32,6 +32,10 @@ interface WorktreeListCacheLike {
   remove(commonDir: string, worktreePath: string): Promise<void>;
 }
 
+interface TerminalCascadeLike {
+  killWorktree(worktreePath: string): Promise<void>;
+}
+
 const REMOVE_LABEL = 'Remove';
 const FORCE_REMOVE_LABEL = 'Force Remove';
 
@@ -53,6 +57,9 @@ export class WorktreeRemovalCommand {
       remove: async () => undefined,
     },
     private readonly projectCommonDirCache: CommonDirCacheLike = PASS_THROUGH_COMMON_DIR_CACHE,
+    private readonly terminalCascade: TerminalCascadeLike = {
+      killWorktree: async () => undefined,
+    },
   ) {}
 
   async run(node: WorktreeNodeLike | undefined): Promise<void> {
@@ -106,6 +113,7 @@ export class WorktreeRemovalCommand {
     let commonDir: string;
     try {
       commonDir = await resolveCommonDir(this.projectCommonDirCache, node.projectPath);
+      await bestEffort(() => this.terminalCascade.killWorktree(node.worktree.path));
       await removeWorktree(node.projectPath, node.worktree.path, { force });
     } catch (error) {
       vscode.window.showErrorMessage(`Cannot remove worktree: ${errorMessage(error)}`);
@@ -178,4 +186,12 @@ function errorMessage(error: unknown): string {
   }
   if (error instanceof Error) return error.message;
   return String(error);
+}
+
+async function bestEffort(action: () => Promise<void>): Promise<void> {
+  try {
+    await action();
+  } catch {
+    // Tmux cleanup must not block git removal.
+  }
 }
