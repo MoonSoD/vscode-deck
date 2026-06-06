@@ -3,3 +3,4 @@ dist/
 *.vsix
 .DS_Store
 .agents/local-repos.json
+tmux-client-*.log
