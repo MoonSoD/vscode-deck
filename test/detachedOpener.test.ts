@@ -16,24 +16,13 @@ vi.mock('vscode', () => ({
 import * as vscode from 'vscode';
 import { DetachedOpener } from '../src/switch/detachedOpener';
 
-function createOpener() {
-  const activeWorktrees = {
-    set: vi.fn(async () => undefined),
-  };
-
-  return {
-    activeWorktrees,
-    opener: new DetachedOpener(),
-  };
-}
-
 describe('DetachedOpener', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
   it('opens the Worktree in a new window', async () => {
-    const { opener } = createOpener();
+    const opener = new DetachedOpener();
 
     await opener.open('/repo/feature');
 
@@ -42,13 +31,5 @@ describe('DetachedOpener', () => {
       { fsPath: '/repo/feature' },
       { forceNewWindow: true },
     );
-  });
-
-  it('does not mutate the current window ActiveWorktree', async () => {
-    const { activeWorktrees, opener } = createOpener();
-
-    await opener.open('/repo/feature');
-
-    expect(activeWorktrees.set).not.toHaveBeenCalled();
   });
 });
