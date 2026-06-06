@@ -43,9 +43,9 @@ export class AddTerminalCommand {
     const termN = allocateTermN(node.worktree.path, existing.map((session) => session.sessionName));
     const session = terminalSessionName(node.worktree.path, termN);
     await this.tmux.ensureSession(session, node.worktree.path);
-    // Re-list after creation to capture tmux's actual window name (zsh,
-    // bash, etc.) — we don't set it ourselves anymore so automatic-rename
-    // can follow the foreground command.
+    // Re-list after creation. tmux's `#{pane_current_command}` is read fresh
+    // from the OS on every query, so the new session's row is correct on the
+    // first observation — no deferred refresh needed.
     const refreshed = await this.tmux.listSessions(prefix);
     await this.terminalSessionListCache.set(
       cacheKey,
@@ -64,27 +64,5 @@ export class AddTerminalCommand {
     // VS Code: Terminal.show(preserveFocus). false → focus moves to the terminal.
     terminal.show(false);
     this.refresh();
-
-    // tmux reports #{window_name}=="tmux" briefly after new-session, before
-    // the shell finishes exec'ing — our immediate list-sessions catches that
-    // racy state. A deferred refresh re-lists once the shell has settled
-    // (~300ms is plenty for any reasonable shell on local hardware) so the
-    // row label updates from "tmux" → "zsh" without user action.
-    this.scheduleSettledRefresh(prefix, cacheKey, node.worktree.path);
-  }
-
-  private scheduleSettledRefresh(prefix: string, cacheKey: string, worktreePath: string): void {
-    setTimeout(() => {
-      void this.tmux
-        .listSessions(prefix)
-        .then(async (settled) => {
-          await this.terminalSessionListCache.set(
-            cacheKey,
-            toCachedTerminalSessions(worktreePath, settled),
-          );
-          this.refresh();
-        })
-        .catch(() => undefined);
-    }, 300);
   }
 }
