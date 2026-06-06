@@ -105,6 +105,11 @@
         "title": "Deck: Open Worktree in New Window"
       },
       {
+        "command": "deck.killTerminal",
+        "title": "Kill Terminal",
+        "icon": "$(trash)"
+      },
+      {
         "command": "deck.refresh",
         "title": "Deck: Refresh",
         "icon": "$(refresh)"
@@ -154,11 +159,20 @@
           "command": "deck.removeProject",
           "when": "view == deck.projects && viewItem == deck.project",
           "group": "navigation"
+        },
+        {
+          "command": "deck.killTerminal",
+          "when": "view == deck.projects && viewItem == deck.terminal && deck.tmuxAvailable",
+          "group": "navigation"
         }
       ],
       "commandPalette": [
         {
           "command": "deck.openWorktreeInNewWindow",
+          "when": "false"
+        },
+        {
+          "command": "deck.killTerminal",
           "when": "false"
         }
       ]

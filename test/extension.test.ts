@@ -11,6 +11,7 @@ const vscodeState = vi.hoisted(() => ({
     reveal: vi.fn(async () => undefined),
   })),
   executeCommand: vi.fn(),
+  killTerminalRun: vi.fn(),
   onDidChangeWorkspaceFolders: vi.fn(() => ({ dispose: vi.fn() })),
   openTerminalRun: vi.fn(),
   projectTreeArgs: undefined as unknown[] | undefined,
@@ -120,6 +121,12 @@ vi.mock('../src/terminal/addTerminalCommand', () => ({
 vi.mock('../src/terminal/openTerminalCommand', () => ({
   OpenTerminalCommand: class {
     run = vscodeState.openTerminalRun;
+  },
+}));
+
+vi.mock('../src/terminal/killTerminalCommand', () => ({
+  KillTerminalCommand: class {
+    run = vscodeState.killTerminalRun;
   },
 }));
 
@@ -241,5 +248,20 @@ describe('activate', () => {
     expect(vscodeState.createTreeView.mock.results[0].value.onDidChangeVisibility).toHaveBeenCalledWith(
       expect.any(Function),
     );
+  });
+
+  it('registers deck.killTerminal through KillTerminalCommand', async () => {
+    const context = createContext();
+
+    await activate(context as never);
+    const killTerminalRegistration = vscodeState.registerCommand.mock.calls.find(
+      ([command]) => command === 'deck.killTerminal',
+    );
+    if (!killTerminalRegistration) throw new Error('missing deck.killTerminal registration');
+    await killTerminalRegistration[1]({ terminal: { sessionName: 's', windowName: 'zsh' } });
+
+    expect(vscodeState.killTerminalRun).toHaveBeenCalledWith({
+      terminal: { sessionName: 's', windowName: 'zsh' },
+    });
   });
 });

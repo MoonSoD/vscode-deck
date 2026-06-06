@@ -133,4 +133,48 @@ describe('TmuxCli', () => {
     ]);
     await expect(tmux.listSessions('wt-_work_repo__term-')).resolves.toEqual([]);
   });
+
+  it('kills an exact Deck session target', async () => {
+    const runner = new MockRunner([{ code: 0, stdout: '', stderr: '' }]);
+    const tmux = new TmuxCli('/ext/resources/deck.conf', runner);
+
+    await tmux.killSession('wt-_work_repo__term-1');
+
+    expect(runner.calls).toEqual([{
+      command: 'tmux',
+      args: [
+        '-L',
+        'deck',
+        '-f',
+        '/ext/resources/deck.conf',
+        'kill-session',
+        '-t',
+        '=wt-_work_repo__term-1',
+      ],
+      cwd: undefined,
+    }]);
+  });
+
+  it.each([
+    ['session not found', 'session not found: wt-_work_repo__term-1'],
+    ['no server running', 'no server running on /tmp/tmux-1000/deck'],
+  ])('swallows kill-session %s errors', async (_name, stderr) => {
+    const runner = new MockRunner([{ code: 1, stdout: '', stderr }]);
+    const tmux = new TmuxCli('/ext/resources/deck.conf', runner);
+
+    await expect(tmux.killSession('wt-_work_repo__term-1')).resolves.toBeUndefined();
+  });
+
+  it('is idempotent when killing the same session twice', async () => {
+    const runner = new MockRunner([
+      { code: 0, stdout: '', stderr: '' },
+      { code: 1, stdout: '', stderr: 'session not found: wt-_work_repo__term-1' },
+    ]);
+    const tmux = new TmuxCli('/ext/resources/deck.conf', runner);
+
+    await tmux.killSession('wt-_work_repo__term-1');
+    await expect(tmux.killSession('wt-_work_repo__term-1')).resolves.toBeUndefined();
+
+    expect(runner.calls).toHaveLength(2);
+  });
 });

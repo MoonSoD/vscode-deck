@@ -114,4 +114,26 @@ describe('package contributions', () => {
       ),
     ).toBe(false);
   });
+
+  it('contributes kill Terminal only as a tmux-available Terminal context action', () => {
+    expect(pkg.contributes.commands).toContainEqual({
+      command: 'deck.killTerminal',
+      title: 'Kill Terminal',
+      icon: '$(trash)',
+    });
+
+    expect(
+      pkg.contributes.menus['view/item/context'].filter(
+        (item: { command: string }) => item.command === 'deck.killTerminal',
+      ),
+    ).toEqual([{
+      command: 'deck.killTerminal',
+      when: 'view == deck.projects && viewItem == deck.terminal && deck.tmuxAvailable',
+      group: 'navigation',
+    }]);
+    expect(pkg.contributes.menus.commandPalette).toContainEqual({
+      command: 'deck.killTerminal',
+      when: 'false',
+    });
+  });
 });
