@@ -21,7 +21,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const projectCommonDirCache = new ProjectCommonDirCache(context.globalState);
   const branchDeletionPreferences = new BranchDeletionPreferenceStore(context.globalState);
   const switcher = new WorktreeSwitcher(activeWorktrees);
-  const detachedOpener = new DetachedOpener(activeWorktrees);
+  const detachedOpener = new DetachedOpener();
   const tree = new ProjectTreeProvider(
     activeWorktrees,
     worktreeOrders,
@@ -73,10 +73,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       tree.refresh();
     }),
   );
-
-  if (await activeWorktrees.consumeFocusIntent()) {
-    await vscode.commands.executeCommand('workbench.view.extension.deck');
-  }
 }
 
 export function deactivate(): void {}

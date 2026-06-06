@@ -29,7 +29,7 @@
     "Other"
   ],
   "activationEvents": [
-    "onStartupFinished"
+    "onView:deck.projects"
   ],
   "main": "./dist/extension.js",
   "contributes": {

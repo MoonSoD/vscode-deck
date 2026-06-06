@@ -14,18 +14,16 @@ vi.mock('vscode', () => ({
 }));
 
 import * as vscode from 'vscode';
-import { ActiveWorktreeStore } from '../src/switch/activeWorktreeStore';
 import { DetachedOpener } from '../src/switch/detachedOpener';
 
 function createOpener() {
   const activeWorktrees = {
     set: vi.fn(async () => undefined),
-    setFocusIntent: vi.fn(async () => undefined),
-  } as unknown as ActiveWorktreeStore;
+  };
 
   return {
     activeWorktrees,
-    opener: new DetachedOpener(activeWorktrees),
+    opener: new DetachedOpener(),
   };
 }
 
@@ -34,12 +32,11 @@ describe('DetachedOpener', () => {
     vi.clearAllMocks();
   });
 
-  it('opens the Worktree in a new window and focuses Deck there', async () => {
-    const { activeWorktrees, opener } = createOpener();
+  it('opens the Worktree in a new window', async () => {
+    const { opener } = createOpener();
 
     await opener.open('/repo/feature');
 
-    expect(activeWorktrees.setFocusIntent).toHaveBeenCalledWith(true);
     expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
       'vscode.openFolder',
       { fsPath: '/repo/feature' },

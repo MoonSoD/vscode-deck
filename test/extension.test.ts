@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const vscodeState = vi.hoisted(() => ({
   createTreeView: vi.fn(() => ({ dispose: vi.fn() })),
   registerCommand: vi.fn(() => ({ dispose: vi.fn() })),
-  consumeFocusIntent: vi.fn(async () => false),
 }));
 
 vi.mock('vscode', () => ({
@@ -17,9 +16,7 @@ vi.mock('vscode', () => ({
 }));
 
 vi.mock('../src/switch/activeWorktreeStore', () => ({
-  ActiveWorktreeStore: class {
-    consumeFocusIntent = vscodeState.consumeFocusIntent;
-  },
+  ActiveWorktreeStore: class {},
 }));
 
 vi.mock('../src/worktree/worktreeRootStore', () => ({

@@ -144,7 +144,6 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
     }
 
     await this.activeWorktrees.set(commonDir, seedPath);
-    await this.activeWorktrees.setFocusIntent(true);
     await vscode.commands.executeCommand('vscode.openFolder', vscode.Uri.file(seedPath), {
       forceNewWindow: false,
     });
