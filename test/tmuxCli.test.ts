@@ -17,7 +17,7 @@ describe('TmuxCli', () => {
     const runner = new MockRunner([{ code: 0, stdout: '', stderr: '' }]);
     const tmux = new TmuxCli('/ext/resources/deck.conf', runner);
 
-    await tmux.ensureSessionWindow('wt-_work_repo__term-1', 'term-1', '/work/repo');
+    await tmux.ensureSession('wt-_work_repo__term-1', '/work/repo');
 
     expect(runner.calls).toEqual([
       {
@@ -55,7 +55,7 @@ describe('TmuxCli', () => {
     ]);
     const tmux = new TmuxCli('/ext/resources/deck.conf', runner);
 
-    await tmux.ensureSessionWindow('wt-_work_repo__term-1', 'term-1', '/work/repo');
+    await tmux.ensureSession('wt-_work_repo__term-1', '/work/repo');
 
     expect(runner.calls.map((call) => call.args.slice(4))).toEqual([
       ['has-session', '-t', '=wt-_work_repo__term-1'],
@@ -64,8 +64,6 @@ describe('TmuxCli', () => {
         '-d',
         '-s',
         'wt-_work_repo__term-1',
-        '-n',
-        'term-1',
         '-c',
         '/work/repo',
       ],

@@ -58,17 +58,20 @@ export class TmuxCli {
     return result.code === 0;
   }
 
-  async ensureSessionWindow(session: string, windowName: string, cwd: string): Promise<void> {
+  async ensureSession(session: string, cwd: string): Promise<void> {
     if (await this.hasSession(session)) return;
 
+    // Deliberately omit `-n`: passing it marks the window as "manually named"
+    // and disables tmux's automatic-rename for that window — `zsh` would
+    // never update to `claude`. Default naming lets automatic-rename do its
+    // job. Sanctel's phantom-window bug (which needed `-n`) doesn't apply
+    // here because Deck's model is one-window-per-session forever.
     const result = await this.runner.run('tmux', [
       ...this.baseArgs(),
       'new-session',
       '-d',
       '-s',
       session,
-      '-n',
-      windowName,
       '-c',
       cwd,
     ]);

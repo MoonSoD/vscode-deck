@@ -14,7 +14,7 @@ import {
 
 export interface AddTerminalTmuxCli {
   listSessions(prefix?: string): Promise<TmuxSession[]>;
-  ensureSessionWindow(session: string, windowName: string, cwd: string): Promise<void>;
+  ensureSession(session: string, cwd: string): Promise<void>;
   attachShellArgs(session: string): string[];
 }
 
@@ -41,16 +41,18 @@ export class AddTerminalCommand {
     const cacheKey = terminalWorktreePrefix(node.worktree.path);
     const existing = await this.tmux.listSessions(prefix);
     const termN = allocateTermN(node.worktree.path, existing.map((session) => session.sessionName));
-    const windowName = `term-${termN}`;
     const session = terminalSessionName(node.worktree.path, termN);
-    await this.tmux.ensureSessionWindow(session, windowName, node.worktree.path);
+    await this.tmux.ensureSession(session, node.worktree.path);
+    // Re-list after creation to capture tmux's actual window name (zsh,
+    // bash, etc.) — we don't set it ourselves anymore so automatic-rename
+    // can follow the foreground command.
+    const refreshed = await this.tmux.listSessions(prefix);
     await this.terminalSessionListCache.set(
       cacheKey,
-      toCachedTerminalSessions(node.worktree.path, [
-        ...existing,
-        { sessionName: session, windowName },
-      ]),
+      toCachedTerminalSessions(node.worktree.path, refreshed),
     );
+    const fresh = refreshed.find((s) => s.sessionName === session);
+    const windowName = fresh?.windowName ?? `term-${termN}`;
 
     const terminal = vscode.window.createTerminal({
       name: `Deck ${windowName}`,

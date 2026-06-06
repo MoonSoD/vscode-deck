@@ -16,12 +16,22 @@ import { TerminalSessionRegistry } from '../src/terminal/terminalSessionRegistry
 
 describe('AddTerminalCommand', () => {
   it('allocates the next terminal in tmux and opens it in editor view focused', async () => {
+    const existing = [
+      { sessionName: 'wt-_work_repo__term-1', windowName: 'zsh' },
+      { sessionName: 'wt-_work_repo__term-3', windowName: 'claude' },
+    ];
     const tmux = {
-      listSessions: vi.fn(async () => [
-        { sessionName: 'wt-_work_repo__term-1', windowName: 'zsh' },
-        { sessionName: 'wt-_work_repo__term-3', windowName: 'claude' },
-      ]),
-      ensureSessionWindow: vi.fn(async () => undefined),
+      // First call returns existing; second call (post-create) returns
+      // the existing plus the new session with whatever name tmux assigned
+      // (we don't set -n anymore, so tmux defaults to the shell name).
+      listSessions: vi
+        .fn()
+        .mockResolvedValueOnce(existing)
+        .mockResolvedValueOnce([
+          ...existing,
+          { sessionName: 'wt-_work_repo__term-4', windowName: 'zsh' },
+        ]),
+      ensureSession: vi.fn(async () => undefined),
       attachShellArgs: vi.fn(() => [
         '-L',
         'deck',
@@ -44,13 +54,12 @@ describe('AddTerminalCommand', () => {
       worktree: { path: '/work/repo' },
     });
 
-    expect(tmux.ensureSessionWindow).toHaveBeenCalledWith(
+    expect(tmux.ensureSession).toHaveBeenCalledWith(
       'wt-_work_repo__term-4',
-      'term-4',
       '/work/repo',
     );
     expect(vscodeState.createTerminal).toHaveBeenCalledWith({
-      name: 'Deck term-4',
+      name: 'Deck zsh',
       shellPath: 'tmux',
       shellArgs: [
         '-L',
@@ -68,7 +77,7 @@ describe('AddTerminalCommand', () => {
     expect(terminalSessionListCache.set).toHaveBeenCalledWith('wt-_work_repo__', [
       { sessionName: 'wt-_work_repo__term-1', n: 1, windowName: 'zsh' },
       { sessionName: 'wt-_work_repo__term-3', n: 3, windowName: 'claude' },
-      { sessionName: 'wt-_work_repo__term-4', n: 4, windowName: 'term-4' },
+      { sessionName: 'wt-_work_repo__term-4', n: 4, windowName: 'zsh' },
     ]);
     expect(refresh).toHaveBeenCalledOnce();
   });
