@@ -52,6 +52,7 @@ vi.mock('vscode', () => ({
     createTreeView: vscodeState.createTreeView,
     onDidCloseTerminal: vscodeState.onDidCloseTerminal,
     onDidChangeActiveTerminal: vi.fn(() => ({ dispose: vi.fn() })),
+    terminals: [],
   },
   workspace: {
     getConfiguration: () => ({
@@ -200,6 +201,7 @@ vi.mock('../src/terminal/terminalSessionRegistry', () => ({
   TerminalSessionRegistry: class {
     findSession = vi.fn();
     deleteSession = vi.fn();
+    hydrateFromWindow = vi.fn();
 
     constructor() {
       vscodeState.terminalSessionRegistryInstances.push(this);
