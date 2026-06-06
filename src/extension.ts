@@ -23,10 +23,11 @@ import { PendingTerminalOpenStore } from './terminal/pendingTerminalOpenStore';
 import { TerminalCascade } from './terminal/terminalCascade';
 import { TerminalSessionRegistry } from './terminal/terminalSessionRegistry';
 import {
+  type CachedTerminalSession,
   TerminalSessionListCacheStore,
   toCachedTerminalSessions,
 } from './terminal/terminalSessionListCacheStore';
-import { TmuxCli, TmuxSession } from './terminal/tmuxCli';
+import { TmuxCli, type TmuxSession } from './terminal/tmuxCli';
 import { terminalSessionPrefix, terminalWorktreePrefix } from './terminal/tmuxSafe';
 import { tmuxPreflight } from './terminal/tmuxPreflight';
 
@@ -188,7 +189,7 @@ interface PendingTerminalOpenConsumer {
 }
 
 interface TerminalSessionCacheWriter {
-  set(prefix: string, terminals: ReturnType<typeof toCachedTerminalSessions>): Promise<void>;
+  set(prefix: string, terminals: readonly CachedTerminalSession[]): Promise<void>;
 }
 
 interface TerminalSessionLister {
