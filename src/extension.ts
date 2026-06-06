@@ -79,7 +79,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       const roots = tree.getChildren();
       if (!Array.isArray(roots)) return;
       const project = roots.find((node) => node.projectPath === projectPath);
-      if (project) await treeView.reveal(project, { expand: true, select: true });
+      if (!project) return;
+      try {
+        await treeView.reveal(project, { expand: true, select: true });
+      } catch (error) {
+        // Reveal can fail if VS Code's internal element map is out of sync
+        // with the freshly-constructed ProjectNode; the project is still in
+        // the tree, just not scrolled into view.
+        console.warn('Deck: TreeView.reveal failed', error);
+      }
     },
     projectCommonDirCache,
   );
