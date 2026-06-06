@@ -29,9 +29,9 @@ export class OpenTerminalCommand {
       return;
     }
 
-    // Tab name is just the index — see AddTerminalCommand.
+    // Mirror sidebar's `<n> <command>` — see AddTerminalCommand.
     const terminal = vscode.window.createTerminal({
-      name: `${node.n}`,
+      name: `${node.n} ${node.terminal.windowName}`,
       shellPath: 'tmux',
       shellArgs: this.tmux.attachShellArgs(node.terminal.sessionName),
       location: { viewColumn: vscode.ViewColumn.Active },

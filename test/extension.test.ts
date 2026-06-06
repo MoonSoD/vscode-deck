@@ -33,6 +33,7 @@ vi.mock('vscode', () => ({
   window: {
     createTreeView: vscodeState.createTreeView,
     onDidCloseTerminal: vi.fn(() => ({ dispose: vi.fn() })),
+    onDidChangeActiveTerminal: vi.fn(() => ({ dispose: vi.fn() })),
   },
   workspace: {
     getConfiguration: () => ({
@@ -231,7 +232,7 @@ describe('activate', () => {
       'deck.tmuxAvailable',
       false,
     );
-    expect(vscodeState.projectTreeArgs?.at(-2)).toBe(false);
+    expect(vscodeState.projectTreeArgs?.at(-3)).toBe(false);
   });
 
   it('hydrates terminal session list cache into the tree and terminal commands', async () => {
@@ -239,7 +240,7 @@ describe('activate', () => {
 
     await activate(context as never);
 
-    const terminalSessionListCache = vscodeState.projectTreeArgs?.at(-1);
+    const terminalSessionListCache = vscodeState.projectTreeArgs?.at(-2);
     expect(terminalSessionListCache).toBeDefined();
     expect(vscodeState.addTerminalArgs?.at(-1)).toBe(terminalSessionListCache);
     expect(vscodeState.killTerminalArgs?.at(-1)).toBe(terminalSessionListCache);

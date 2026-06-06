@@ -42,6 +42,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const branchDeletionPreferences = new BranchDeletionPreferenceStore(context.globalState);
   const switcher = new WorktreeSwitcher(activeWorktrees);
   const detachedOpener = new DetachedOpener();
+  const terminalRegistry = new TerminalSessionRegistry(vscode.window.onDidCloseTerminal);
   const tree = new ProjectTreeProvider(
     projectRegistry,
     activeWorktrees,
@@ -51,8 +52,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     tmux,
     tmuxAvailability.available,
     terminalSessionListCache,
+    terminalRegistry,
   );
-  const terminalRegistry = new TerminalSessionRegistry(vscode.window.onDidCloseTerminal);
   const addTerminal = new AddTerminalCommand(
     tmux,
     terminalRegistry,
@@ -149,6 +150,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.workspace.onDidChangeWorkspaceFolders(() => tree.refresh()),
     treeView.onDidChangeVisibility((event) => {
       if (event.visible) tree.refresh();
+    }),
+    vscode.window.onDidChangeActiveTerminal((active) => {
+      if (!active) return;
+      tree.handleActiveTerminalChange(active);
     }),
   );
 }

@@ -47,15 +47,15 @@ export class AddTerminalCommand {
     // from the OS on every query, so the new session's row is correct on the
     // first observation — no deferred refresh needed.
     const refreshed = await this.tmux.listSessions(prefix);
-    await this.terminalSessionListCache.set(
-      cacheKey,
-      toCachedTerminalSessions(node.worktree.path, refreshed),
-    );
-    // Tab name is just the index — the sidebar carries the full
-    // `<n> <command>` label. Index is stable; VS Code's Terminal.name is
-    // sticky after creation, and the sidebar is the dynamic surface.
+    const cached = toCachedTerminalSessions(node.worktree.path, refreshed);
+    await this.terminalSessionListCache.set(cacheKey, cached);
+    // Mirror the sidebar's `<n> <command>` format. Rename only fires while
+    // the terminal is focused, so the creation-time label is what stale
+    // background tabs will show.
+    const newRow = cached.find((row) => row.sessionName === session);
+    const tabName = newRow ? `${newRow.n} ${newRow.windowName}` : `${termN}`;
     const terminal = vscode.window.createTerminal({
-      name: `${termN}`,
+      name: tabName,
       shellPath: 'tmux',
       shellArgs: this.tmux.attachShellArgs(session),
       location: { viewColumn: vscode.ViewColumn.Active },
