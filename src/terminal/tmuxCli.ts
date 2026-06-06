@@ -93,11 +93,16 @@ export class TmuxCli {
   }
 
   async listSessions(prefix?: string): Promise<TmuxSession[]> {
+    // Use `#{pane_current_command}` rather than `#{window_name}` — tmux reads
+    // the former fresh from the OS (tcgetpgrp + process table) on every query,
+    // so it always reflects the actual foreground process. window_name relies
+    // on automatic-rename being enabled, which a stray shell-emitted OSC
+    // sequence (or other quirk) can silently disable for a window.
     const result = await this.runner.run('tmux', [
       ...this.baseArgs(),
       'list-sessions',
       '-F',
-      '#{session_name}\t#{window_name}',
+      '#{session_name}\t#{pane_current_command}',
     ]);
     if (result.code !== 0 && isMissingSession(result)) return [];
     if (result.code !== 0) {

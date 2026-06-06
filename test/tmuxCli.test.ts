@@ -106,7 +106,7 @@ describe('TmuxCli', () => {
       '/ext/resources/deck.conf',
       'list-sessions',
       '-F',
-      '#{session_name}\t#{window_name}',
+      '#{session_name}\t#{pane_current_command}',
     ]);
   });
 
