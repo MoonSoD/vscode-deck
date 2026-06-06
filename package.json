@@ -162,19 +162,6 @@
           "when": "false"
         }
       ]
-    },
-    "configuration": {
-      "title": "Deck",
-      "properties": {
-        "deck.projects": {
-          "type": "array",
-          "default": [],
-          "description": "Absolute paths to project root directories. Each is scanned for git worktrees.",
-          "items": {
-            "type": "string"
-          }
-        }
-      }
     }
   },
   "scripts": {

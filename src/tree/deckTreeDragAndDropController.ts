@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { getCommonDirSafe, listWorktrees } from '../git/worktrees';
+import { ProjectRegistryStore } from '../project/projectRegistryStore';
 import { WorktreeOrderStore } from '../worktree/worktreeOrderStore';
 import { reconcileWorktreeOrder } from './reconcileWorktreeOrder';
 import { DropPosition, reorderArray } from './reorderArray';
@@ -40,6 +41,7 @@ export class DeckTreeDragAndDropController
 
   constructor(
     private readonly refresh: () => void,
+    private readonly projectRegistry: Pick<ProjectRegistryStore, 'list' | 'replace'>,
     private readonly worktreeOrders: WorktreeOrderStore,
   ) {}
 
@@ -69,8 +71,7 @@ export class DeckTreeDragAndDropController
       return;
     }
 
-    const cfg = vscode.workspace.getConfiguration('deck');
-    const projects = cfg.get<string[]>('projects', []);
+    const projects = this.projectRegistry.list();
     let reordered: string[];
     if (target) {
       if (!isProjectNode(target)) return;
@@ -91,7 +92,7 @@ export class DeckTreeDragAndDropController
 
     if (sameOrder(projects, reordered)) return;
 
-    await cfg.update('projects', reordered, vscode.ConfigurationTarget.Global);
+    await this.projectRegistry.replace(reordered);
     this.refresh();
   }
 

@@ -2,24 +2,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const vscodeState = vi.hoisted(() => ({
   projects: ['/repo/a', '/repo/b', '/repo/c', '/repo/d'],
-  update: vi.fn(),
   listWorktrees: vi.fn(),
   getCommonDirSafe: vi.fn(),
 }));
 
 vi.mock('vscode', () => ({
-  ConfigurationTarget: {
-    Global: 1,
-  },
   DataTransferItem: class {
     constructor(readonly value: unknown) {}
-  },
-  workspace: {
-    getConfiguration: () => ({
-      get: <T>(_key: string, defaultValue: T) =>
-        (vscodeState.projects as T | undefined) ?? defaultValue,
-      update: vscodeState.update,
-    }),
   },
 }));
 
@@ -29,6 +18,7 @@ vi.mock('../src/git/worktrees', () => ({
 }));
 
 import * as vscode from 'vscode';
+import { ProjectRegistryStore } from '../src/project/projectRegistryStore';
 import { DeckTreeDragAndDropController } from '../src/tree/deckTreeDragAndDropController';
 import { WorktreeOrderStore } from '../src/worktree/worktreeOrderStore';
 
@@ -57,12 +47,19 @@ function worktree(projectPath: string, worktreePath: string) {
 }
 
 function createController(refresh = vi.fn()) {
+  const projectRegistry = {
+    list: vi.fn(() => vscodeState.projects),
+    replace: vi.fn(async (projects: readonly string[]) => {
+      vscodeState.projects = [...projects];
+    }),
+  } as unknown as ProjectRegistryStore;
   const worktreeOrders = {
     get: vi.fn(),
     set: vi.fn(async () => undefined),
   } as unknown as WorktreeOrderStore;
   return {
-    controller: new DeckTreeDragAndDropController(refresh, worktreeOrders),
+    controller: new DeckTreeDragAndDropController(refresh, projectRegistry, worktreeOrders),
+    projectRegistry,
     refresh,
     worktreeOrders,
   };
@@ -72,7 +69,6 @@ describe('DeckTreeDragAndDropController', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vscodeState.projects = ['/repo/a', '/repo/b', '/repo/c', '/repo/d'];
-    vscodeState.update.mockResolvedValue(undefined);
     vscodeState.getCommonDirSafe.mockResolvedValue('/git/a');
     vscodeState.listWorktrees.mockResolvedValue([
       {
@@ -99,47 +95,41 @@ describe('DeckTreeDragAndDropController', () => {
     ]);
   });
 
-  it('reorders Projects in the deck.projects setting and refreshes the tree', async () => {
-    const { controller, refresh } = createController();
+  it('reorders Projects in ProjectRegistryStore and refreshes the tree', async () => {
+    const { controller, projectRegistry, refresh } = createController();
     const dataTransfer = new DataTransferMock();
 
     controller.handleDrag?.([project('/repo/b')], dataTransfer as vscode.DataTransfer, {} as never);
     await controller.handleDrop?.(project('/repo/d'), dataTransfer as vscode.DataTransfer, {} as never);
 
-    expect(vscodeState.update).toHaveBeenCalledWith(
-      'projects',
+    expect(projectRegistry.replace).toHaveBeenCalledWith(
       ['/repo/a', '/repo/c', '/repo/d', '/repo/b'],
-      vscode.ConfigurationTarget.Global,
     );
     expect(refresh).toHaveBeenCalledOnce();
   });
 
   it('moves Projects upward above the target', async () => {
-    const { controller, refresh } = createController();
+    const { controller, projectRegistry, refresh } = createController();
     const dataTransfer = new DataTransferMock();
 
     controller.handleDrag?.([project('/repo/d')], dataTransfer as vscode.DataTransfer, {} as never);
     await controller.handleDrop?.(project('/repo/b'), dataTransfer as vscode.DataTransfer, {} as never);
 
-    expect(vscodeState.update).toHaveBeenCalledWith(
-      'projects',
+    expect(projectRegistry.replace).toHaveBeenCalledWith(
       ['/repo/a', '/repo/d', '/repo/b', '/repo/c'],
-      vscode.ConfigurationTarget.Global,
     );
     expect(refresh).toHaveBeenCalledOnce();
   });
 
   it('moves Projects to the bottom when dropped on the empty root area', async () => {
-    const { controller, refresh } = createController();
+    const { controller, projectRegistry, refresh } = createController();
     const dataTransfer = new DataTransferMock();
 
     controller.handleDrag?.([project('/repo/b')], dataTransfer as vscode.DataTransfer, {} as never);
     await controller.handleDrop?.(undefined, dataTransfer as vscode.DataTransfer, {} as never);
 
-    expect(vscodeState.update).toHaveBeenCalledWith(
-      'projects',
+    expect(projectRegistry.replace).toHaveBeenCalledWith(
       ['/repo/a', '/repo/c', '/repo/d', '/repo/b'],
-      vscode.ConfigurationTarget.Global,
     );
     expect(refresh).toHaveBeenCalledOnce();
   });
@@ -155,7 +145,7 @@ describe('DeckTreeDragAndDropController', () => {
       {} as never,
     );
 
-    expect(vscodeState.update).not.toHaveBeenCalled();
+    expect(vscodeState.projects).toEqual(['/repo/a', '/repo/b', '/repo/c', '/repo/d']);
     expect(refresh).not.toHaveBeenCalled();
   });
 
@@ -217,7 +207,7 @@ describe('DeckTreeDragAndDropController', () => {
     );
     await controller.handleDrop?.(project('/repo/b'), dataTransfer as vscode.DataTransfer, {} as never);
 
-    expect(vscodeState.update).not.toHaveBeenCalled();
+    expect(vscodeState.projects).toEqual(['/repo/a', '/repo/b', '/repo/c', '/repo/d']);
     expect(worktreeOrders.set).not.toHaveBeenCalled();
     expect(refresh).not.toHaveBeenCalled();
   });

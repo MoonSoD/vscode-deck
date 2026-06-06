@@ -39,6 +39,10 @@ describe('package contributions', () => {
     expect(markdown).toContain('command:workbench.action.toggleAuxiliaryBar');
   });
 
+  it('does not expose ProjectRegistry as a user setting', () => {
+    expect(pkg.contributes.configuration?.properties?.['deck.projects']).toBeUndefined();
+  });
+
   it('contributes add worktree as a project-only inline tree action', () => {
     expect(pkg.contributes.commands).toContainEqual({
       command: 'deck.addWorktree',

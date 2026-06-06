@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { getCommonDir, getCommonDirSafe, listWorktrees, Worktree } from '../git/worktrees';
 import { ProjectCommonDirCache } from '../project/projectCommonDirCache';
+import { ProjectRegistryStore } from '../project/projectRegistryStore';
 import { ActiveWorktreeStore } from '../switch/activeWorktreeStore';
 import { WorktreeListCacheStore } from '../worktree/worktreeListCacheStore';
 import { WorktreeOrderStore } from '../worktree/worktreeOrderStore';
@@ -49,6 +50,7 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
   private readonly resolvingProjectPaths = new Set<string>();
 
   constructor(
+    private readonly projectRegistry: Pick<ProjectRegistryStore, 'list'>,
     private readonly activeWorktrees: ActiveWorktreeStore,
     private readonly worktreeOrders: WorktreeOrderStore,
     private readonly worktreeListCache: Pick<WorktreeListCacheStore, 'get' | 'set'> = {
@@ -74,9 +76,7 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
     if (!element) {
       // Sync return: any `await` here would yield to the event loop and let
       // viewsWelcome ("No projects yet") flash on every tree.refresh().
-      const projects = vscode.workspace
-        .getConfiguration('deck')
-        .get<string[]>('projects', []);
+      const projects = this.projectRegistry.list();
       this.resolveActiveProject();
       return projects.map((p) => {
         this.resolveProjectCommonDir(p);
@@ -116,47 +116,6 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
     }
 
     return this.loadWorktreeChildren(element.projectPath, commonDir, activeWorktreePath);
-  }
-
-  async addProject(): Promise<void> {
-    const picked = await vscode.window.showOpenDialog({
-      canSelectFolders: true,
-      canSelectFiles: false,
-      canSelectMany: false,
-      openLabel: 'Add as Deck project',
-    });
-    if (!picked || picked.length === 0) return;
-    const seedPath = picked[0].fsPath;
-    const commonDir = await this.getCommonDirSafeCached(seedPath);
-    if (commonDir === null) {
-      vscode.window.showErrorMessage(
-        `Cannot add ${seedPath}: not a git repository.`,
-      );
-      return;
-    }
-    const cfg = vscode.workspace.getConfiguration('deck');
-    const projects = cfg.get<string[]>('projects', []);
-    const isRegistered = await this.hasRegisteredCommonDir(projects, commonDir);
-
-    if (!isRegistered) {
-      await cfg.update('projects', [...projects, seedPath], vscode.ConfigurationTarget.Global);
-      this.projectCommonDirs.set(seedPath, commonDir);
-    }
-
-    await this.activeWorktrees.set(commonDir, seedPath);
-    await vscode.commands.executeCommand('vscode.openFolder', vscode.Uri.file(seedPath), {
-      forceNewWindow: false,
-    });
-  }
-
-  private async hasRegisteredCommonDir(projects: string[], commonDir: string): Promise<boolean> {
-    // getCommonDirSafe: a stale registered entry returns null and is skipped,
-    // so dedup never throws and a single bad entry doesn't block Add Project.
-    for (const projectPath of projects) {
-      const registered = await this.getCommonDirSafeCached(projectPath);
-      if (registered !== null && registered === commonDir) return true;
-    }
-    return false;
   }
 
   private resolveActiveProject(): void {

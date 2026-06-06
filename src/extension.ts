@@ -3,8 +3,11 @@ import { ProjectTreeProvider } from './tree/projectTree';
 import { ActiveWorktreeStore } from './switch/activeWorktreeStore';
 import { DetachedOpener } from './switch/detachedOpener';
 import { WorktreeSwitcher } from './switch/worktreeSwitcher';
+import { AddProjectCommand, VsCodeProjectFolderPicker } from './project/addProjectCommand';
 import { ProjectRemovalCommand } from './project/projectRemovalCommand';
 import { ProjectCommonDirCache } from './project/projectCommonDirCache';
+import { ProjectRegistryStore } from './project/projectRegistryStore';
+import { projectsMigration } from './project/projectsMigration';
 import { AddWorktreeCommand } from './worktree/addWorktreeCommand';
 import { BranchDeletionPreferenceStore } from './worktree/branchDeletionPreferenceStore';
 import { WorktreeListCacheStore } from './worktree/worktreeListCacheStore';
@@ -14,6 +17,9 @@ import { DeckTreeDragAndDropController } from './tree/deckTreeDragAndDropControl
 import { WorktreeOrderStore } from './worktree/worktreeOrderStore';
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
+  const projectRegistry = new ProjectRegistryStore(context.globalState);
+  await migrateProjects(projectRegistry);
+
   const activeWorktrees = new ActiveWorktreeStore(context.globalState);
   const worktreeRoots = new WorktreeRootStore(context.globalState);
   const worktreeOrders = new WorktreeOrderStore(context.globalState);
@@ -23,6 +29,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const switcher = new WorktreeSwitcher(activeWorktrees);
   const detachedOpener = new DetachedOpener();
   const tree = new ProjectTreeProvider(
+    projectRegistry,
     activeWorktrees,
     worktreeOrders,
     worktreeListCache,
@@ -37,6 +44,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   );
   const dragAndDropController = new DeckTreeDragAndDropController(
     () => tree.refresh(),
+    projectRegistry,
     worktreeOrders,
   );
   const removeWorktree = new WorktreeRemovalCommand(
@@ -46,22 +54,39 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     worktreeListCache,
   );
   const removeProject = new ProjectRemovalCommand(
+    projectRegistry,
     activeWorktrees,
     worktreeRoots,
     worktreeOrders,
     () => tree.refresh(),
   );
 
+  const treeView = vscode.window.createTreeView('deck.projects', {
+    treeDataProvider: tree,
+    dragAndDropController,
+    canSelectMany: false,
+  });
+  const addProject = new AddProjectCommand(
+    new VsCodeProjectFolderPicker(),
+    projectRegistry,
+    activeWorktrees,
+    switcher,
+    detachedOpener,
+    () => tree.refresh(),
+    async (projectPath) => {
+      const roots = tree.getChildren();
+      if (!Array.isArray(roots)) return;
+      const project = roots.find((node) => node.projectPath === projectPath);
+      if (project) await treeView.reveal(project, { expand: true, select: true });
+    },
+  );
+
   context.subscriptions.push(
-    vscode.window.createTreeView('deck.projects', {
-      treeDataProvider: tree,
-      dragAndDropController,
-      canSelectMany: false,
-    }),
+    treeView,
     vscode.commands.registerCommand('deck.refresh', () => {
       tree.refresh();
     }),
-    vscode.commands.registerCommand('deck.addProject', () => tree.addProject()),
+    vscode.commands.registerCommand('deck.addProject', () => addProject.run()),
     vscode.commands.registerCommand('deck.addWorktree', (node) => addWorktree.run(node)),
     vscode.commands.registerCommand('deck.removeProject', (node) => removeProject.run(node)),
     vscode.commands.registerCommand('deck.removeWorktree', (node) => removeWorktree.run(node)),
@@ -76,3 +101,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 }
 
 export function deactivate(): void {}
+
+async function migrateProjects(projectRegistry: ProjectRegistryStore): Promise<void> {
+  const cfg = vscode.workspace.getConfiguration('deck');
+  const settingsProjects = cfg.get<string[]>('projects', []);
+  const migration = projectsMigration(settingsProjects, projectRegistry.list());
+
+  await projectRegistry.replace(migration.merged);
+  if (migration.clearSettings) {
+    await cfg.update('projects', undefined, vscode.ConfigurationTarget.Global);
+  }
+}

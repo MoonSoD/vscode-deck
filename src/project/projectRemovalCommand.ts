@@ -9,6 +9,10 @@ interface PerProjectStoreLike {
   clear(commonDir: string): Promise<void>;
 }
 
+interface ProjectRegistryLike {
+  remove(projectPath: string): Promise<void>;
+}
+
 const REMOVE_LABEL = 'Remove from Deck';
 const BASE_DETAIL = 'This only removes the Project from Deck. Files and git history are untouched.';
 const ACTIVE_PROJECT_DETAIL =
@@ -16,6 +20,7 @@ const ACTIVE_PROJECT_DETAIL =
 
 export class ProjectRemovalCommand {
   constructor(
+    private readonly projectRegistry: ProjectRegistryLike,
     private readonly activeWorktrees: PerProjectStoreLike,
     private readonly worktreeRoots: PerProjectStoreLike,
     private readonly worktreeOrders: PerProjectStoreLike,
@@ -43,13 +48,7 @@ export class ProjectRemovalCommand {
     );
     if (picked !== REMOVE_LABEL) return;
 
-    const cfg = vscode.workspace.getConfiguration('deck');
-    const projects = cfg.get<string[]>('projects', []);
-    await cfg.update(
-      'projects',
-      projects.filter((projectPath) => projectPath !== node.projectPath),
-      vscode.ConfigurationTarget.Global,
-    );
+    await this.projectRegistry.remove(node.projectPath);
 
     if (commonDir !== null) {
       await this.activeWorktrees.clear(commonDir);

@@ -1,9 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const vscodeState = vi.hoisted(() => ({
-  projects: ['/repo/main', '/other/main'],
   showInformationMessage: vi.fn(),
-  update: vi.fn(),
   workspaceFolders: [{ uri: { fsPath: '/repo/feature' } }],
 }));
 
@@ -18,11 +16,6 @@ vi.mock('vscode', () => ({
     get workspaceFolders() {
       return vscodeState.workspaceFolders;
     },
-    getConfiguration: () => ({
-      get: <T>(_key: string, defaultValue: T) =>
-        (vscodeState.projects as T | undefined) ?? defaultValue,
-      update: vscodeState.update,
-    }),
   },
 }));
 
@@ -40,18 +33,18 @@ import { ProjectRemovalCommand } from '../src/project/projectRemovalCommand';
 describe('ProjectRemovalCommand', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vscodeState.projects = ['/repo/main', '/other/main'];
     vscodeState.workspaceFolders = [{ uri: { fsPath: '/repo/feature' } }];
     vscodeState.showInformationMessage.mockResolvedValue('Remove from Deck');
-    vscodeState.update.mockResolvedValue(undefined);
   });
 
   it('removes a Project from Deck and clears its per-Project state after confirmation', async () => {
     const activeWorktrees = { clear: vi.fn(async () => undefined) };
+    const projectRegistry = { remove: vi.fn(async () => undefined) };
     const worktreeRoots = { clear: vi.fn(async () => undefined) };
     const worktreeOrders = { clear: vi.fn(async () => undefined) };
     const refresh = vi.fn();
     const command = new ProjectRemovalCommand(
+      projectRegistry,
       activeWorktrees,
       worktreeRoots,
       worktreeOrders,
@@ -69,11 +62,7 @@ describe('ProjectRemovalCommand', () => {
       },
       'Remove from Deck',
     );
-    expect(vscodeState.update).toHaveBeenCalledWith(
-      'projects',
-      ['/other/main'],
-      vscode.ConfigurationTarget.Global,
-    );
+    expect(projectRegistry.remove).toHaveBeenCalledWith('/repo/main');
     expect(activeWorktrees.clear).toHaveBeenCalledWith('/git/repo');
     expect(worktreeRoots.clear).toHaveBeenCalledWith('/git/repo');
     expect(worktreeOrders.clear).toHaveBeenCalledWith('/git/repo');
@@ -82,10 +71,12 @@ describe('ProjectRemovalCommand', () => {
 
   it('does nothing when confirmation is cancelled', async () => {
     const activeWorktrees = { clear: vi.fn(async () => undefined) };
+    const projectRegistry = { remove: vi.fn(async () => undefined) };
     const worktreeRoots = { clear: vi.fn(async () => undefined) };
     const worktreeOrders = { clear: vi.fn(async () => undefined) };
     const refresh = vi.fn();
     const command = new ProjectRemovalCommand(
+      projectRegistry,
       activeWorktrees,
       worktreeRoots,
       worktreeOrders,
@@ -96,7 +87,7 @@ describe('ProjectRemovalCommand', () => {
 
     await command.run({ projectPath: '/repo/main' });
 
-    expect(vscodeState.update).not.toHaveBeenCalled();
+    expect(projectRegistry.remove).not.toHaveBeenCalled();
     expect(activeWorktrees.clear).not.toHaveBeenCalled();
     expect(worktreeRoots.clear).not.toHaveBeenCalled();
     expect(worktreeOrders.clear).not.toHaveBeenCalled();

@@ -33,11 +33,11 @@ vi.mock('vscode', () => ({
     showOpenDialog: vi.fn(),
   },
   workspace: {
-    getConfiguration: () => ({
+    getConfiguration: vi.fn(() => ({
       get: <T>(_key: string, defaultValue: T) =>
         ['/work/alpha-main', '/work/beta-main'] as T,
       update: vi.fn(),
-    }),
+    })),
     workspaceFolders: [{ uri: { fsPath: '/work/beta-main' } }],
   },
 }));
@@ -81,11 +81,19 @@ vi.mock('../src/git/worktrees', () => ({
   }),
 }));
 
+import * as vscode from 'vscode';
 import { ActiveWorktreeStore } from '../src/switch/activeWorktreeStore';
 import { ProjectTreeProvider } from '../src/tree/projectTree';
 import { WorktreeListCacheStore } from '../src/worktree/worktreeListCacheStore';
 import { WorktreeOrderStore } from '../src/worktree/worktreeOrderStore';
 import { ProjectCommonDirCache } from '../src/project/projectCommonDirCache';
+import { ProjectRegistryStore } from '../src/project/projectRegistryStore';
+
+function registry(projects = ['/work/alpha-main', '/work/beta-main']) {
+  return {
+    list: vi.fn(() => projects),
+  } as unknown as ProjectRegistryStore;
+}
 
 describe('ProjectTreeProvider', () => {
   it('marks only the currently mounted worktree as active', async () => {
@@ -98,7 +106,7 @@ describe('ProjectTreeProvider', () => {
     const worktreeOrders = {
       get: vi.fn(),
     } as unknown as WorktreeOrderStore;
-    const provider = new ProjectTreeProvider(activeWorktrees, worktreeOrders);
+    const provider = new ProjectTreeProvider(registry(), activeWorktrees, worktreeOrders);
 
     const projects = provider.getChildren();
     if (!Array.isArray(projects)) throw new Error('expected sync project roots');
@@ -127,7 +135,7 @@ describe('ProjectTreeProvider', () => {
     const worktreeOrders = {
       get: vi.fn(() => ['/work/alpha-feature']),
     } as unknown as WorktreeOrderStore;
-    const provider = new ProjectTreeProvider(activeWorktrees, worktreeOrders);
+    const provider = new ProjectTreeProvider(registry(), activeWorktrees, worktreeOrders);
 
     const projectNode = provider.getChildren();
     if (!Array.isArray(projectNode)) throw new Error('expected sync project roots');
@@ -170,6 +178,7 @@ describe('ProjectTreeProvider', () => {
       set: vi.fn(async () => undefined),
     } as unknown as ProjectCommonDirCache;
     const provider = new ProjectTreeProvider(
+      registry(),
       activeWorktrees,
       worktreeOrders,
       worktreeListCache,
@@ -235,6 +244,7 @@ describe('ProjectTreeProvider', () => {
       set: vi.fn(async () => undefined),
     } as unknown as ProjectCommonDirCache;
     const provider = new ProjectTreeProvider(
+      registry(),
       activeWorktrees,
       worktreeOrders,
       worktreeListCache,
@@ -248,5 +258,24 @@ describe('ProjectTreeProvider', () => {
 
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(worktreeListCache.set).not.toHaveBeenCalled();
+  });
+
+  it('reads root Projects from ProjectRegistryStore without reading deck.projects settings', () => {
+    const activeWorktrees = {
+      get: vi.fn(),
+    } as unknown as ActiveWorktreeStore;
+    const worktreeOrders = {
+      get: vi.fn(),
+    } as unknown as WorktreeOrderStore;
+    const projectRegistry = registry(['/work/beta-main']);
+    const provider = new ProjectTreeProvider(projectRegistry, activeWorktrees, worktreeOrders);
+
+    const projects = provider.getChildren();
+
+    expect(Array.isArray(projects)).toBe(true);
+    expect((projects as Array<{ projectPath: string }>).map((node) => node.projectPath)).toEqual([
+      '/work/beta-main',
+    ]);
+    expect(vscode.workspace.getConfiguration).not.toHaveBeenCalled();
   });
 });
