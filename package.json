@@ -114,6 +114,10 @@
         "title": "Deck: Open Terminal"
       },
       {
+        "command": "deck.openTerminalInNewWindow",
+        "title": "Deck: Open Terminal in New Window"
+      },
+      {
         "command": "deck.killTerminal",
         "title": "Deck: Close Terminal",
         "icon": "$(close)"
@@ -173,6 +177,11 @@
           "command": "deck.killTerminal",
           "when": "view == deck.projects && viewItem == deck.terminal && deck.tmuxAvailable",
           "group": "inline"
+        },
+        {
+          "command": "deck.openTerminalInNewWindow",
+          "when": "view == deck.projects && viewItem == deck.terminal && deck.tmuxAvailable",
+          "group": "navigation"
         }
       ],
       "commandPalette": [
@@ -190,6 +199,10 @@
         },
         {
           "command": "deck.openTerminal",
+          "when": "false"
+        },
+        {
+          "command": "deck.openTerminalInNewWindow",
           "when": "false"
         }
       ]

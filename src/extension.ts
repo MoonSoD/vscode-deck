@@ -19,6 +19,7 @@ import { WorktreeOrderStore } from './worktree/worktreeOrderStore';
 import { AddTerminalCommand } from './terminal/addTerminalCommand';
 import { CloseTerminalCommand } from './terminal/killTerminalCommand';
 import { OpenTerminalCommand } from './terminal/openTerminalCommand';
+import { OpenTerminalInNewWindowCommand } from './terminal/openTerminalInNewWindowCommand';
 import { PendingTerminalOpenStore } from './terminal/pendingTerminalOpenStore';
 import { TerminalCascade } from './terminal/terminalCascade';
 import { TerminalSessionRegistry } from './terminal/terminalSessionRegistry';
@@ -71,6 +72,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     pendingTerminalOpens,
     switcher,
   });
+  const openTerminalInNewWindow = new OpenTerminalInNewWindowCommand(pendingTerminalOpens);
   const closeTerminal = new CloseTerminalCommand(
     tmux,
     terminalRegistry,
@@ -155,6 +157,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand('deck.addWorktree', (node) => addWorktree.run(node)),
     vscode.commands.registerCommand('deck.addTerminal', (node) => addTerminal.run(node)),
     vscode.commands.registerCommand('deck.openTerminal', (node) => openTerminal.run(node)),
+    vscode.commands.registerCommand('deck.openTerminalInNewWindow', (node) =>
+      openTerminalInNewWindow.run(node),
+    ),
     vscode.commands.registerCommand('deck.killTerminal', (node) => closeTerminal.run(node)),
     vscode.commands.registerCommand('deck.removeProject', (node) => removeProject.run(node)),
     vscode.commands.registerCommand('deck.removeWorktree', (node) => removeWorktree.run(node)),
