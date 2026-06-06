@@ -98,14 +98,15 @@ state, not the user's whole tmux. Sanctel solved this with `-L sanctel -f
    instead of opening a second client. Removed from the map on
    `onDidCloseTerminal`.
 
-9. **Reload persistence is free.** Editor-area terminals are restored by
-   VS Code's `terminal.integrated.enablePersistentSessions` (default on)
-   by re-executing their original `shellPath`+`shellArgs`. Since our
-   args are exactly the reattach recipe, the editor tabs reattach to
-   their live tmux sessions on reload without any Deck-side restore code.
-   Per-workspaceFolder restoration means switching Worktrees correctly
-   hides A's terminals while in B and brings them back when switching to
-   A — the same property ADR-0003 leverages for tabs/buffers/layout.
+9. **Reload persistence is hydrated, not free.** VS Code's
+   `terminal.integrated.enablePersistentSessions` preserves the pty across
+   window reload, so a restored editor tab can still be attached to the
+   same Deck tmux session. It does not reliably expose the original
+   `shellPath`/`shellArgs` through the extension API after restoration.
+   Deck therefore runs an activate-time hydrator that identifies restored
+   Deck terminals by tab name plus cwd, verifies their OS PID, and re-links
+   matching `vscode.Terminal` objects into the per-window registry before
+   pending terminal-open intents are consumed.
 
 10. **Lifecycle.**
     - Close editor tab → tmux session killed; row removed on next refresh.
@@ -169,6 +170,24 @@ state, not the user's whole tmux. Sanctel solved this with `-L sanctel -f
     older than 60 seconds on every read. Schema-version mismatch resets
     the store to empty. There is no cross-window collision check; ADR-0008's
     existing multi-window collision note applies.
+
+16. **Cross-reload terminal identification.** Restored editor terminals are
+    considered Deck-managed only when their name matches `^(\d+)\s+\S+`
+    and their `creationOptions.cwd`, after `path.resolve`, equals the
+    current workspace folder. The leading `N` and cwd reconstruct the tmux
+    session name with the normal `wt-<sanitized(cwd)>__term-N` rule. PID is
+    a liveness verifier, stored in `workspaceState` under
+    `deck.terminalPids` as `{ schemaVersion: 1, bySession }` whenever Deck
+    creates an editor terminal. Activation subscribes to
+    `onDidOpenTerminal`, hydrates the current `vscode.window.terminals`
+    snapshot, then handles pending cross-worktree open intents. Hydration
+    ignores non-Deck or foreign-cwd terminals, disposes tabs whose tmux
+    session no longer exists, registers PID-matching restored tabs, swaps a
+    later restored tab over an already-registered duplicate only when its
+    PID matches, and disposes/recreates unknown or mismatched PID tabs with
+    Deck's `tmux -L deck attach-session -t =<session>` args. PID records
+    are removed on user-initiated terminal kills and pruned after snapshot
+    hydration against live Deck tmux sessions.
 
 ## Consequences
 

@@ -33,9 +33,14 @@ interface WorktreeSwitcherLike {
   switchTo(worktreePath: string): Promise<void>;
 }
 
+interface TerminalPidStoreLike {
+  set(sessionName: string, pid: number): Promise<void>;
+}
+
 interface AddTerminalCommandOptions {
   pendingTerminalOpens?: PendingTerminalOpenStoreLike;
   switcher?: WorktreeSwitcherLike;
+  pidStore?: TerminalPidStoreLike;
 }
 
 export class AddTerminalCommand {
@@ -76,6 +81,8 @@ export class AddTerminalCommand {
       location: { viewColumn: vscode.ViewColumn.Active },
     });
     this.registry.set(session, terminal);
+    const pid = await terminal.processId;
+    if (pid !== undefined) await this.options.pidStore?.set(session, pid);
     terminal.show(false);
     this.refresh();
   }

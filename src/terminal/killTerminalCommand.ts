@@ -11,6 +11,10 @@ interface TerminalNodeLike {
   };
 }
 
+interface TerminalPidStoreLike {
+  remove(sessionName: string): Promise<void>;
+}
+
 export class CloseTerminalCommand {
   constructor(
     private readonly tmux: CloseTerminalTmuxCli,
@@ -19,6 +23,7 @@ export class CloseTerminalCommand {
     private readonly terminalSessionListCache: Pick<TerminalSessionListCacheStore, 'removeSession'> = {
       removeSession: async () => undefined,
     },
+    private readonly pidStore?: TerminalPidStoreLike,
   ) {}
 
   async run(node: TerminalNodeLike | undefined): Promise<void> {
@@ -27,6 +32,7 @@ export class CloseTerminalCommand {
     const session = node.terminal.sessionName;
     await this.tmux.killSession(session);
     await this.terminalSessionListCache.removeSession(session);
+    await this.pidStore?.remove(session);
     const terminal = this.registry.getTerminal(session);
     this.registry.deleteSession(session);
     terminal?.dispose?.();

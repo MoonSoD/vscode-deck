@@ -28,11 +28,12 @@ describe('OpenTerminalCommand', () => {
     const tmux = {
       attachShellArgs: vi.fn(() => ['attach-session', '-t', '=wt-_work_repo__term-1']),
     };
-    const terminal = { show: vi.fn() };
+    const terminal = { show: vi.fn(), processId: Promise.resolve(1234) };
     vscodeState.createTerminal.mockReturnValue(terminal);
     const registry = new TerminalSessionRegistry();
+    const pidStore = { set: vi.fn(async () => undefined) };
 
-    await new OpenTerminalCommand(tmux, registry).run({
+    await new OpenTerminalCommand(tmux, registry, { pidStore }).run({
       terminal: { sessionName: 'wt-_work_repo__term-1', windowName: 'zsh' },
       n: 1,
       worktreePath: '/work/alpha-main',
@@ -46,6 +47,7 @@ describe('OpenTerminalCommand', () => {
     });
     expect(terminal.show).toHaveBeenCalledWith(false);
     expect(registry.get('wt-_work_repo__term-1')).toBe(terminal);
+    expect(pidStore.set).toHaveBeenCalledWith('wt-_work_repo__term-1', 1234);
   });
 
   it('focuses the existing editor terminal on registry hit', async () => {

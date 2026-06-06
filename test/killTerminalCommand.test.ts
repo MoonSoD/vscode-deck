@@ -30,17 +30,25 @@ describe('CloseTerminalCommand', () => {
     const terminalSessionListCache = {
       removeSession: vi.fn(async () => undefined),
     };
+    const pidStore = {
+      remove: vi.fn(async () => undefined),
+    };
     const registry = new TerminalSessionRegistry();
     const terminal = { show: vi.fn(), dispose: vi.fn() };
     registry.set('wt-_work_repo__term-1', terminal);
 
-    await new CloseTerminalCommand(tmux, registry, refresh, terminalSessionListCache).run({
-      terminal: { sessionName: 'wt-_work_repo__term-1' },
-    });
+    await new CloseTerminalCommand(
+      tmux,
+      registry,
+      refresh,
+      terminalSessionListCache,
+      pidStore,
+    ).run({ terminal: { sessionName: 'wt-_work_repo__term-1' } });
 
     expect(tmux.killSession).toHaveBeenCalledWith('wt-_work_repo__term-1');
     expect(terminal.dispose).toHaveBeenCalledOnce();
     expect(terminalSessionListCache.removeSession).toHaveBeenCalledWith('wt-_work_repo__term-1');
+    expect(pidStore.remove).toHaveBeenCalledWith('wt-_work_repo__term-1');
     expect(refresh).toHaveBeenCalledOnce();
   });
 

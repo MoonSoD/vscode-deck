@@ -14,10 +14,17 @@ const vscodeState = vi.hoisted(() => ({
   executeCommand: vi.fn(),
   closeTerminalRun: vi.fn(),
   closeTerminalArgs: undefined as unknown[] | undefined,
+  hydratorInstances: [] as Array<{
+    hydrateOne: ReturnType<typeof vi.fn>;
+    hydrateSnapshot: ReturnType<typeof vi.fn>;
+  }>,
+  lifecycleOrder: [] as string[],
   onDidCloseTerminal: vi.fn(() => ({ dispose: vi.fn() })),
   onDidChangeWorkspaceFolders: vi.fn(() => ({ dispose: vi.fn() })),
+  onDidOpenTerminal: vi.fn(() => ({ dispose: vi.fn() })),
   openTerminalInNewWindowRun: vi.fn(),
   openTerminalRun: vi.fn(),
+  openTerminalArgs: undefined as unknown[] | undefined,
   projectTreeArgs: undefined as unknown[] | undefined,
   projectTreeInstances: [] as Array<{ refresh: ReturnType<typeof vi.fn>; getChildren: ReturnType<typeof vi.fn> }>,
   projectTreeRevealNode: undefined as ((node: unknown) => Promise<void> | void) | undefined,
@@ -28,7 +35,12 @@ const vscodeState = vi.hoisted(() => ({
     findSession: ReturnType<typeof vi.fn>;
     deleteSession: ReturnType<typeof vi.fn>;
   }>,
-  tmuxInstances: [] as Array<{ killSession: ReturnType<typeof vi.fn> }>,
+  terminalPidStoreInstances: [] as Array<{ remove: ReturnType<typeof vi.fn> }>,
+  terminals: [] as unknown[],
+  tmuxInstances: [] as Array<{
+    killSession: ReturnType<typeof vi.fn>;
+    listSessions: ReturnType<typeof vi.fn>;
+  }>,
   workspaceFolders: [{ uri: { fsPath: '/work/alpha-main' } }],
   tmuxPreflight: vi.fn(async () => ({ available: true })),
 }));
@@ -52,6 +64,13 @@ vi.mock('vscode', () => ({
     createTreeView: vscodeState.createTreeView,
     onDidCloseTerminal: vscodeState.onDidCloseTerminal,
     onDidChangeActiveTerminal: vi.fn(() => ({ dispose: vi.fn() })),
+    onDidOpenTerminal: (...args: unknown[]) => {
+      vscodeState.lifecycleOrder.push('subscribe-open');
+      return vscodeState.onDidOpenTerminal(...args);
+    },
+    get terminals() {
+      return vscodeState.terminals;
+    },
   },
   workspace: {
     getConfiguration: () => ({
@@ -85,6 +104,7 @@ vi.mock('../src/worktree/worktreeListCacheStore', () => ({
 vi.mock('../src/terminal/terminalSessionListCacheStore', () => ({
   TerminalSessionListCacheStore: class {
     removeSession = vi.fn(async () => undefined);
+    set = vi.fn(async () => undefined);
 
     constructor() {
       vscodeState.terminalSessionListCacheInstances.push(this);
@@ -157,6 +177,10 @@ vi.mock('../src/terminal/tmuxPreflight', () => ({
 vi.mock('../src/terminal/tmuxCli', () => ({
   TmuxCli: class {
     killSession = vi.fn(async () => undefined);
+    listSessions = vi.fn(async () => {
+      vscodeState.lifecycleOrder.push('pending-list');
+      return [{ sessionName: 'wt-_work_alpha-main__term-1', windowName: 'zsh' }];
+    });
 
     constructor() {
       vscodeState.tmuxInstances.push(this);
@@ -176,6 +200,10 @@ vi.mock('../src/terminal/addTerminalCommand', () => ({
 
 vi.mock('../src/terminal/openTerminalCommand', () => ({
   OpenTerminalCommand: class {
+    constructor(...args: unknown[]) {
+      vscodeState.openTerminalArgs = args;
+    }
+
     run = vscodeState.openTerminalRun;
   },
 }));
@@ -207,6 +235,29 @@ vi.mock('../src/terminal/terminalSessionRegistry', () => ({
   },
 }));
 
+vi.mock('../src/terminal/terminalPidStore', () => ({
+  TerminalPidStore: class {
+    remove = vi.fn(async () => undefined);
+
+    constructor() {
+      vscodeState.terminalPidStoreInstances.push(this);
+    }
+  },
+}));
+
+vi.mock('../src/terminal/editorTerminalHydrator', () => ({
+  EditorTerminalHydrator: class {
+    hydrateOne = vi.fn(async () => undefined);
+    hydrateSnapshot = vi.fn(async () => {
+      vscodeState.lifecycleOrder.push('snapshot');
+    });
+
+    constructor() {
+      vscodeState.hydratorInstances.push(this);
+    }
+  },
+}));
+
 import * as vscode from 'vscode';
 import { activate, openPendingTerminalForCurrentWorktree } from '../src/extension';
 import { PendingTerminalOpenStore } from '../src/terminal/pendingTerminalOpenStore';
@@ -217,12 +268,17 @@ describe('activate', () => {
     vscodeState.addProjectArgs = undefined;
     vscodeState.addTerminalArgs = undefined;
     vscodeState.closeTerminalArgs = undefined;
+    vscodeState.hydratorInstances = [];
+    vscodeState.lifecycleOrder = [];
+    vscodeState.openTerminalArgs = undefined;
     vscodeState.projectTreeArgs = undefined;
     vscodeState.projectTreeInstances = [];
     vscodeState.projectTreeRevealNode = undefined;
     vscodeState.settingsProjects = ['/settings/repo'];
     vscodeState.terminalSessionListCacheInstances = [];
     vscodeState.terminalSessionRegistryInstances = [];
+    vscodeState.terminalPidStoreInstances = [];
+    vscodeState.terminals = [];
     vscodeState.tmuxInstances = [];
     vscodeState.workspaceFolders = [{ uri: { fsPath: '/work/alpha-main' } }];
     vscodeState.configUpdate.mockResolvedValue(undefined);
@@ -233,6 +289,12 @@ describe('activate', () => {
     const values: Record<string, unknown> = { 'deck.projectRegistry': globalProjects };
     return {
       globalState: {
+        get: <T>(key: string, defaultValue: T) => (values[key] as T | undefined) ?? defaultValue,
+        update: vi.fn(async (key: string, value: unknown) => {
+          values[key] = value;
+        }),
+      },
+      workspaceState: {
         get: <T>(key: string, defaultValue: T) => (values[key] as T | undefined) ?? defaultValue,
         update: vi.fn(async (key: string, value: unknown) => {
           values[key] = value;
@@ -321,7 +383,28 @@ describe('activate', () => {
     const terminalSessionListCache = vscodeState.projectTreeArgs?.at(-2);
     expect(terminalSessionListCache).toBeDefined();
     expect(vscodeState.addTerminalArgs?.at(-2)).toBe(terminalSessionListCache);
-    expect(vscodeState.closeTerminalArgs?.at(-1)).toBe(terminalSessionListCache);
+    expect(vscodeState.closeTerminalArgs?.at(-2)).toBe(terminalSessionListCache);
+  });
+
+  it('subscribes to terminal opens, hydrates restored terminals, then consumes pending intents', async () => {
+    const context = createContext();
+    context.values['deck.pendingTerminalOpen'] = {
+      schemaVersion: 1,
+      entries: {
+        '/work/alpha-main': {
+          sessionName: 'wt-_work_alpha-main__term-1',
+          createdAt: Date.now(),
+        },
+      },
+    };
+    const restored = { name: '1 zsh' };
+    vscodeState.terminals = [restored];
+
+    await activate(context as never);
+
+    expect(vscodeState.onDidOpenTerminal).toHaveBeenCalledWith(expect.any(Function));
+    expect(vscodeState.hydratorInstances[0].hydrateSnapshot).toHaveBeenCalledWith([restored]);
+    expect(vscodeState.lifecycleOrder).toEqual(['subscribe-open', 'snapshot', 'pending-list']);
   });
 
   it('registers deck.addTerminal through AddTerminalCommand', async () => {
@@ -526,6 +609,9 @@ describe('activate', () => {
     expect(vscodeState.terminalSessionListCacheInstances[0].removeSession).toHaveBeenCalledWith(
       'wt-_work_repo__term-1',
     );
+    expect(vscodeState.terminalPidStoreInstances[0].remove).toHaveBeenCalledWith(
+      'wt-_work_repo__term-1',
+    );
     expect(vscodeState.terminalSessionRegistryInstances[0].deleteSession).toHaveBeenCalledWith(
       'wt-_work_repo__term-1',
     );
@@ -542,6 +628,7 @@ describe('activate', () => {
 
     expect(vscodeState.tmuxInstances[0].killSession).not.toHaveBeenCalled();
     expect(vscodeState.terminalSessionListCacheInstances[0].removeSession).not.toHaveBeenCalled();
+    expect(vscodeState.terminalPidStoreInstances[0].remove).not.toHaveBeenCalled();
     // Registry entry is still cleared so the next attach in the new window
     // starts fresh.
     expect(vscodeState.terminalSessionRegistryInstances[0].deleteSession).toHaveBeenCalledWith(
