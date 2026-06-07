@@ -12,6 +12,7 @@ import {
   toCachedTerminalSessions,
   type TerminalSessionListCacheStore,
 } from './terminalSessionListCacheStore';
+import { SessionUriCodec } from './sessionUriCodec';
 
 export interface AddTerminalTmuxCli {
   listSessions(prefix?: string): Promise<TmuxSession[]>;
@@ -47,6 +48,7 @@ export class AddTerminalCommand {
       set: async () => undefined,
     },
     private readonly options: AddTerminalCommandOptions = {},
+    private readonly sessionUriCodec: SessionUriCodec = new SessionUriCodec(),
   ) {}
 
   async run(node: WorktreeNodeLike | undefined): Promise<void> {
@@ -67,16 +69,12 @@ export class AddTerminalCommand {
     // a pending-open intent and switch; post-reload activation opens it.
     if (await this.switchForForeignWorktree(node, session)) return;
 
-    const newRow = cached.find((row) => row.sessionName === session);
-    const tabName = newRow ? `${newRow.n} ${newRow.windowName}` : `${termN}`;
-    const terminal = vscode.window.createTerminal({
-      name: tabName,
-      shellPath: 'tmux',
-      shellArgs: this.tmux.attachShellArgs(session),
-      location: { viewColumn: vscode.ViewColumn.Active },
-    });
-    this.registry.set(session, terminal);
-    terminal.show(false);
+    await vscode.commands.executeCommand(
+      'vscode.openWith',
+      this.sessionUriCodec.encode({ sessionName: session, cwd: node.worktree.path }),
+      'deck.terminal',
+      { viewColumn: vscode.ViewColumn.Active },
+    );
     this.refresh();
   }
 

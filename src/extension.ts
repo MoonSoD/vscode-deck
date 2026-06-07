@@ -23,6 +23,7 @@ import { OpenTerminalCommand } from './terminal/openTerminalCommand';
 import { OpenTerminalInNewWindowCommand } from './terminal/openTerminalInNewWindowCommand';
 import { PendingTerminalOpenStore } from './terminal/pendingTerminalOpenStore';
 import { TerminalCascade } from './terminal/terminalCascade';
+import { TerminalEditorProvider, terminalEditorViewType } from './terminal/terminalEditorProvider';
 import { TerminalSessionRegistry } from './terminal/terminalSessionRegistry';
 import {
   type CachedTerminalSession,
@@ -32,6 +33,7 @@ import {
 import { TmuxCli, type TmuxSession } from './terminal/tmuxCli';
 import { terminalSessionPrefix, terminalWorktreePrefix } from './terminal/tmuxSafe';
 import { tmuxPreflight } from './terminal/tmuxPreflight';
+import { SessionUriCodec } from './terminal/sessionUriCodec';
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const tmux = new TmuxCli(join(context.extensionPath, 'resources', 'deck.conf'));
@@ -89,6 +91,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     terminalSessionListCache,
   );
   const terminalCascade = new TerminalCascade(tmux);
+  const terminalEditorProvider = new TerminalEditorProvider(
+    context.extensionUri,
+    join(context.extensionPath, 'resources', 'deck.conf'),
+  );
   const addWorktree = new AddWorktreeCommand(
     switcher,
     detachedOpener,
@@ -159,6 +165,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   context.subscriptions.push(
     treeView,
+    vscode.window.registerCustomEditorProvider(terminalEditorViewType, terminalEditorProvider, {
+      webviewOptions: {
+        retainContextWhenHidden: true,
+      },
+      supportsMultipleEditorsPerDocument: false,
+    }),
     vscode.commands.registerCommand('deck.refresh', () => {
       tree.refresh();
     }),
@@ -261,9 +273,10 @@ export async function openPendingTerminalForCurrentWorktree(
   await pendingTerminalOpens.consume(worktreePath);
   await terminalSessionListCache.set(terminalWorktreePrefix(worktreePath), terminals);
 
-  await vscode.commands.executeCommand('deck.openTerminal', {
-    terminal,
-    n: terminal.n,
-    worktreePath,
-  });
+  await vscode.commands.executeCommand(
+    'vscode.openWith',
+    new SessionUriCodec().encode({ sessionName, cwd: worktreePath }),
+    terminalEditorViewType,
+    { viewColumn: vscode.ViewColumn.Active },
+  );
 }

@@ -76,6 +76,18 @@
         ]
       }
     ],
+    "customEditors": [
+      {
+        "viewType": "deck.terminal",
+        "displayName": "Deck Terminal",
+        "selector": [
+          {
+            "filenamePattern": "deck-terminal://**"
+          }
+        ],
+        "priority": "default"
+      }
+    ],
     "commands": [
       {
         "command": "deck.addProject",
@@ -221,5 +233,10 @@
     "@types/vscode": "^1.106.0",
     "typescript": "^5.7.2",
     "vitest": "^4.1.8"
+  },
+  "dependencies": {
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
+    "node-pty": "^1.1.0"
   }
 }

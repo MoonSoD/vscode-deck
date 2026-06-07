@@ -29,6 +29,7 @@ const vscodeState = vi.hoisted(() => ({
   projectTreeInstances: [] as Array<{ refresh: ReturnType<typeof vi.fn>; getChildren: ReturnType<typeof vi.fn> }>,
   projectTreeRevealNode: undefined as ((node: unknown) => Promise<void> | void) | undefined,
   registerCommand: vi.fn(() => ({ dispose: vi.fn() })),
+  registerCustomEditorProvider: vi.fn(() => ({ dispose: vi.fn() })),
   settingsProjects: ['/settings/repo'],
   terminalSessionListCacheInstances: [] as Array<{ removeSession: ReturnType<typeof vi.fn> }>,
   terminalSessionRegistryInstances: [] as Array<{
@@ -48,6 +49,7 @@ vi.mock('vscode', () => ({
   ConfigurationTarget: {
     Global: 1,
   },
+  ViewColumn: { Active: -1 },
   TerminalExitReason: {
     Unknown: 0,
     Shutdown: 1,
@@ -59,8 +61,15 @@ vi.mock('vscode', () => ({
     executeCommand: vscodeState.executeCommand,
     registerCommand: vscodeState.registerCommand,
   },
+  Uri: {
+    joinPath: (base: unknown, ...paths: string[]) => ({ base, paths }),
+    from(value: { scheme: string; authority: string; path: string; query: string }) {
+      return value;
+    },
+  },
   window: {
     createTreeView: vscodeState.createTreeView,
+    registerCustomEditorProvider: vscodeState.registerCustomEditorProvider,
     onDidCloseTerminal: vscodeState.onDidCloseTerminal,
     onDidChangeActiveTerminal: vi.fn(() => ({ dispose: vi.fn() })),
     onDidOpenTerminal: (...args: unknown[]) => {
@@ -290,6 +299,7 @@ describe('activate', () => {
       },
       subscriptions: [] as Array<{ dispose(): void }>,
       extensionPath: '/ext',
+      extensionUri: { fsPath: '/ext' },
       values,
     };
   }
@@ -489,15 +499,15 @@ describe('activate', () => {
       { sessionName: 'wt-_work_alpha-main__term-1', n: 1, windowName: 'zsh' },
     ]);
     expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
-      'deck.openTerminal',
-      expect.objectContaining({
-        n: 1,
-        worktreePath: '/work/alpha-main',
-        terminal: expect.objectContaining({
-          sessionName: 'wt-_work_alpha-main__term-1',
-          windowName: 'zsh',
-        }),
-      }),
+      'vscode.openWith',
+      {
+        scheme: 'deck-terminal',
+        authority: 'session',
+        path: '/wt-_work_alpha-main__term-1',
+        query: 'cwd=%2Fwork%2Falpha-main',
+      },
+      'deck.terminal',
+      { viewColumn: -1 },
     );
   });
 

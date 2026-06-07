@@ -43,6 +43,15 @@ describe('package contributions', () => {
     expect(pkg.contributes.configuration?.properties?.['deck.projects']).toBeUndefined();
   });
 
+  it('contributes Deck Terminal as a custom editor for deck-terminal URIs', () => {
+    expect(pkg.contributes.customEditors).toContainEqual({
+      viewType: 'deck.terminal',
+      displayName: 'Deck Terminal',
+      selector: [{ filenamePattern: 'deck-terminal://**' }],
+      priority: 'default',
+    });
+  });
+
   it('contributes add worktree as a project-only inline tree action', () => {
     expect(pkg.contributes.commands).toContainEqual({
       command: 'deck.addWorktree',

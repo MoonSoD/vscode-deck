@@ -2,11 +2,20 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const vscodeState = vi.hoisted(() => ({
   createTerminal: vi.fn(() => ({ show: vi.fn() })),
+  executeCommand: vi.fn(async () => undefined),
   workspaceFolders: [{ uri: { fsPath: '/work/repo' } }],
 }));
 
 vi.mock('vscode', () => ({
   ViewColumn: { Active: -1 },
+  Uri: {
+    from(value: { scheme: string; authority: string; path: string; query: string }) {
+      return value;
+    },
+  },
+  commands: {
+    executeCommand: vscodeState.executeCommand,
+  },
   window: {
     createTerminal: vscodeState.createTerminal,
   },
@@ -26,7 +35,7 @@ describe('AddTerminalCommand', () => {
     vscodeState.workspaceFolders = [{ uri: { fsPath: '/work/repo' } }];
   });
 
-  it('allocates the next terminal in tmux and opens it in editor view focused', async () => {
+  it('allocates the next terminal in tmux and opens it as a Deck custom editor', async () => {
     const existing = [
       { sessionName: 'wt-_work_repo__term-1', windowName: 'zsh' },
       { sessionName: 'wt-_work_repo__term-3', windowName: 'claude' },
@@ -53,8 +62,6 @@ describe('AddTerminalCommand', () => {
         '=wt-_work_repo__term-4',
       ]),
     };
-    const terminal = { show: vi.fn() };
-    vscodeState.createTerminal.mockReturnValue(terminal);
     const registry = new TerminalSessionRegistry();
     const refresh = vi.fn();
     const terminalSessionListCache = {
@@ -72,22 +79,19 @@ describe('AddTerminalCommand', () => {
       'wt-_work_repo__term-4',
       '/work/repo',
     );
-    expect(vscodeState.createTerminal).toHaveBeenCalledWith({
-      name: '4 zsh',
-      shellPath: 'tmux',
-      shellArgs: [
-        '-L',
-        'deck',
-        '-f',
-        '/ext/resources/deck.conf',
-        'attach-session',
-        '-t',
-        '=wt-_work_repo__term-4',
-      ],
-      location: { viewColumn: -1 },
-    });
-    expect(terminal.show).toHaveBeenCalledWith(false);
-    expect(registry.get('wt-_work_repo__term-4')).toBe(terminal);
+    expect(vscodeState.executeCommand).toHaveBeenCalledWith(
+      'vscode.openWith',
+      {
+        scheme: 'deck-terminal',
+        authority: 'session',
+        path: '/wt-_work_repo__term-4',
+        query: 'cwd=%2Fwork%2Frepo',
+      },
+      'deck.terminal',
+      { viewColumn: -1 },
+    );
+    expect(vscodeState.createTerminal).not.toHaveBeenCalled();
+    expect(registry.get('wt-_work_repo__term-4')).toBeUndefined();
     expect(terminalSessionListCache.set).toHaveBeenCalledWith('wt-_work_repo__', [
       { sessionName: 'wt-_work_repo__term-1', n: 1, windowName: 'zsh' },
       { sessionName: 'wt-_work_repo__term-3', n: 3, windowName: 'claude' },
@@ -132,6 +136,7 @@ describe('AddTerminalCommand', () => {
     );
     expect(switcher.switchTo).toHaveBeenCalledWith('/work/beta-main');
     expect(vscodeState.createTerminal).not.toHaveBeenCalled();
+    expect(vscodeState.executeCommand).not.toHaveBeenCalled();
     expect(refresh).not.toHaveBeenCalled();
   });
 });
