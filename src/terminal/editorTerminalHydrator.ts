@@ -1,4 +1,3 @@
-import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { awaitProcessId } from './awaitProcessId';
 import { terminalSessionName } from './tmuxSafe';
@@ -90,13 +89,19 @@ export class EditorTerminalHydrator {
   private sessionNameFor(terminal: vscode.Terminal): string | undefined {
     const n = parseDeckTerminalNumber(terminal.name);
     if (!n) return undefined;
-
-    const cwd = terminalCwd(terminal);
+    // We can't cross-check the terminal's own cwd: VS Code's restoration
+    // pipeline drops creationOptions.cwd by design. mainThreadTerminalService
+    // builds the DTO from shellLaunchConfig.cwd, which is intentionally
+    // undefined on restored terminals (the live cwd lives on
+    // attachPersistentProcess.cwd / instance._cwd internally but never
+    // surfaces through the stable Terminal API). So identification falls back
+    // to "name pattern + current workspace folder". A user who manually
+    // names a non-Deck terminal `N word` in this worktree would false-match;
+    // accepted given the default-profile-named "tmux" panel terminals don't
+    // collide with our `^\d+ \S+` shape.
     const currentWorktreePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-    if (!cwd || !currentWorktreePath) return undefined;
-    if (path.resolve(cwd) !== path.resolve(currentWorktreePath)) return undefined;
-
-    return terminalSessionName(cwd, n);
+    if (!currentWorktreePath) return undefined;
+    return terminalSessionName(currentWorktreePath, n);
   }
 
   private async recreateTerminal(
@@ -135,14 +140,6 @@ function parseDeckTerminalNumber(name: string): number | undefined {
   if (!match) return undefined;
   const n = Number(match[1]);
   return Number.isInteger(n) ? n : undefined;
-}
-
-function terminalCwd(terminal: vscode.Terminal): string | undefined {
-  if (!('cwd' in terminal.creationOptions)) return undefined;
-  const cwd = terminal.creationOptions.cwd;
-  if (!cwd) return undefined;
-  if (typeof cwd === 'string') return cwd;
-  return cwd.fsPath;
 }
 
 export function findTabPosition(terminal: vscode.Terminal): TabPosition | undefined {

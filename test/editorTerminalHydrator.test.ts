@@ -83,11 +83,16 @@ describe('EditorTerminalHydrator', () => {
     });
   });
 
-  it('ignores non-Deck names and wrong worktree cwd', async () => {
+  it('ignores terminals whose name does not match the Deck pattern', async () => {
+    // VS Code's restoration drops creationOptions.cwd by design — see
+    // sessionNameFor doc comment. Identity is name pattern + current
+    // worktree alone; terminal.creationOptions.cwd is irrelevant on the
+    // hydration path.
     const { hydrator, registry, tmux } = createHydrator({});
 
     await hydrator.hydrateOne(terminal('zsh', '/work/repo'));
-    await hydrator.hydrateOne(terminal('1 zsh', '/work/other'));
+    await hydrator.hydrateOne(terminal('tmux', '/work/repo'));
+    await hydrator.hydrateOne(terminal('plain text', '/work/repo'));
 
     expect(tmux.listSessions).not.toHaveBeenCalled();
     expect(registry.get('wt-_work_repo__term-1')).toBeUndefined();
