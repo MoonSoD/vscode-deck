@@ -4,6 +4,7 @@ export interface TmuxControlClientLike {
   start(sessionName: string, cwd: string, seedLines: number): Promise<void> | void;
   onOutput(handler: (data: string) => void): { dispose(): void };
   onSeed(handler: (seed: string) => void): { dispose(): void };
+  onRename(handler: () => void): { dispose(): void };
   onExit(handler: (code: number | null) => void): { dispose(): void };
   sendKeys(data: string): Promise<void> | void;
   resize(cols: number, rows: number): Promise<void> | void;
@@ -27,6 +28,7 @@ export class TerminalTransport {
   private pendingSize: { cols: number; rows: number } | undefined;
   private readonly dataHandlers = new Set<(data: string) => void>();
   private readonly exitHandlers = new Set<(code: number) => void>();
+  private readonly renameHandlers = new Set<() => void>();
   private readonly disposables: Array<{ dispose(): void }> = [];
 
   constructor(
@@ -47,6 +49,9 @@ export class TerminalTransport {
         if (scrollback) this.emitData(scrollback);
       }),
       client.onOutput((data) => this.emitData(data)),
+      client.onRename(() => {
+        for (const handler of this.renameHandlers) handler();
+      }),
       client.onExit((code) => this.emitExit(code ?? 0)),
     );
 
@@ -71,6 +76,11 @@ export class TerminalTransport {
   onExit(handler: (code: number) => void): { dispose(): void } {
     this.exitHandlers.add(handler);
     return { dispose: () => this.exitHandlers.delete(handler) };
+  }
+
+  onRename(handler: () => void): { dispose(): void } {
+    this.renameHandlers.add(handler);
+    return { dispose: () => this.renameHandlers.delete(handler) };
   }
 
   write(data: string): void {

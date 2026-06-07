@@ -64,6 +64,7 @@ export interface TerminalTransportLike {
   clearHistory(): void;
   onData(handler: (data: string) => void): { dispose(): void };
   onExit(handler: (code: number) => void): { dispose(): void };
+  onRename(handler: () => void): { dispose(): void };
   dispose(): void;
 }
 
@@ -82,6 +83,7 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
     private readonly transportFactory: TerminalTransportFactory = () =>
       new TerminalTransport(this.configPath),
     private readonly onPanelDispose: TerminalEditorDisposeHandler = () => undefined,
+    private readonly onTitleChange: () => void = () => undefined,
   ) {
     this.configChangeSubscription = vscode.workspace.onDidChangeConfiguration((event) => {
       const fontKeys = [
@@ -146,6 +148,7 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
       transport.onExit((code) => {
         void panel.webview.postMessage({ type: 'exit', code });
       }),
+      transport.onRename(() => this.onTitleChange()),
       panel.webview.onDidReceiveMessage((message: TerminalWebviewMessage) => {
         if (message.type === 'ready') {
           transport.start(

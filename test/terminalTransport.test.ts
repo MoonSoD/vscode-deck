@@ -40,6 +40,18 @@ describe('TerminalTransport', () => {
     expect(client.kill).toHaveBeenCalledOnce();
   });
 
+  it('forwards client rename events to onRename subscribers', () => {
+    const client = fakeClient();
+    const transport = new TerminalTransport('/ext/resources/deck.conf', vi.fn(() => client));
+    const renamed = vi.fn();
+
+    transport.onRename(renamed);
+    transport.start('wt-_work_repo__term-1', '/work/repo', 80, 24);
+    client.emitRename();
+
+    expect(renamed).toHaveBeenCalledOnce();
+  });
+
   it('forwards the seed and live output in client order', () => {
     const client = fakeClient();
     const transport = new TerminalTransport('/ext/resources/deck.conf', vi.fn(() => client));
@@ -187,6 +199,7 @@ function fakeClient() {
   let outputHandler: ((data: string) => void) | undefined;
   let seedHandler: ((seed: string) => void) | undefined;
   let exitHandler: ((code: number | null) => void) | undefined;
+  let renameHandler: (() => void) | undefined;
   return {
     start: vi.fn(),
     sendKeys: vi.fn(),
@@ -204,9 +217,14 @@ function fakeClient() {
       exitHandler = handler;
       return { dispose: vi.fn() };
     }),
+    onRename: vi.fn((handler: () => void) => {
+      renameHandler = handler;
+      return { dispose: vi.fn() };
+    }),
     kill: vi.fn(),
     emitOutput: (data: string) => outputHandler?.(data),
     emitSeed: (seed: string) => seedHandler?.(seed),
     emitExit: (code: number | null) => exitHandler?.(code),
+    emitRename: () => renameHandler?.(),
   };
 }

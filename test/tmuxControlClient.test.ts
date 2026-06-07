@@ -167,6 +167,19 @@ describe('TmuxControlClient', () => {
     ]);
   });
 
+  it('fires onRename for %window-renamed / %window-pane-changed notifications', async () => {
+    const child = fakeChild();
+    const client = new TmuxControlClient('/ext/resources/deck.conf', vi.fn(() => child));
+    const renamed = vi.fn();
+    client.onRename(renamed);
+    await startClient(client, child);
+
+    child.emitStdout('%window-renamed @0 vim\n');
+    child.emitStdout('%window-pane-changed @0 %0\n');
+
+    expect(renamed).toHaveBeenCalledTimes(2);
+  });
+
   it('clears tmux history for the discovered pane', async () => {
     const child = fakeChild();
     const client = new TmuxControlClient('/ext/resources/deck.conf', vi.fn(() => child));

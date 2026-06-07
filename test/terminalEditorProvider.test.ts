@@ -43,6 +43,7 @@ function bridge() {
     clearHistory: vi.fn(),
     onData: vi.fn(() => ({ dispose: vi.fn() })),
     onExit: vi.fn(() => ({ dispose: vi.fn() })),
+    onRename: vi.fn(() => ({ dispose: vi.fn() })),
     dispose: vi.fn(),
   };
 }
@@ -276,6 +277,7 @@ describe('TerminalEditorProvider', () => {
       clearHistory: vi.fn(),
       onData: vi.fn(() => ({ dispose: vi.fn() })),
       onExit: vi.fn(() => ({ dispose: vi.fn() })),
+    onRename: vi.fn(() => ({ dispose: vi.fn() })),
       dispose: vi.fn(),
     };
     const provider = new TerminalEditorProvider(
@@ -353,6 +355,7 @@ function bridgeStub() {
     resize: vi.fn(),
     onData: vi.fn(() => ({ dispose: vi.fn() })),
     onExit: vi.fn(() => ({ dispose: vi.fn() })),
+    onRename: vi.fn(() => ({ dispose: vi.fn() })),
     dispose: vi.fn(),
   };
 }

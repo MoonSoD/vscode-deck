@@ -35,6 +35,7 @@ export class TmuxControlClient {
   private readonly pendingReplies: PendingReply[] = [];
   private readonly outputHandlers = new Set<(data: string) => void>();
   private readonly seedHandlers = new Set<(seed: string) => void>();
+  private readonly renameHandlers = new Set<() => void>();
   private readonly exitHandlers = new Set<(code: number | null) => void>();
   private readonly paneDecoder = new TextDecoder();
   private titleFilterState: TitleFilterState = 'text';
@@ -109,6 +110,11 @@ export class TmuxControlClient {
   onSeed(handler: (seed: string) => void): { dispose(): void } {
     this.seedHandlers.add(handler);
     return { dispose: () => this.seedHandlers.delete(handler) };
+  }
+
+  onRename(handler: () => void): { dispose(): void } {
+    this.renameHandlers.add(handler);
+    return { dispose: () => this.renameHandlers.delete(handler) };
   }
 
   onExit(handler: (code: number | null) => void): { dispose(): void } {
@@ -208,6 +214,13 @@ export class TmuxControlClient {
     }
 
     if (text.startsWith('%exit')) return;
+
+    // automatic-rename fires this when the foreground command changes
+    // (zsh -> vim); surface it so the tree can re-read the row label live.
+    if (text.startsWith('%window-renamed') || text.startsWith('%window-pane-changed')) {
+      for (const handler of this.renameHandlers) handler();
+      return;
+    }
 
     if (text.startsWith('%')) {
       console.debug(`[deck] ignoring tmux control-mode notification: ${text}`);

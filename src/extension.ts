@@ -78,6 +78,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       await terminalSessionListCache.removeSession(sessionName);
       tree.refresh();
     },
+    // %window-renamed from any open terminal's control client → relabel the row
+    // live (automatic-rename tracks the foreground command); event-driven, no poll.
+    () => tree.refresh(),
   );
   const openTerminal = new OpenTerminalCommand({
     pendingTerminalOpens,
