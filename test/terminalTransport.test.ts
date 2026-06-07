@@ -72,6 +72,18 @@ describe('TerminalTransport', () => {
     expect(data).toHaveBeenCalledWith('prompt\r\n');
   });
 
+  it('normalizes captured line feeds for xterm replay', () => {
+    const client = fakeClient();
+    client.capturePane.mockReturnValue('one\ntwo');
+    const transport = new TerminalTransport('/ext/resources/deck.conf', vi.fn(() => client));
+    const data = vi.fn();
+
+    transport.onData(data);
+    transport.start('wt-_work_repo__term-1', '/work/repo', 80, 24);
+
+    expect(data).toHaveBeenCalledWith('one\r\ntwo');
+  });
+
   it('uses the latest resize as the initial control-client size when resize arrives before start', () => {
     const client = fakeClient();
     const transport = new TerminalTransport('/ext/resources/deck.conf', vi.fn(() => client));

@@ -115,7 +115,7 @@ export class TerminalTransport {
 
   private finishSeed(client: TmuxControlClientLike, seed: string): void {
     if (this.client !== client) return;
-    const scrollback = stripTrailingBlankLines(seed);
+    const scrollback = normalizeSeedNewlines(stripTrailingBlankLines(seed));
     if (scrollback) this.emitData(scrollback);
     for (const data of this.pendingOutput.splice(0)) this.emitData(data);
     this.started = true;
@@ -131,6 +131,10 @@ function stripTrailingBlankLines(data: string): string {
   while (lines.length > 0 && lines.at(-1)?.trimEnd() === '') lines.pop();
   if (lines.length === 0) return '';
   return lines.join('\n') + (data.endsWith('\n') ? '\n' : '');
+}
+
+function normalizeSeedNewlines(data: string): string {
+  return data.replace(/\r?\n/g, '\r\n');
 }
 
 function isPromiseLike<T>(value: Promise<T> | T): value is Promise<T> {
