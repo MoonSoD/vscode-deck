@@ -51,16 +51,19 @@ describe('TerminalTransport', () => {
     expect(data.mock.calls.map(([payload]) => payload)).toEqual(['seed', 'live\r\n']);
   });
 
-  it('drops trailing blank screen lines from the seeded scrollback', () => {
+  it('drops trailing blank screen lines and leaves no trailing newline after the prompt', () => {
     const client = fakeClient();
     const transport = new TerminalTransport('/ext/resources/deck.conf', vi.fn(() => client));
     const data = vi.fn();
 
     transport.onData(data);
     transport.start('wt-_work_repo__term-1', '/work/repo', 80, 24);
-    client.emitSeed('prompt\r\n\r\n   \n');
+    // capture-pane fills the pane height with blank rows below the prompt
+    client.emitSeed('output\n❯ \n\n\n');
 
-    expect(data).toHaveBeenCalledWith('prompt\r\n');
+    // No trailing newline: the cursor must land on the prompt line, not the
+    // empty line below it (the "cursor below the glyph" seed artifact).
+    expect(data).toHaveBeenCalledWith('output\r\n❯ ');
   });
 
   it('normalizes captured line feeds for xterm replay', () => {

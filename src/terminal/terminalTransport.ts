@@ -124,7 +124,12 @@ function stripTrailingBlankLines(data: string): string {
   const lines = data.split('\n');
   while (lines.length > 0 && lines.at(-1)?.trimEnd() === '') lines.pop();
   if (lines.length === 0) return '';
-  return lines.join('\n') + (data.endsWith('\n') ? '\n' : '');
+  // No trailing newline: capture-pane fills the pane height with blank rows
+  // below the prompt, so the raw capture ends in '\n'. Re-appending it would
+  // leave xterm's cursor on the empty line *below* the prompt (the "cursor
+  // below the glyph" seed artifact). The seed must end exactly at the last
+  // content line so the cursor lands on the prompt, matching the live shell.
+  return lines.join('\n');
 }
 
 function normalizeSeedNewlines(data: string): string {
