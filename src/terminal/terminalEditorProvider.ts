@@ -336,9 +336,9 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
     const findInput = document.getElementById('find-input');
     const findOptions = {
       decorations: {
-        matchBackground: 'rgba(234, 92, 0, 0.35)',
+        matchBackground: '#5c3300',
         matchBorder: '#ea5c00',
-        activeMatchBackground: 'rgba(255, 214, 10, 0.45)',
+        activeMatchBackground: '#665500',
         activeMatchBorder: '#ffd60a',
         matchOverviewRuler: '#ea5c00',
         activeMatchColorOverviewRuler: '#ffd60a'

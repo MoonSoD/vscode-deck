@@ -190,5 +190,7 @@ describe('TerminalEditorProvider', () => {
     expect(terminalPanel.webview.html).toContain('clipboard.readText');
     expect(terminalPanel.webview.html).toContain('context-menu');
     expect(terminalPanel.webview.html).toContain('searchAddon.findNext');
+    expect(terminalPanel.webview.html).toContain("matchBackground: '#5c3300'");
+    expect(terminalPanel.webview.html).not.toContain('rgba(');
   });
 });
