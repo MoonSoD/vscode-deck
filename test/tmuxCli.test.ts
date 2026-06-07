@@ -169,6 +169,10 @@ describe('TmuxCli', () => {
   });
 
   it.each([
+    // The shape tmux actually emits when a tab is closed after its shell
+    // already exited — missing it made killSession throw and abort the
+    // tab-dispose cleanup, stranding the sidebar row.
+    ["can't find session", "can't find session: wt-_work_repo__term-1"],
     ['session not found', 'session not found: wt-_work_repo__term-1'],
     ['no server running', 'no server running on /tmp/tmux-1000/deck'],
   ])('swallows kill-session %s errors', async (_name, stderr) => {

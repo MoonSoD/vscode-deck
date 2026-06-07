@@ -138,12 +138,17 @@ function isDuplicateSession(result: CommandResult): boolean {
 }
 
 function isMissingSession(result: CommandResult): boolean {
-  // Three shapes from tmux when the -L deck world is empty:
-  //   "session not found"  — server up, target absent
+  // Shapes from tmux when the target session is gone:
+  //   "can't find session: <name>" — kill-session/most -t commands, target absent
+  //   "session not found"  — server up, target absent (some commands)
   //   "no server running"  — server stopped but socket file lingered
   //   "error connecting to …" — socket file itself absent (fresh boot, never new-session'd)
+  // The "can't find session" shape is the one kill-session emits when a tab is
+  // closed after its shell already exited — missing it made killSession throw
+  // and abort the tab-dispose cleanup, leaving a stale sidebar row.
   const output = `${result.stdout}\n${result.stderr}`;
   return (
+    output.includes("can't find session") ||
     output.includes('session not found') ||
     output.includes('no server running') ||
     output.includes('error connecting')
