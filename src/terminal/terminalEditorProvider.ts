@@ -218,6 +218,16 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
         'addon-search.js',
       ),
     );
+    const serializeJs = webview.asWebviewUri(
+      vscode.Uri.joinPath(
+        this.extensionUri,
+        'node_modules',
+        '@xterm',
+        'addon-serialize',
+        'lib',
+        'addon-serialize.js',
+      ),
+    );
     const nonce = String(Date.now());
 
     return `<!doctype html>
@@ -317,6 +327,8 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
   <script nonce="${nonce}" src="${webLinksJs}"></script>
   <!-- @xterm/addon-search -->
   <script nonce="${nonce}" src="${searchJs}"></script>
+  <!-- @xterm/addon-serialize -->
+  <script nonce="${nonce}" src="${serializeJs}"></script>
   <script nonce="${nonce}">
     (async () => {
       const vscode = acquireVsCodeApi();
@@ -375,6 +387,7 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
       });
       const fitAddon = new FitAddon.FitAddon();
       const searchAddon = new SearchAddon.SearchAddon();
+      const serializeAddon = new SerializeAddon.SerializeAddon();
       const webLinksAddon = new WebLinksAddon.WebLinksAddon((event, uri) => {
         if (event.metaKey || event.ctrlKey) {
           event.preventDefault();
@@ -401,6 +414,7 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
       terminal.loadAddon(fitAddon);
       terminal.loadAddon(searchAddon);
       terminal.loadAddon(webLinksAddon);
+      terminal.loadAddon(serializeAddon);
       terminal.open(terminalElement);
       fitAddon.fit();
       terminal.focus();
@@ -409,13 +423,18 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
         document.documentElement,
         { attributes: true, attributeFilter: ['class', 'data-vscode-theme-kind', 'data-vscode-theme-name'] },
       );
-      const scrollbackLimit = 65536;
       const restoredState = vscode.getState() || {};
-      let scrollback = restoredState.scrollback || '';
       if (restoredState.scrollback) terminal.write(restoredState.scrollback);
-      function rememberScrollback(payload) {
-        scrollback = (scrollback + payload).slice(-scrollbackLimit);
-        vscode.setState({ scrollback });
+      // Snapshot the framebuffer (not the raw stream): replaying raw output
+      // re-triggers xterm's answers to device queries (e.g. \\x1b[c), which
+      // then reach the live pty as keystrokes. serialize() emits only buffer
+      // content, so it's always safe to replay.
+      let scrollbackTimer;
+      function rememberScrollback() {
+        clearTimeout(scrollbackTimer);
+        scrollbackTimer = setTimeout(() => {
+          vscode.setState({ scrollback: serializeAddon.serialize({ scrollback: 5000 }) });
+        }, 500);
       }
       terminal.onData((payload) => vscode.postMessage({ type: 'input', payload }));
       terminal.element.addEventListener('focusin', () => vscode.postMessage({ type: 'focused' }));
@@ -517,8 +536,8 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
       window.addEventListener('message', async (event) => {
         const message = event.data;
         if (message.type === 'data') {
-          rememberScrollback(message.payload);
           terminal.write(message.payload);
+          rememberScrollback();
         }
         if (message.type === 'config') {
           await warmFonts(message.payload.fontFamily, message.payload.fontSize);
