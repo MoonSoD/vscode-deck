@@ -1,7 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('fix-path', () => ({ default: () => undefined }));
-
 const vscodeState = vi.hoisted(() => ({
   addProjectArgs: undefined as unknown[] | undefined,
   addTerminalArgs: undefined as unknown[] | undefined,

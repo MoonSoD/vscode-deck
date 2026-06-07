@@ -92,21 +92,8 @@ the editor tab and how reload is handled.
    via node-pty. The `-A` flag makes the call idempotent: create on
    first open, attach on every subsequent open of the same URI. The
    `-L deck -f resources/deck.conf` prefix is the same `TmuxCli` flag
-   convention used everywhere else in Deck (src/terminal/tmuxCli.ts:128).
-
-   **PATH at activation.** VS Code's extension host on macOS GUI launch
-   frequently inherits a stripped `PATH` (`/usr/bin:/bin:/usr/sbin:/sbin`)
-   that doesn't include Homebrew, so `posix_spawnp('tmux', …)` from
-   node-pty fails with `ENOENT` (and `execFile` fails identically). The
-   `activate()` entrypoint calls `fix-path` (npm package, sindresorhus)
-   *before* any spawn. `fix-path` invokes the user's `$SHELL` as a login
-   shell once to read its `PATH`, then mutates `process.env.PATH` in
-   place — the same mechanism VS Code itself uses in
-   `src/vs/platform/shell/node/shellEnv.ts`, but reliable in our hands
-   because we don't depend on VS Code's resolution succeeding. All
-   subsequent spawns — tmux today, any other PATH-dependent tool Deck
-   adds later — inherit the resolved `PATH` for free. ~50–200ms cost at
-   activation; one-time.
+   convention used everywhere else in Deck (src/terminal/tmuxCli.ts:128);
+   bare `tmux` is never invoked.
 
 4. **Webview ↔ extension protocol.** Pure message schema:
 
@@ -276,6 +263,15 @@ the editor tab and how reload is handled.
   `TabSnapshotStore` is the source of truth across SwitchOperation;
   within a worktree, VS Code's native per-folder workspace storage is
   the source of truth. Two layers, clean handoff at switch boundary.
+
+- **node-pty's `spawn-helper` ships without the execute bit on darwin
+  prebuilds** ([microsoft/node-pty#850](https://github.com/microsoft/node-pty/issues/850)).
+  Mode is 0644 in the npm tarball; `posix_spawnp` rejects it with the
+  unhelpful message "posix_spawnp failed" — the failing binary is
+  node-pty's own helper, not whatever you asked it to spawn. The
+  symptom appears as a black terminal with no shell output. Worked
+  around by a `postinstall` script that `chmod +x`'s the helper. Drop
+  the workaround once upstream ships a fix.
 
 - **xterm.js is a native dep.** Adds `@xterm/xterm`,
   `@xterm/addon-fit`, `@xterm/addon-serialize`, `@xterm/addon-web-links`,

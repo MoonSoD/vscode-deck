@@ -35,14 +35,6 @@ import { tmuxPreflight } from './terminal/tmuxPreflight';
 import { SessionUriCodec } from './terminal/sessionUriCodec';
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
-  // VS Code's extension host on macOS GUI launch frequently inherits a
-  // stripped PATH that excludes Homebrew, breaking node-pty's posix_spawnp
-  // lookup of `tmux` and any other tool. fix-path resolves the user's real
-  // PATH from their login shell once and mutates process.env.PATH so every
-  // subsequent spawn — tmux, anything we add later — finds binaries normally.
-  const { default: fixPath } = await import('fix-path');
-  fixPath();
-
   const tmuxAvailability = await tmuxPreflight();
   await vscode.commands.executeCommand('setContext', 'deck.tmuxAvailable', tmuxAvailability.available);
   const tmuxConfigPath = join(context.extensionPath, 'resources', 'deck.conf');
