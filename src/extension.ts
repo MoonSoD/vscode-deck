@@ -82,7 +82,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     context.extensionUri,
     join(context.extensionPath, 'resources', 'deck.conf'),
   );
-  const openTerminal = new OpenTerminalCommand(tmux, terminalRegistry, {
+  const openTerminal = new OpenTerminalCommand({
     pendingTerminalOpens,
     switcher,
     terminalPanels: terminalEditorProvider,

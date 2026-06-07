@@ -25,7 +25,6 @@ vi.mock('vscode', () => ({
 }));
 
 import { OpenTerminalCommand } from '../src/terminal/openTerminalCommand';
-import { TerminalSessionRegistry } from '../src/terminal/terminalSessionRegistry';
 
 describe('OpenTerminalCommand', () => {
   beforeEach(() => {
@@ -34,12 +33,7 @@ describe('OpenTerminalCommand', () => {
   });
 
   it('opens a same-worktree terminal row as a Deck custom editor', async () => {
-    const tmux = {
-      attachShellArgs: vi.fn(),
-    };
-    const registry = new TerminalSessionRegistry();
-
-    await new OpenTerminalCommand(tmux, registry).run({
+    await new OpenTerminalCommand().run({
       terminal: { sessionName: 'wt-_work_alpha-main__term-1', windowName: 'zsh' },
       n: 1,
       worktreePath: '/work/alpha-main',
@@ -57,20 +51,15 @@ describe('OpenTerminalCommand', () => {
       { viewColumn: -1 },
     );
     expect(vscodeState.createTerminal).not.toHaveBeenCalled();
-    expect(tmux.attachShellArgs).not.toHaveBeenCalled();
   });
 
   it('focuses an existing custom-editor tab on re-click', async () => {
-    const tmux = {
-      attachShellArgs: vi.fn(),
-    };
     const panel = { reveal: vi.fn() };
-    const registry = new TerminalSessionRegistry();
     const terminalPanels = {
       panelFor: vi.fn(() => panel),
     };
 
-    await new OpenTerminalCommand(tmux, registry, { terminalPanels }).run({
+    await new OpenTerminalCommand({ terminalPanels }).run({
       terminal: { sessionName: 'wt-_work_alpha-main__term-1', windowName: 'zsh' },
       n: 1,
       worktreePath: '/work/alpha-main',
@@ -83,10 +72,6 @@ describe('OpenTerminalCommand', () => {
   });
 
   it('stores a pending intent and switches worktree for cross-worktree terminal clicks', async () => {
-    const tmux = {
-      attachShellArgs: vi.fn(),
-    };
-    const registry = new TerminalSessionRegistry();
     const pendingTerminalOpens = {
       set: vi.fn(async () => undefined),
     };
@@ -94,7 +79,7 @@ describe('OpenTerminalCommand', () => {
       switchTo: vi.fn(async () => undefined),
     };
 
-    await new OpenTerminalCommand(tmux, registry, { pendingTerminalOpens, switcher }).run({
+    await new OpenTerminalCommand({ pendingTerminalOpens, switcher }).run({
       terminal: { sessionName: 'wt-_work_beta-main__term-1', windowName: 'zsh' },
       n: 1,
       worktreePath: '/work/beta-main',

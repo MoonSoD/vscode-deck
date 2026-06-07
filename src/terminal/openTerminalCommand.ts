@@ -1,12 +1,7 @@
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { SessionUriCodec } from './sessionUriCodec';
-import { TerminalSessionRegistry } from './terminalSessionRegistry';
 import { terminalEditorViewType } from './terminalEditorProvider';
-
-export interface OpenTerminalTmuxCli {
-  attachShellArgs(session: string): string[];
-}
 
 interface TerminalNodeLike {
   terminal: {
@@ -41,8 +36,6 @@ interface OpenTerminalCommandOptions {
 
 export class OpenTerminalCommand {
   constructor(
-    private readonly tmux: OpenTerminalTmuxCli,
-    private readonly registry: TerminalSessionRegistry,
     private readonly options: OpenTerminalCommandOptions = {},
     private readonly sessionUriCodec: SessionUriCodec = new SessionUriCodec(),
   ) {}
