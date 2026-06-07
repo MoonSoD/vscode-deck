@@ -156,11 +156,12 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
     terminal.open(document.getElementById('terminal'));
     fitAddon.fit();
     terminal.focus();
+    const scrollbackLimit = 65536;
     const restoredState = vscode.getState() || {};
     let scrollback = restoredState.scrollback || '';
     if (restoredState.scrollback) terminal.write(restoredState.scrollback);
     function rememberScrollback(payload) {
-      scrollback = (scrollback + payload).slice(-65536);
+      scrollback = (scrollback + payload).slice(-scrollbackLimit);
       vscode.setState({ scrollback });
     }
     terminal.onData((payload) => vscode.postMessage({ type: 'input', payload }));

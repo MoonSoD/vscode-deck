@@ -108,10 +108,7 @@ describe('TerminalEditorProvider', () => {
     const firstPanel = panelStub();
     const duplicatePanel = panelStub();
     const firstBridge = bridgeStub();
-    const secondBridge = bridgeStub();
-    const bridgeFactory = vi.fn()
-      .mockReturnValueOnce(firstBridge)
-      .mockReturnValueOnce(secondBridge);
+    const bridgeFactory = vi.fn(() => firstBridge);
     const provider = new TerminalEditorProvider(
       { fsPath: '/extension' } as never,
       '/extension/resources/deck.conf',
@@ -128,6 +125,7 @@ describe('TerminalEditorProvider', () => {
     provider.resolveCustomEditor(document, duplicatePanel as never);
 
     expect(provider.panelFor('wt-_work_alpha-main__term-1')).toBe(firstPanel);
+    expect(firstPanel.reveal).toHaveBeenCalledOnce();
     expect(duplicatePanel.dispose).toHaveBeenCalledOnce();
     expect(bridgeFactory).toHaveBeenCalledOnce();
   });
@@ -151,7 +149,8 @@ describe('TerminalEditorProvider', () => {
     expect(panel.webview.html).toContain('vscode.getState()');
     expect(panel.webview.html).toContain('terminal.write(restoredState.scrollback)');
     expect(panel.webview.html).toContain('vscode.setState({ scrollback })');
-    expect(panel.webview.html).toContain('.slice(-65536)');
+    expect(panel.webview.html).toContain('const scrollbackLimit = 65536');
+    expect(panel.webview.html).toContain('.slice(-scrollbackLimit)');
   });
 });
 
