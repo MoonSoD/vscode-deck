@@ -382,7 +382,6 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
         // proposed API in xterm 6.
         allowProposedApi: true,
         cursorBlink: true,
-        convertEol: true,
         scrollback: 5000,
         theme: readVsCodeTheme(),
         fontFamily: initialConfig.fontFamily,
@@ -462,15 +461,7 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
 
       function copySelection() {
         const text = terminal.getSelection();
-        if (!text) return;
-        const textarea = document.createElement('textarea');
-        textarea.value = text;
-        textarea.style.position = 'fixed';
-        textarea.style.opacity = '0';
-        document.body.appendChild(textarea);
-        textarea.select();
-        document.execCommand('copy');
-        textarea.remove();
+        if (text) void navigator.clipboard.writeText(text);
       }
 
       async function pasteClipboard() {
@@ -498,7 +489,6 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
         searchAddon.findPrevious(findInput.value, findOptions);
       }
 
-      terminalElement.addEventListener('mouseup', copySelection);
       terminalElement.addEventListener('contextmenu', (event) => {
         event.preventDefault();
         contextMenu.style.left = event.clientX + 'px';
