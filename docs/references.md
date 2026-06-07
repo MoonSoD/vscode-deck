@@ -14,6 +14,7 @@ Reference repos live as **siblings** in `~/code/`. Local paths are tracked in `.
 | **superset** | Electron + own pty-daemon. The over-architected predecessor; reference for PTY/terminal-runtime patterns that vscode-deck's per-worktree terminals will need to handle. |
 | **vscode** | microsoft/vscode source. Reference for VS Code API internals — verifying contribution-point gates (e.g. `secondarySidebar`), built-in command names, and how VS Code itself implements tree views, view containers, and walkthroughs. |
 | **sanctel** | Tauri + tmux Arc-shaped workspace. Reference for per-worktree PTY/tmux persistence patterns and multi-context workspace UX (profiles / spaces / tabs / agent flows). |
+| **iterm2** | The canonical tmux control-mode (`-C`) client. Reference for the protocol handling behind ADR-0012: reply correlation, %output decoding, history seeding, flow control. |
 
 ## By subsystem
 
@@ -53,6 +54,14 @@ tree hierarchy. |
 | `sanctel:src-tauri/src/` | tmux-backed PTY persistence wired to a workspace shell. Lighter-weight alternative to `superset`'s pty-daemon. |
 | `sanctel:src/` | Profiles / spaces / tabs UX over a workspace surface — adjacent UX for multi-worktree agent flows. |
 
+### tmux control mode (ADR-0012 transport)
+
+| File | What it teaches |
+|---|---|
+| `iterm2:sources/tmux/TmuxGateway.m` | Control-mode protocol parsing: %begin/%end/%error correlation, %output octal decoding, notification dispatch, %pause/%continue flow control. The battle-tested counterpart to `TmuxControlClient`. |
+| `iterm2:sources/tmux/TmuxController.m` | Session/window lifecycle over the gateway: attach/detach, resize strategy (`window-size` handling), command batching. |
+| `iterm2:sources/tmux/TmuxHistoryParser.m` | Seeding scrollback from tmux history into the terminal buffer — iTerm2's equivalent of our capture-pane seed. |
+
 ## Cloning fresh
 
 These are not vendored. Clone as siblings of `vscode-deck/`:
@@ -66,4 +75,5 @@ git clone --depth 1 https://github.com/jhhtaylor/Tabstronaut tabstronaut
 git clone --depth 1 git@github.com:superset-sh/superset.git
 git clone --depth 1 https://github.com/microsoft/vscode
 git clone --depth 1 git@github.com:sanctel/sanctel.git
+git clone --depth 1 https://github.com/gnachman/iTerm2 iterm2
 ```

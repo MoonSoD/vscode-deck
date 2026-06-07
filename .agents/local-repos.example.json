@@ -6,6 +6,7 @@
     "vscode-project-manager": "../vscode-project-manager",
     "tabstronaut": "../tabstronaut",
     "vscode": "../vscode",
-    "sanctel": "../sanctel"
+    "sanctel": "../sanctel",
+    "iterm2": "../iterm2"
   }
 }
