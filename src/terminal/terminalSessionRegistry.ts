@@ -35,6 +35,12 @@ export class TerminalSessionRegistry {
     const terminal = this.terminals.get(session);
     if (!terminal) return;
     if (vscode.window.activeTerminal !== (terminal as unknown as vscode.Terminal)) return;
+    // Skip the no-op rename. During Cmd+Q restoration VS Code sequentially
+    // activates each restored tab to wire up its renderer, firing
+    // onDidChangeActiveTerminal for each one. If the saved name already
+    // matches the target format, firing renameWithArg adds command-bus
+    // traffic and visual label re-renders for no gain.
+    if ((terminal as unknown as vscode.Terminal).name === name) return;
     try {
       await vscode.commands.executeCommand('workbench.action.terminal.renameWithArg', { name });
     } catch {
