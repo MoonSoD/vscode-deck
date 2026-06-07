@@ -11,7 +11,6 @@ import {
   terminalWorktreePrefix,
 } from '../terminal/tmuxSafe';
 import type { TmuxSession } from '../terminal/tmuxCli';
-import type { TerminalLike, TerminalSessionRegistry } from '../terminal/terminalSessionRegistry';
 import {
   CachedTerminalSession,
   TerminalSessionListCacheStore,
@@ -117,7 +116,6 @@ class TmuxUnavailableNode extends vscode.TreeItem {
 export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
   private readonly _onDidChangeTreeData = new vscode.EventEmitter<Node | undefined>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
-  private revealNode: ((node: vscode.TreeItem) => Promise<void> | void) | undefined;
   private activeProjectCommonDir: string | null = null;
   private resolvingActiveProject = false;
   private readonly projectCommonDirs = new Map<string, string | null>();
@@ -145,7 +143,6 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
       get: () => undefined,
       set: async () => undefined,
     },
-    private readonly terminalRegistry?: Pick<TerminalSessionRegistry, 'findSession' | 'renameIfActive'>,
   ) {
     if (typeof tmuxOrAvailable === 'boolean') {
       this.tmux = { listSessions: async () => [] };
@@ -164,10 +161,6 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
 
   getTreeItem(element: Node): vscode.TreeItem {
     return element;
-  }
-
-  setRevealNode(revealNode: (node: vscode.TreeItem) => Promise<void> | void): void {
-    this.revealNode = revealNode;
   }
 
   getParent(_element: Node): Node | undefined {
@@ -339,66 +332,12 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
         const terminals = toCachedTerminalSessions(element.worktree.path, sessions);
         if (sameTerminals(previous, terminals)) return;
         await this.terminalSessionListCache.set(cacheKey, terminals);
-        this.dispatchRenamesForWindowNameDiffs(previous, terminals);
         this._onDidChangeTreeData.fire(undefined);
       })
       .catch(() => undefined)
       .finally(() => {
         this.refreshingTerminals.delete(prefix);
       });
-  }
-
-  private dispatchRenamesForWindowNameDiffs(
-    previous: readonly CachedTerminalSession[],
-    next: readonly CachedTerminalSession[],
-  ): void {
-    if (!this.terminalRegistry) return;
-    const prev = new Map(previous.map((t) => [t.sessionName, t]));
-    for (const t of next) {
-      const before = prev.get(t.sessionName);
-      if (before && before.windowName === t.windowName) continue;
-      void this.terminalRegistry.renameIfActive(t.sessionName, `${t.n} ${t.windowName}`);
-    }
-  }
-
-  handleActiveTerminalChange(terminal: TerminalLike): void {
-    if (!this.terminalRegistry) return;
-    const session = this.terminalRegistry.findSession(terminal);
-    if (!session) return;
-    // Rename to the currently-cached label so a tab that drifted while
-    // unfocused snaps into sync the moment the user focuses it. The
-    // subsequent tree refresh's diff path also covers the case where the
-    // cache itself is stale.
-    const cached = this.findCachedTerminal(session);
-    if (cached) {
-      this.revealCachedTerminal(cached);
-      void this.terminalRegistry.renameIfActive(session, `${cached.n} ${cached.windowName}`);
-    }
-    this.refresh();
-  }
-
-  private revealCachedTerminal(terminal: CachedTerminalSession): void {
-    if (!this.revealNode) return;
-    const worktreePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-    if (!worktreePath) return;
-    try {
-      // Reveal targets a node by id; the active flag only affects context
-      // menus, irrelevant for reveal — pass true to satisfy the type.
-      void Promise.resolve(this.revealNode(new TerminalNode(terminal, terminal.n, worktreePath, true))).catch(() => undefined);
-    } catch {
-      // Reveal is best-effort; rename and refresh must still run.
-    }
-  }
-
-  private findCachedTerminal(sessionName: string): CachedTerminalSession | undefined {
-    // Session name encodes its cache key: `wt-<sanitized(path)>__term-<N>`
-    // → cache key `wt-<sanitized(path)>__`. One store lookup, no cross-store
-    // traversal.
-    const sep = sessionName.lastIndexOf('__term-');
-    if (sep === -1) return undefined;
-    const cacheKey = sessionName.substring(0, sep + 2);
-    const terminals = this.terminalSessionListCache.get(cacheKey);
-    return terminals?.find((t) => t.sessionName === sessionName);
   }
 
   private toTerminalNodes(element: WorktreeNode, terminals: readonly CachedTerminalSession[]): Node[] {

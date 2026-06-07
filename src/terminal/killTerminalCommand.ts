@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
 import { SessionUriCodec } from './sessionUriCodec';
 import type { TerminalSessionListCacheStore } from './terminalSessionListCacheStore';
-import type { TerminalSessionRegistry } from './terminalSessionRegistry';
 import { terminalEditorViewType } from './terminalEditorProvider';
 
 export interface CloseTerminalTmuxCli {
@@ -17,7 +16,6 @@ interface TerminalNodeLike {
 export class CloseTerminalCommand {
   constructor(
     private readonly tmux: CloseTerminalTmuxCli,
-    private readonly registry: Pick<TerminalSessionRegistry, 'getTerminal' | 'deleteSession'>,
     private readonly refresh: () => void = () => undefined,
     private readonly terminalSessionListCache: Pick<TerminalSessionListCacheStore, 'removeSession'> = {
       removeSession: async () => undefined,
@@ -31,9 +29,6 @@ export class CloseTerminalCommand {
     const session = node.terminal.sessionName;
     await this.tmux.killSession(session);
     await this.terminalSessionListCache.removeSession(session);
-    const terminal = this.registry.getTerminal(session);
-    this.registry.deleteSession(session);
-    terminal?.dispose?.();
     await this.closeMatchingEditorTab(session);
     this.refresh();
   }

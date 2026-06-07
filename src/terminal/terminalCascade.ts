@@ -28,7 +28,6 @@ export class TerminalCascade {
     }
 
     await this.closeCustomEditorTabs(prefix);
-    this.disposeLegacyTerminals(worktreePath);
   }
 
   private async closeCustomEditorTabs(prefix: string): Promise<void> {
@@ -55,24 +54,4 @@ export class TerminalCascade {
       return undefined;
     }
   }
-
-  private disposeLegacyTerminals(worktreePath: string): void {
-    if (vscode.workspace.workspaceFolders?.[0]?.uri.fsPath !== worktreePath) return;
-
-    for (const terminal of vscode.window.terminals) {
-      if (!isLegacyDeckTerminalName(terminal.name)) continue;
-      try {
-        terminal.dispose();
-      } catch {
-        // Cascade cleanup is best-effort; removal must still proceed.
-      }
-    }
-  }
-}
-
-function isLegacyDeckTerminalName(name: string): boolean {
-  const match = /^(\d+)\s+\S+/.exec(name);
-  if (!match) return false;
-  const n = Number(match[1]);
-  return Number.isInteger(n);
 }

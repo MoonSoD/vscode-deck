@@ -17,7 +17,6 @@ import { WorktreeRootStore } from './worktree/worktreeRootStore';
 import { DeckTreeDragAndDropController } from './tree/deckTreeDragAndDropController';
 import { WorktreeOrderStore } from './worktree/worktreeOrderStore';
 import { AddTerminalCommand } from './terminal/addTerminalCommand';
-import { EditorTerminalHydrator } from './terminal/editorTerminalHydrator';
 import { CloseTerminalCommand } from './terminal/killTerminalCommand';
 import { OpenTerminalCommand } from './terminal/openTerminalCommand';
 import { OpenTerminalInNewWindowCommand } from './terminal/openTerminalInNewWindowCommand';
@@ -25,7 +24,6 @@ import { PendingTerminalOpenStore } from './terminal/pendingTerminalOpenStore';
 import { TabSnapshotStore } from './terminal/tabSnapshotStore';
 import { TerminalCascade } from './terminal/terminalCascade';
 import { TerminalEditorProvider, terminalEditorViewType } from './terminal/terminalEditorProvider';
-import { TerminalSessionRegistry } from './terminal/terminalSessionRegistry';
 import {
   type CachedTerminalSession,
   TerminalSessionListCacheStore,
@@ -55,14 +53,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const branchDeletionPreferences = new BranchDeletionPreferenceStore(context.globalState);
   const switcher = new WorktreeSwitcher(activeWorktrees, tabSnapshots);
   const detachedOpener = new DetachedOpener();
-  const terminalRegistry = new TerminalSessionRegistry();
-  const editorTerminalHydrator = new EditorTerminalHydrator(tmux, terminalRegistry);
-  const terminalOpenSubscription = vscode.window.onDidOpenTerminal((terminal) => {
-    void editorTerminalHydrator.hydrateOne(terminal);
-  });
-  if (tmuxAvailability.available) {
-    await editorTerminalHydrator.hydrateSnapshot(vscode.window.terminals);
-  }
   const tree = new ProjectTreeProvider(
     projectRegistry,
     activeWorktrees,
@@ -72,7 +62,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     tmux,
     tmuxAvailability.available,
     terminalSessionListCache,
-    terminalRegistry,
   );
   const addTerminal = new AddTerminalCommand(
     tmux,
@@ -99,7 +88,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const openTerminalInNewWindow = new OpenTerminalInNewWindowCommand(pendingTerminalOpens);
   const closeTerminal = new CloseTerminalCommand(
     tmux,
-    terminalRegistry,
     () => tree.refresh(),
     terminalSessionListCache,
   );
@@ -139,14 +127,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     treeDataProvider: tree,
     dragAndDropController,
     canSelectMany: false,
-  });
-  tree.setRevealNode(async (node) => {
-    try {
-      await treeView.reveal(node, { select: true, focus: false, expand: false });
-    } catch (error) {
-      // Best-effort only; focus must stay with the editor terminal.
-      console.warn('Deck: TreeView.reveal failed', error);
-    }
   });
   const addProject = new AddProjectCommand(
     new VsCodeProjectFolderPicker(),
@@ -202,32 +182,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       await switcher.switchTo(worktreePath);
       tree.refresh();
     }),
-    terminalRegistry,
     vscode.workspace.onDidChangeWorkspaceFolders(() => tree.refresh()),
     treeView.onDidChangeVisibility((event) => {
       if (event.visible) tree.refresh();
     }),
-    vscode.window.onDidChangeActiveTerminal((active) => {
-      if (!active) return;
-      tree.handleActiveTerminalChange(active);
-    }),
-    vscode.window.onDidCloseTerminal(async (terminal) => {
-      const session = terminalRegistry.findSession(terminal);
-      if (!session) return;
-      // Only kill on deliberate close. Window reloads (worktree switches,
-      // extension host restarts) dispose all editor terminals with
-      // reason=Shutdown — killing them there would cascade-destroy every
-      // tmux session on every switch, defeating reattach.
-      if (terminal.exitStatus?.reason !== vscode.TerminalExitReason.User) {
-        terminalRegistry.deleteSession(session);
-        return;
-      }
-      await tmux.killSession(session);
-      await terminalSessionListCache.removeSession(session);
-      terminalRegistry.deleteSession(session);
-      tree.refresh();
-    }),
-    terminalOpenSubscription,
   );
   if (tmuxAvailability.available) {
     await tabSnapshots.restore();

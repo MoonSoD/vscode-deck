@@ -72,7 +72,7 @@ describe('TerminalCascade', () => {
     expect(tmux.killSession).toHaveBeenCalledTimes(2);
   });
 
-  it('kills sessions before closing matching custom-editor tabs and legacy terminals', async () => {
+  it('kills sessions before closing matching custom-editor tabs only', async () => {
     const tmux = {
       listSessions: vi.fn(async () => [
         { sessionName: 'wt-_repo_feature__term-1', windowName: 'zsh' },
@@ -112,12 +112,9 @@ describe('TerminalCascade', () => {
     expect(tmux.killSession).toHaveBeenCalledTimes(2);
     expect(vscodeState.closeTab).toHaveBeenCalledWith(matchingTab);
     expect(vscodeState.closeTab).not.toHaveBeenCalledWith(otherTab);
-    expect(legacyTerminal.dispose).toHaveBeenCalledOnce();
+    expect(legacyTerminal.dispose).not.toHaveBeenCalled();
     expect(otherLegacyTerminal.dispose).not.toHaveBeenCalled();
     expect(vscodeState.closeTab.mock.invocationCallOrder[0]).toBeGreaterThan(
-      tmux.killSession.mock.invocationCallOrder[1],
-    );
-    expect(legacyTerminal.dispose.mock.invocationCallOrder[0]).toBeGreaterThan(
       tmux.killSession.mock.invocationCallOrder[1],
     );
   });
