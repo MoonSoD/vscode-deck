@@ -168,7 +168,6 @@ vi.mock('../src/project/projectRemovalCommand', () => ({
 vi.mock('../src/tree/projectTree', () => ({
   ProjectTreeProvider: class {
     refresh = vi.fn();
-    forgetTerminal = vi.fn();
     getChildren = vi.fn(() => [{ projectPath: '/settings/repo' }]);
 
     constructor(...args: unknown[]) {
@@ -462,7 +461,6 @@ describe('activate', () => {
     await Promise.resolve();
 
     expect(vscodeState.tmuxInstances[0].killSession).toHaveBeenCalledWith('wt-_work_repo__term-1');
-    expect(vscodeState.projectTreeInstances[0].forgetTerminal).toHaveBeenCalledWith('wt-_work_repo__term-1');
     expect(vscodeState.projectTreeInstances[0].refresh).toHaveBeenCalledOnce();
   });
 

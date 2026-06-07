@@ -326,45 +326,6 @@ describe('ProjectTreeProvider', () => {
     expect(tmux.listSessions).toHaveBeenCalledWith('wt-_work_alpha-main__term-');
   });
 
-  it('suppresses a just-closed terminal until tmux finishes reaping it', async () => {
-    vi.useFakeTimers();
-    try {
-      vi.setSystemTime(0);
-      const tmux = {
-        // tmux keeps reporting term-2 for a moment after it is closed (reap delay)
-        listSessions: vi.fn(async () => [
-          { sessionName: 'wt-_work_alpha-main__term-1', windowName: 'zsh' },
-          { sessionName: 'wt-_work_alpha-main__term-2', windowName: 'claude' },
-        ]),
-      };
-      const provider = new ProjectTreeProvider(
-        registry(['/work/alpha-main']),
-        { get: vi.fn() } as unknown as ActiveWorktreeStore,
-        { get: vi.fn() } as unknown as WorktreeOrderStore,
-        { get: vi.fn(), set: vi.fn(async () => undefined) } as unknown as WorktreeListCacheStore,
-        { get: vi.fn(() => '/git/alpha'), set: vi.fn(async () => undefined) } as unknown as ProjectCommonDirCache,
-        tmux,
-        true,
-      );
-      const projects = provider.getChildren();
-      if (!Array.isArray(projects)) throw new Error('expected sync project roots');
-      const worktrees = await provider.getChildren(projects[0]);
-      if (!Array.isArray(worktrees)) throw new Error('expected worktree children');
-
-      // term-2 just closed; tmux still reports it mid-reap → must not show a ghost row
-      provider.forgetTerminal('wt-_work_alpha-main__term-2');
-      const rows = (await provider.getChildren(worktrees[0])) as Array<{ label: string }>;
-      expect(rows.map((row) => row.label)).toEqual(['1 zsh']);
-
-      // once the tombstone expires, a session tmux still reports is shown again
-      vi.setSystemTime(2001);
-      const later = (await provider.getChildren(worktrees[0])) as Array<{ label: string }>;
-      expect(later.map((row) => row.label)).toEqual(['1 zsh', '2 claude']);
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
   it('marks terminals in the current workspace folder as active', async () => {
     const tmux = {
       listSessions: vi.fn(async () => [

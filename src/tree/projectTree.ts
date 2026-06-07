@@ -27,11 +27,6 @@ import {
 
 type Node = ProjectNode | WorktreeNode | TerminalNode | TerminalAddNode | TmuxUnavailableNode;
 
-// How long a closed session stays tombstoned — comfortably longer than tmux's
-// session reap delay (~250ms observed), short enough to never collide with a
-// genuinely new terminal.
-const TERMINAL_TOMBSTONE_TTL_MS = 2000;
-
 interface TerminalSessionLister {
   listSessions(prefix?: string): Promise<TmuxSession[]>;
 }
@@ -127,13 +122,6 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
   private readonly resolvingProjectPaths = new Set<string>();
   private readonly refreshingWorktrees = new Set<string>();
   private readonly refreshingTerminals = new Set<string>();
-  // Sessions Deck has authoritatively closed, kept until tmux finishes reaping
-  // them (~250ms). A background list-sessions running inside that window still
-  // sees the dead session and would otherwise write it back into the cache,
-  // resurrecting a ghost row. Tombstoned names are filtered out of every
-  // list-sessions result until they expire. Safe because new terminals always
-  // get a fresh term-N name, so a tombstoned name is never legitimately reused.
-  private readonly closedTerminalTombstones = new Map<string, number>();
   private readonly tmux: TerminalSessionLister;
   private readonly tmuxAvailable: boolean;
 
@@ -169,26 +157,6 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
   refresh(): void {
     this.resolveActiveProject();
     this._onDidChangeTreeData.fire(undefined);
-  }
-
-  // Call when a terminal session is closed on purpose (tab disposed, killed):
-  // suppresses its row until tmux finishes reaping it, so a mid-reap
-  // list-sessions cannot resurrect it as a ghost row.
-  forgetTerminal(sessionName: string): void {
-    this.closedTerminalTombstones.set(sessionName, Date.now() + TERMINAL_TOMBSTONE_TTL_MS);
-  }
-
-  private withoutTombstoned(
-    terminals: readonly CachedTerminalSession[],
-  ): CachedTerminalSession[] {
-    if (this.closedTerminalTombstones.size > 0) {
-      const now = Date.now();
-      for (const [name, expiry] of this.closedTerminalTombstones) {
-        if (expiry <= now) this.closedTerminalTombstones.delete(name);
-      }
-    }
-    if (this.closedTerminalTombstones.size === 0) return [...terminals];
-    return terminals.filter((terminal) => !this.closedTerminalTombstones.has(terminal.sessionName));
   }
 
   getTreeItem(element: Node): vscode.TreeItem {
@@ -342,8 +310,9 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
     prefix: string,
     cacheKey: string,
   ): Promise<Node[]> {
-    const terminals = this.withoutTombstoned(
-      toCachedTerminalSessions(element.worktree.path, await this.tmux.listSessions(prefix)),
+    const terminals = toCachedTerminalSessions(
+      element.worktree.path,
+      await this.tmux.listSessions(prefix),
     );
     await this.terminalSessionListCache.set(cacheKey, terminals);
     return this.toTerminalNodes(element, terminals);
@@ -360,9 +329,7 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
     void this.tmux
       .listSessions(prefix)
       .then(async (sessions) => {
-        const terminals = this.withoutTombstoned(
-          toCachedTerminalSessions(element.worktree.path, sessions),
-        );
+        const terminals = toCachedTerminalSessions(element.worktree.path, sessions);
         if (sameTerminals(previous, terminals)) return;
         await this.terminalSessionListCache.set(cacheKey, terminals);
         this._onDidChangeTreeData.fire(undefined);

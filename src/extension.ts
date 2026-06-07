@@ -78,9 +78,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     async (sessionName) => {
       await tmux.killSession(sessionName);
       await terminalSessionListCache.removeSession(sessionName);
-      // tmux keeps listing the session for ~250ms after it dies; tombstone it
-      // so a mid-reap background list-sessions can't resurrect a ghost row.
-      tree.forgetTerminal(sessionName);
       tree.refresh();
     },
   );
