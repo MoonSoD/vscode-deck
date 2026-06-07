@@ -11,6 +11,7 @@ const vscodeState = vi.hoisted(() => ({
 }));
 
 vi.mock('vscode', () => ({
+  ViewColumn: { Active: -1 },
   window: {
     createTerminal: vscodeState.createTerminal,
     get tabGroups() {
@@ -225,6 +226,7 @@ describe('EditorTerminalHydrator', () => {
       name: '1 zsh',
       shellPath: 'tmux',
       shellArgs: ['attach-session', '-t', '=wt-_work_repo__term-1'],
+      location: { viewColumn: -1 },
     });
     expect(vscodeState.executeCommand).not.toHaveBeenCalled();
     expect(events).toEqual(['dispose', 'create']);

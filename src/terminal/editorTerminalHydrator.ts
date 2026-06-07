@@ -110,16 +110,25 @@ export class EditorTerminalHydrator {
   ): Promise<void> {
     const originalPos = findTabPosition(terminal);
     if (originalPos === undefined) {
-      // Panel/no-group terminal: no editor strip slot to preserve, so the
-      // "only tab in column" footgun that motivates create-before-dispose
-      // doesn't apply. Dispose first.
+      // No editor strip slot found (the tab isn't in tabGroups.all yet —
+      // common during activate when restoration hasn't fully wired tabs to
+      // groups, or the tab is genuinely panel-located). Dispose first; the
+      // "only tab in column" footgun doesn't apply when there's no column.
       terminal.dispose?.();
     }
+    // Always target the editor area. Omitting `location` would make VS Code
+    // honor `terminal.integrated.defaultLocation` ("view" by default = panel),
+    // which silently relocates the recreated terminal out of the editor strip
+    // — the bug that surfaced as "after cross-worktree click, my tabs ended
+    // up in the panel".
+    const location: vscode.TerminalEditorLocationOptions = {
+      viewColumn: originalPos?.viewColumn ?? vscode.ViewColumn.Active,
+    };
     const options: vscode.TerminalOptions = {
       name: terminal.name,
       shellPath: 'tmux',
       shellArgs: this.tmux.attachShellArgs(sessionName),
-      ...(originalPos === undefined ? {} : { location: { viewColumn: originalPos.viewColumn } }),
+      location,
     };
     const recreated = vscode.window.createTerminal(options) as HydratableTerminal;
     if (originalPos !== undefined) {
