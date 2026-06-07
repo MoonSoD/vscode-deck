@@ -24,7 +24,6 @@ import { PendingTerminalOpenStore } from './terminal/pendingTerminalOpenStore';
 import { TabSnapshotStore } from './terminal/tabSnapshotStore';
 import { TerminalCascade } from './terminal/terminalCascade';
 import { TerminalEditorProvider, terminalEditorViewType } from './terminal/terminalEditorProvider';
-import { TerminalPtyBridge } from './terminal/terminalPtyBridge';
 import {
   type CachedTerminalSession,
   TerminalSessionListCacheStore,
@@ -36,11 +35,18 @@ import { tmuxPreflight } from './terminal/tmuxPreflight';
 import { SessionUriCodec } from './terminal/sessionUriCodec';
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
+  // VS Code's extension host on macOS GUI launch frequently inherits a
+  // stripped PATH that excludes Homebrew, breaking node-pty's posix_spawnp
+  // lookup of `tmux` and any other tool. fix-path resolves the user's real
+  // PATH from their login shell once and mutates process.env.PATH so every
+  // subsequent spawn — tmux, anything we add later — finds binaries normally.
+  const { default: fixPath } = await import('fix-path');
+  fixPath();
+
   const tmuxAvailability = await tmuxPreflight();
   await vscode.commands.executeCommand('setContext', 'deck.tmuxAvailable', tmuxAvailability.available);
   const tmuxConfigPath = join(context.extensionPath, 'resources', 'deck.conf');
-  const tmuxBinary = tmuxAvailability.binaryPath ?? 'tmux';
-  const tmux = new TmuxCli(tmuxConfigPath, undefined, tmuxBinary);
+  const tmux = new TmuxCli(tmuxConfigPath);
 
   const projectRegistry = new ProjectRegistryStore(context.globalState);
   await migrateProjects(projectRegistry);
@@ -76,7 +82,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     context.extensionUri,
     tmuxConfigPath,
     undefined,
-    () => new TerminalPtyBridge(tmuxConfigPath, undefined, tmuxBinary),
+    undefined,
     async (sessionName) => {
       await tmux.killSession(sessionName);
       await terminalSessionListCache.removeSession(sessionName);

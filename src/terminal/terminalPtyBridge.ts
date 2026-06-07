@@ -30,7 +30,6 @@ export class TerminalPtyBridge {
   constructor(
     private readonly configPath: string,
     private readonly factory: PtyFactory = nodePtyFactory,
-    private readonly binaryPath: string = 'tmux',
   ) {}
 
   start(sessionName: string, cwd: string, cols: number, rows: number): void {
@@ -38,7 +37,7 @@ export class TerminalPtyBridge {
     const size = this.pendingSize ?? { cols, rows };
     this.pendingSize = undefined;
 
-    this.pty = this.factory.spawn(this.binaryPath, [
+    this.pty = this.factory.spawn('tmux', [
       '-L',
       'deck',
       '-f',

@@ -85,8 +85,8 @@ the editor tab and how reload is handled.
    that spawns
 
    ```
-   <tmuxBinary> -L deck -f resources/deck.conf \
-                new-session -A -s <sessionName> -c <worktreePath>
+   tmux -L deck -f resources/deck.conf \
+        new-session -A -s <sessionName> -c <worktreePath>
    ```
 
    via node-pty. The `-A` flag makes the call idempotent: create on
@@ -94,15 +94,19 @@ the editor tab and how reload is handled.
    `-L deck -f resources/deck.conf` prefix is the same `TmuxCli` flag
    convention used everywhere else in Deck (src/terminal/tmuxCli.ts:128).
 
-   `<tmuxBinary>` is resolved at activation by `tmuxPreflight`, not at
-   spawn time. VS Code's extension host on macOS GUI launch frequently
-   inherits a stripped `PATH` (`/usr/bin:/bin:/usr/sbin:/sbin`) that
-   doesn't include Homebrew, so `posix_spawnp('tmux', …)` from node-pty
-   fails with `ENOENT`. Preflight tries the bare name first (preferring a
-   working `PATH`), then falls through to `/opt/homebrew/bin/tmux`,
-   `/usr/local/bin/tmux`, `/usr/bin/tmux`. The resolved absolute path is
-   threaded into both `TmuxCli` and `TerminalPtyBridge` so every Deck-
-   issued spawn bypasses `PATH` lookup entirely.
+   **PATH at activation.** VS Code's extension host on macOS GUI launch
+   frequently inherits a stripped `PATH` (`/usr/bin:/bin:/usr/sbin:/sbin`)
+   that doesn't include Homebrew, so `posix_spawnp('tmux', …)` from
+   node-pty fails with `ENOENT` (and `execFile` fails identically). The
+   `activate()` entrypoint calls `fix-path` (npm package, sindresorhus)
+   *before* any spawn. `fix-path` invokes the user's `$SHELL` as a login
+   shell once to read its `PATH`, then mutates `process.env.PATH` in
+   place — the same mechanism VS Code itself uses in
+   `src/vs/platform/shell/node/shellEnv.ts`, but reliable in our hands
+   because we don't depend on VS Code's resolution succeeding. All
+   subsequent spawns — tmux today, any other PATH-dependent tool Deck
+   adds later — inherit the resolved `PATH` for free. ~50–200ms cost at
+   activation; one-time.
 
 4. **Webview ↔ extension protocol.** Pure message schema:
 
