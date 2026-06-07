@@ -167,6 +167,19 @@ describe('TmuxControlClient', () => {
     ]);
   });
 
+  it('clears tmux history for the discovered pane', async () => {
+    const child = fakeChild();
+    const client = new TmuxControlClient('/ext/resources/deck.conf', vi.fn(() => child));
+    await startClient(client, child);
+
+    const cleared = client.clearHistory();
+    await untilWrites(child, 3);
+    expect(child.writes.at(-1)).toBe('clear-history -t %0\n');
+
+    child.emitStdout('%begin 1 4 1\n%end 1 4 1\n');
+    await expect(cleared).resolves.toBeUndefined();
+  });
+
   it('treats body lines that mimic %end as content when their numbers mismatch', async () => {
     const child = fakeChild();
     const client = new TmuxControlClient('/ext/resources/deck.conf', vi.fn(() => child));

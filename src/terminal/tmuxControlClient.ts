@@ -135,6 +135,11 @@ export class TmuxControlClient {
     await this.command(`refresh-client -C ${cols}x${rows}`);
   }
 
+  async clearHistory(): Promise<void> {
+    if (!this.paneId) throw new Error('tmux control client has not started');
+    await this.command(`clear-history -t ${this.paneId}`);
+  }
+
   async capturePane(lines: number): Promise<string> {
     return this.command(`capture-pane -p -e -q -J -N -S -${lines}`);
   }

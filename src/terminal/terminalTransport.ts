@@ -7,6 +7,7 @@ export interface TmuxControlClientLike {
   onExit(handler: (code: number | null) => void): { dispose(): void };
   sendKeys(data: string): Promise<void> | void;
   resize(cols: number, rows: number): Promise<void> | void;
+  clearHistory(): Promise<void> | void;
   kill(): void;
 }
 
@@ -94,6 +95,10 @@ export class TerminalTransport {
     }
 
     void Promise.resolve(this.client.resize(cols, rows)).catch(() => undefined);
+  }
+
+  clearHistory(): void {
+    void Promise.resolve(this.client?.clearHistory()).catch(() => undefined);
   }
 
   dispose(): void {

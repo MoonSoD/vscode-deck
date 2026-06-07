@@ -39,6 +39,10 @@ interface FocusedMessage {
   type: 'focused';
 }
 
+interface ClearHistoryMessage {
+  type: 'clearHistory';
+}
+
 interface TerminalConfig {
   fontFamily: string;
   fontSize: number;
@@ -50,12 +54,14 @@ type TerminalWebviewMessage =
   | OpenExternalMessage
   | ResizeMessage
   | ExitMessage
-  | FocusedMessage;
+  | FocusedMessage
+  | ClearHistoryMessage;
 
 export interface TerminalTransportLike {
   start(sessionName: string, cwd: string, cols: number, rows: number): void;
   write(data: string): void;
   resize(cols: number, rows: number): void;
+  clearHistory(): void;
   onData(handler: (data: string) => void): { dispose(): void };
   onExit(handler: (code: number) => void): { dispose(): void };
   dispose(): void;
@@ -156,6 +162,7 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
           void vscode.env.openExternal(vscode.Uri.parse(message.payload));
         }
         if (message.type === 'resize') transport.resize(message.cols, message.rows);
+        if (message.type === 'clearHistory') transport.clearHistory();
         if (message.type === 'focused') this.activePanel = panel;
         if (message.type === 'exit') panel.dispose();
       }),
@@ -534,7 +541,13 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
         if (action === 'copy') copySelection();
         if (action === 'paste') void pasteClipboard();
         if (action === 'select-all') terminal.selectAll();
-        if (action === 'clear') terminal.clear();
+        if (action === 'clear') {
+          terminal.clear();
+          // Also clear tmux's scrollback so the clear survives reload/reattach
+          // (the seed comes from capture-pane); otherwise it reseeds the
+          // "cleared" content. Mirrors iTerm2's clear -> tmux clear-history.
+          vscode.postMessage({ type: 'clearHistory' });
+        }
         hideContextMenu();
       });
       findInput.addEventListener('input', findNext);

@@ -40,6 +40,7 @@ function bridge() {
     start: vi.fn(),
     write: vi.fn(),
     resize: vi.fn(),
+    clearHistory: vi.fn(),
     onData: vi.fn(() => ({ dispose: vi.fn() })),
     onExit: vi.fn(() => ({ dispose: vi.fn() })),
     dispose: vi.fn(),
@@ -270,6 +271,7 @@ describe('TerminalEditorProvider', () => {
       start: vi.fn(),
       write: vi.fn(),
       resize: vi.fn(),
+      clearHistory: vi.fn(),
       onData: vi.fn(() => ({ dispose: vi.fn() })),
       onExit: vi.fn(() => ({ dispose: vi.fn() })),
       dispose: vi.fn(),
@@ -288,8 +290,12 @@ describe('TerminalEditorProvider', () => {
 
     provider.resolveCustomEditor(document, panel as never);
     receiveMessage?.({ type: 'resize', cols: 132, rows: 41 });
+    receiveMessage?.({ type: 'clearHistory' });
 
     expect(bridge.resize).toHaveBeenCalledWith(132, 41);
+    // Clear must reach tmux (clear-history) so it survives reload, not just
+    // clear the local xterm buffer.
+    expect(bridge.clearHistory).toHaveBeenCalledOnce();
   });
 
   it('does not use webview scrollback snapshots and renders a debounced fit resize observer before ready', () => {

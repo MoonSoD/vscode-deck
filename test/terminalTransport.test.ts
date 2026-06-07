@@ -28,12 +28,14 @@ describe('TerminalTransport', () => {
     client.emitOutput('hello');
     transport.write('ls\n');
     transport.resize(100, 40);
+    transport.clearHistory();
     client.emitExit(7);
     transport.dispose();
 
     expect(data).toHaveBeenCalledWith('hello');
     expect(client.sendKeys).toHaveBeenCalledWith('ls\n');
     expect(client.resize).toHaveBeenLastCalledWith(100, 40);
+    expect(client.clearHistory).toHaveBeenCalledOnce();
     expect(exit).toHaveBeenCalledWith(7);
     expect(client.kill).toHaveBeenCalledOnce();
   });
@@ -189,6 +191,7 @@ function fakeClient() {
     start: vi.fn(),
     sendKeys: vi.fn(),
     resize: vi.fn(),
+    clearHistory: vi.fn(),
     onOutput: vi.fn((handler: (data: string) => void) => {
       outputHandler = handler;
       return { dispose: vi.fn() };
