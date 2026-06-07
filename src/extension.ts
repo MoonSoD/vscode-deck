@@ -24,6 +24,7 @@ import { PendingTerminalOpenStore } from './terminal/pendingTerminalOpenStore';
 import { TabSnapshotStore } from './terminal/tabSnapshotStore';
 import { TerminalCascade } from './terminal/terminalCascade';
 import { TerminalEditorProvider, terminalEditorViewType } from './terminal/terminalEditorProvider';
+import { TerminalPtyBridge } from './terminal/terminalPtyBridge';
 import {
   type CachedTerminalSession,
   TerminalSessionListCacheStore,
@@ -35,9 +36,11 @@ import { tmuxPreflight } from './terminal/tmuxPreflight';
 import { SessionUriCodec } from './terminal/sessionUriCodec';
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
-  const tmux = new TmuxCli(join(context.extensionPath, 'resources', 'deck.conf'));
   const tmuxAvailability = await tmuxPreflight();
   await vscode.commands.executeCommand('setContext', 'deck.tmuxAvailable', tmuxAvailability.available);
+  const tmuxConfigPath = join(context.extensionPath, 'resources', 'deck.conf');
+  const tmuxBinary = tmuxAvailability.binaryPath ?? 'tmux';
+  const tmux = new TmuxCli(tmuxConfigPath, undefined, tmuxBinary);
 
   const projectRegistry = new ProjectRegistryStore(context.globalState);
   await migrateProjects(projectRegistry);
@@ -71,9 +74,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   );
   const terminalEditorProvider = new TerminalEditorProvider(
     context.extensionUri,
-    join(context.extensionPath, 'resources', 'deck.conf'),
+    tmuxConfigPath,
     undefined,
-    undefined,
+    () => new TerminalPtyBridge(tmuxConfigPath, undefined, tmuxBinary),
     async (sessionName) => {
       await tmux.killSession(sessionName);
       await terminalSessionListCache.removeSession(sessionName);

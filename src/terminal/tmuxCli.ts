@@ -40,16 +40,17 @@ export class TmuxCli {
   constructor(
     private readonly configPath: string,
     private readonly runner: CommandRunner = new ExecFileCommandRunner(),
+    private readonly binaryPath: string = 'tmux',
   ) {}
 
   async version(): Promise<string> {
-    const result = await this.runner.run('tmux', ['-V']);
+    const result = await this.runner.run(this.binaryPath, ['-V']);
     if (result.code !== 0) throw new Error(result.stderr || 'tmux -V failed');
     return result.stdout.trim();
   }
 
   async hasSession(session: string): Promise<boolean> {
-    const result = await this.runner.run('tmux', [
+    const result = await this.runner.run(this.binaryPath, [
       ...this.baseArgs(),
       'has-session',
       '-t',
@@ -66,7 +67,7 @@ export class TmuxCli {
     // never update to `claude`. Default naming lets automatic-rename do its
     // job. Sanctel's phantom-window bug (which needed `-n`) doesn't apply
     // here because Deck's model is one-window-per-session forever.
-    const result = await this.runner.run('tmux', [
+    const result = await this.runner.run(this.binaryPath, [
       ...this.baseArgs(),
       'new-session',
       '-d',
@@ -82,7 +83,7 @@ export class TmuxCli {
   }
 
   async killSession(session: string): Promise<void> {
-    const result = await this.runner.run('tmux', [
+    const result = await this.runner.run(this.binaryPath, [
       ...this.baseArgs(),
       'kill-session',
       '-t',
@@ -98,7 +99,7 @@ export class TmuxCli {
     // so it always reflects the actual foreground process. window_name relies
     // on automatic-rename being enabled, which a stray shell-emitted OSC
     // sequence (or other quirk) can silently disable for a window.
-    const result = await this.runner.run('tmux', [
+    const result = await this.runner.run(this.binaryPath, [
       ...this.baseArgs(),
       'list-sessions',
       '-F',

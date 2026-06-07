@@ -85,15 +85,24 @@ the editor tab and how reload is handled.
    that spawns
 
    ```
-   tmux -L deck -f resources/deck.conf \
-        new-session -A -s <sessionName> -c <worktreePath>
+   <tmuxBinary> -L deck -f resources/deck.conf \
+                new-session -A -s <sessionName> -c <worktreePath>
    ```
 
    via node-pty. The `-A` flag makes the call idempotent: create on
    first open, attach on every subsequent open of the same URI. The
    `-L deck -f resources/deck.conf` prefix is the same `TmuxCli` flag
-   convention used everywhere else in Deck (src/terminal/tmuxCli.ts:128);
-   bare `tmux` is never invoked.
+   convention used everywhere else in Deck (src/terminal/tmuxCli.ts:128).
+
+   `<tmuxBinary>` is resolved at activation by `tmuxPreflight`, not at
+   spawn time. VS Code's extension host on macOS GUI launch frequently
+   inherits a stripped `PATH` (`/usr/bin:/bin:/usr/sbin:/sbin`) that
+   doesn't include Homebrew, so `posix_spawnp('tmux', …)` from node-pty
+   fails with `ENOENT`. Preflight tries the bare name first (preferring a
+   working `PATH`), then falls through to `/opt/homebrew/bin/tmux`,
+   `/usr/local/bin/tmux`, `/usr/bin/tmux`. The resolved absolute path is
+   threaded into both `TmuxCli` and `TerminalPtyBridge` so every Deck-
+   issued spawn bypasses `PATH` lookup entirely.
 
 4. **Webview ↔ extension protocol.** Pure message schema:
 
@@ -144,14 +153,30 @@ the editor tab and how reload is handled.
    (xterm-addon-fit → `TerminalPtyBridge.resize` → node-pty resize →
    SIGWINCH) all live in the webview.
 
-   **Theme via CSS vars.** VS Code injects `--vscode-terminal-foreground`,
-   `--vscode-terminal-background`, and the full `--vscode-terminal-ansi*`
-   palette into webview iframes. The webview reads them via
-   `getComputedStyle(document.body).getPropertyValue(...)` and feeds
-   xterm.js's theme API directly — no extension-side
-   `activeColorTheme` reading, no `config`-message round-trip for colors.
-   A `MutationObserver` on `document.documentElement`'s
-   `data-vscode-theme-kind` attribute triggers a re-read on theme change.
+   **Theme via `--vscode-editor-*` CSS vars.** The earlier amendment of
+   this decision claimed `--vscode-terminal-*` vars are injected into
+   webviews; that was wrong. Verified empirically:
+   `getComputedStyle(document.body).getPropertyValue('--vscode-terminal-foreground')`
+   returns `''` inside a Deck custom-editor webview. The terminal-
+   namespace colors live only inside the integrated terminal iframe.
+
+   Webviews *do* get the editor-namespace vars, so the webview reads
+   `--vscode-editor-background`, `--vscode-editor-foreground`,
+   `--vscode-editorCursor-foreground`, `--vscode-editorCursor-background`,
+   `--vscode-editor-selectionBackground`, and
+   `--vscode-editor-selectionForeground` via `getComputedStyle` and
+   feeds them to xterm.js's `theme` option at construction. The ANSI
+   palette stays at xterm.js's built-in defaults, which approximate
+   VS Code's default dark/light schemes. Result: the terminal matches
+   the surrounding editor's background and foreground; custom themes
+   that re-skin only the ANSI palette without changing the editor will
+   not propagate. Worth a follow-up that posts the theme JSON's
+   `colors['terminal.*']` block via the `config` message if/when ANSI-
+   palette parity matters.
+
+   A `MutationObserver` on `document.documentElement`'s `class` /
+   `data-vscode-theme-kind` / `data-vscode-theme-name` triggers a re-read
+   on theme change.
 
    **Font via `config` message.** Font family/size are
    `editor.fontFamily`/`editor.fontSize` *settings*, not CSS vars, so the

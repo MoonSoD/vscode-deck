@@ -319,29 +319,18 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
     const terminalElement = document.getElementById('terminal');
+    // VS Code does NOT inject --vscode-terminal-* CSS vars into custom-editor
+    // webviews — those live only inside the integrated terminal iframe. We
+    // borrow the editor's bg/fg/cursor/selection so the terminal at least
+    // matches the surrounding editor; the ANSI palette stays at xterm.js's
+    // defaults (close to the VS Code default dark/light schemes).
     const themeVarMap = {
-      background: '--vscode-terminal-background',
-      foreground: '--vscode-terminal-foreground',
-      cursor: '--vscode-terminalCursor-foreground',
-      cursorAccent: '--vscode-terminalCursor-background',
-      selectionBackground: '--vscode-terminal-selectionBackground',
-      selectionForeground: '--vscode-terminal-selectionForeground',
-      black: '--vscode-terminal-ansiBlack',
-      red: '--vscode-terminal-ansiRed',
-      green: '--vscode-terminal-ansiGreen',
-      yellow: '--vscode-terminal-ansiYellow',
-      blue: '--vscode-terminal-ansiBlue',
-      magenta: '--vscode-terminal-ansiMagenta',
-      cyan: '--vscode-terminal-ansiCyan',
-      white: '--vscode-terminal-ansiWhite',
-      brightBlack: '--vscode-terminal-ansiBrightBlack',
-      brightRed: '--vscode-terminal-ansiBrightRed',
-      brightGreen: '--vscode-terminal-ansiBrightGreen',
-      brightYellow: '--vscode-terminal-ansiBrightYellow',
-      brightBlue: '--vscode-terminal-ansiBrightBlue',
-      brightMagenta: '--vscode-terminal-ansiBrightMagenta',
-      brightCyan: '--vscode-terminal-ansiBrightCyan',
-      brightWhite: '--vscode-terminal-ansiBrightWhite',
+      background: '--vscode-editor-background',
+      foreground: '--vscode-editor-foreground',
+      cursor: '--vscode-editorCursor-foreground',
+      cursorAccent: '--vscode-editorCursor-background',
+      selectionBackground: '--vscode-editor-selectionBackground',
+      selectionForeground: '--vscode-editor-selectionForeground',
     };
     function readVsCodeTheme() {
       const cs = getComputedStyle(document.body);
