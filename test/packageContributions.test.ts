@@ -43,6 +43,11 @@ describe('package contributions', () => {
     expect(pkg.contributes.configuration?.properties?.['deck.projects']).toBeUndefined();
   });
 
+  it('does not ship node-pty or its postinstall workaround', () => {
+    expect(pkg.dependencies?.['node-pty']).toBeUndefined();
+    expect(pkg.scripts?.postinstall).toBeUndefined();
+  });
+
   it('contributes Deck Terminal as a custom editor for deck-terminal URIs', () => {
     expect(pkg.contributes.customEditors).toContainEqual({
       viewType: 'deck.terminal',
