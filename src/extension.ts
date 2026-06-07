@@ -68,15 +68,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     terminalSessionListCache,
     { pendingTerminalOpens, switcher },
   );
-  // %window-renamed from any open terminal's control client → relabel the row
-  // (automatic-rename tracks the foreground command); event-driven, no poll.
-  // Debounced so a burst of renames (e.g. a command exiting on rapid Ctrl-C)
-  // refreshes once after the foreground command settles, not on a transient.
-  let renameRefreshTimer: ReturnType<typeof setTimeout> | undefined;
-  const refreshTreeForRename = () => {
-    clearTimeout(renameRefreshTimer);
-    renameRefreshTimer = setTimeout(() => tree.refresh(), 150);
-  };
   const terminalEditorProvider = new TerminalEditorProvider(
     context.extensionUri,
     tmuxConfigPath,
@@ -87,7 +78,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       await terminalSessionListCache.removeSession(sessionName);
       tree.refresh();
     },
-    refreshTreeForRename,
+    // %window-renamed from any open terminal's control client → relabel the row
+    // live (automatic-rename tracks the foreground command); event-driven, no poll.
+    () => tree.refresh(),
   );
   const openTerminal = new OpenTerminalCommand({
     pendingTerminalOpens,
