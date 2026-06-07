@@ -37,11 +37,13 @@ const vscodeState = vi.hoisted(() => ({
     findSession: ReturnType<typeof vi.fn>;
     deleteSession: ReturnType<typeof vi.fn>;
   }>,
+  tabSnapshotStoreInstances: [] as Array<{ capture: ReturnType<typeof vi.fn>; restore: ReturnType<typeof vi.fn> }>,
   terminals: [] as unknown[],
   tmuxInstances: [] as Array<{
     killSession: ReturnType<typeof vi.fn>;
     listSessions: ReturnType<typeof vi.fn>;
   }>,
+  worktreeSwitcherArgs: undefined as unknown[] | undefined,
   workspaceFolders: [{ uri: { fsPath: '/work/alpha-main' } }],
   tmuxPreflight: vi.fn(async () => ({ available: true })),
 }));
@@ -153,7 +155,24 @@ vi.mock('../src/project/addProjectCommand', () => ({
 }));
 
 vi.mock('../src/switch/worktreeSwitcher', () => ({
-  WorktreeSwitcher: class {},
+  WorktreeSwitcher: class {
+    constructor(...args: unknown[]) {
+      vscodeState.worktreeSwitcherArgs = args;
+    }
+  },
+}));
+
+vi.mock('../src/terminal/tabSnapshotStore', () => ({
+  TabSnapshotStore: class {
+    capture = vi.fn(async () => undefined);
+    restore = vi.fn(async () => {
+      vscodeState.lifecycleOrder.push('tab-restore');
+    });
+
+    constructor() {
+      vscodeState.tabSnapshotStoreInstances.push(this);
+    }
+  },
 }));
 
 vi.mock('../src/worktree/addWorktreeCommand', () => ({
@@ -284,8 +303,10 @@ describe('activate', () => {
     vscodeState.settingsProjects = ['/settings/repo'];
     vscodeState.terminalSessionListCacheInstances = [];
     vscodeState.terminalSessionRegistryInstances = [];
+    vscodeState.tabSnapshotStoreInstances = [];
     vscodeState.terminals = [];
     vscodeState.tmuxInstances = [];
+    vscodeState.worktreeSwitcherArgs = undefined;
     vscodeState.workspaceFolders = [{ uri: { fsPath: '/work/alpha-main' } }];
     vscodeState.configUpdate.mockResolvedValue(undefined);
     vscodeState.tmuxPreflight.mockResolvedValue({ available: true });
@@ -411,7 +432,14 @@ describe('activate', () => {
 
     expect(vscodeState.onDidOpenTerminal).toHaveBeenCalledWith(expect.any(Function));
     expect(vscodeState.hydratorInstances[0].hydrateSnapshot).toHaveBeenCalledWith([restored]);
-    expect(vscodeState.lifecycleOrder).toEqual(['subscribe-open', 'snapshot', 'pending-list']);
+    expect(vscodeState.lifecycleOrder).toEqual([
+      'subscribe-open',
+      'snapshot',
+      'tab-restore',
+      'pending-list',
+    ]);
+    expect(vscodeState.tabSnapshotStoreInstances[0].restore).toHaveBeenCalledOnce();
+    expect(vscodeState.worktreeSwitcherArgs?.[1]).toBe(vscodeState.tabSnapshotStoreInstances[0]);
   });
 
   it('registers deck.addTerminal through AddTerminalCommand', async () => {

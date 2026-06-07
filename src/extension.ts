@@ -22,6 +22,7 @@ import { CloseTerminalCommand } from './terminal/killTerminalCommand';
 import { OpenTerminalCommand } from './terminal/openTerminalCommand';
 import { OpenTerminalInNewWindowCommand } from './terminal/openTerminalInNewWindowCommand';
 import { PendingTerminalOpenStore } from './terminal/pendingTerminalOpenStore';
+import { TabSnapshotStore } from './terminal/tabSnapshotStore';
 import { TerminalCascade } from './terminal/terminalCascade';
 import { TerminalEditorProvider, terminalEditorViewType } from './terminal/terminalEditorProvider';
 import { TerminalSessionRegistry } from './terminal/terminalSessionRegistry';
@@ -49,9 +50,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const worktreeListCache = new WorktreeListCacheStore(context.globalState);
   const terminalSessionListCache = new TerminalSessionListCacheStore(context.globalState);
   const pendingTerminalOpens = new PendingTerminalOpenStore(context.globalState);
+  const tabSnapshots = new TabSnapshotStore(context.workspaceState);
   const projectCommonDirCache = new ProjectCommonDirCache(context.globalState);
   const branchDeletionPreferences = new BranchDeletionPreferenceStore(context.globalState);
-  const switcher = new WorktreeSwitcher(activeWorktrees);
+  const switcher = new WorktreeSwitcher(activeWorktrees, tabSnapshots);
   const detachedOpener = new DetachedOpener();
   const terminalRegistry = new TerminalSessionRegistry();
   const editorTerminalHydrator = new EditorTerminalHydrator(tmux, terminalRegistry);
@@ -228,6 +230,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     terminalOpenSubscription,
   );
   if (tmuxAvailability.available) {
+    await tabSnapshots.restore();
     await openPendingTerminalForCurrentWorktree(pendingTerminalOpens, terminalSessionListCache, tmux);
   }
 }
