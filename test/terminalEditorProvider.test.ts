@@ -170,7 +170,7 @@ describe('TerminalEditorProvider', () => {
 
     expect(terminalPanel.webview.html).toContain('@xterm/addon-web-links');
     expect(terminalPanel.webview.html).toContain('@xterm/addon-search');
-    expect(terminalPanel.webview.html).toContain('document.execCommand');
+    expect(terminalPanel.webview.html).toContain('clipboard.writeText');
     expect(terminalPanel.webview.html).toContain('clipboard.readText');
     expect(terminalPanel.webview.html).toContain('context-menu');
     expect(terminalPanel.webview.html).toContain('searchAddon.findNext');
@@ -269,9 +269,7 @@ describe('TerminalEditorProvider', () => {
 
     expect(panel.webview.html).toContain('vscode.getState()');
     expect(panel.webview.html).toContain('terminal.write(restoredState.scrollback)');
-    expect(panel.webview.html).toContain('vscode.setState({ scrollback })');
-    expect(panel.webview.html).toContain('const scrollbackLimit = 65536');
-    expect(panel.webview.html).toContain('.slice(-scrollbackLimit)');
+    expect(panel.webview.html).toContain('serializeAddon.serialize({ scrollback: 5000 })');
     expect(panel.webview.html).toContain('new ResizeObserver');
     expect(panel.webview.html).toContain('setTimeout(postResize, 50)');
     expect(panel.webview.html).toContain("vscode.postMessage({ type: 'resize'");
