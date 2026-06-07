@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const pkg = JSON.parse(readFileSync(join(process.cwd(), 'package.json'), 'utf8'));
+const lock = JSON.parse(readFileSync(join(process.cwd(), 'package-lock.json'), 'utf8'));
 
 describe('package contributions', () => {
   it('contributes Deck to the secondary sidebar with first-install walkthrough', () => {
@@ -45,7 +46,9 @@ describe('package contributions', () => {
 
   it('does not ship node-pty or its postinstall workaround', () => {
     expect(pkg.dependencies?.['node-pty']).toBeUndefined();
+    expect(pkg.devDependencies?.['node-pty']).toBeUndefined();
     expect(pkg.scripts?.postinstall).toBeUndefined();
+    expect(lock.packages?.['node_modules/node-pty']).toBeUndefined();
   });
 
   it('contributes Deck Terminal as a custom editor for deck-terminal URIs', () => {
