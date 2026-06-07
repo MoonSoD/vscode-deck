@@ -64,6 +64,13 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
   }
 
   resolveCustomEditor(document: TerminalDocument, panel: vscode.WebviewPanel): void {
+    const existing = this.panels.get(document.sessionName);
+    if (existing) {
+      existing.reveal();
+      panel.dispose();
+      return;
+    }
+
     this.panels.set(document.sessionName, panel);
     const bridge = this.bridgeFactory();
     const bridgeDisposables: vscode.Disposable[] = [];
@@ -149,10 +156,20 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
     terminal.open(document.getElementById('terminal'));
     fitAddon.fit();
     terminal.focus();
+    const restoredState = vscode.getState() || {};
+    let scrollback = restoredState.scrollback || '';
+    if (restoredState.scrollback) terminal.write(restoredState.scrollback);
+    function rememberScrollback(payload) {
+      scrollback = (scrollback + payload).slice(-65536);
+      vscode.setState({ scrollback });
+    }
     terminal.onData((payload) => vscode.postMessage({ type: 'input', payload }));
     window.addEventListener('message', (event) => {
       const message = event.data;
-      if (message.type === 'data') terminal.write(message.payload);
+      if (message.type === 'data') {
+        rememberScrollback(message.payload);
+        terminal.write(message.payload);
+      }
       if (message.type === 'exit') {
         terminal.writeln('\\r\\n[process exited ' + message.code + ']');
         vscode.postMessage({ type: 'exit' });
