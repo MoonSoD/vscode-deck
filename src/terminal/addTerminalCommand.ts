@@ -6,7 +6,6 @@ import {
   terminalSessionPrefix,
   terminalWorktreePrefix,
 } from './tmuxSafe';
-import { TerminalSessionRegistry } from './terminalSessionRegistry';
 import type { TmuxSession } from './tmuxCli';
 import {
   toCachedTerminalSessions,
@@ -17,7 +16,6 @@ import { SessionUriCodec } from './sessionUriCodec';
 export interface AddTerminalTmuxCli {
   listSessions(prefix?: string): Promise<TmuxSession[]>;
   ensureSession(session: string, cwd: string): Promise<void>;
-  attachShellArgs(session: string): string[];
 }
 
 interface WorktreeNodeLike {
@@ -42,7 +40,6 @@ interface AddTerminalCommandOptions {
 export class AddTerminalCommand {
   constructor(
     private readonly tmux: AddTerminalTmuxCli,
-    private readonly registry: TerminalSessionRegistry = new TerminalSessionRegistry(),
     private readonly refresh: () => void = () => undefined,
     private readonly terminalSessionListCache: Pick<TerminalSessionListCacheStore, 'set'> = {
       set: async () => undefined,

@@ -74,7 +74,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   );
   const addTerminal = new AddTerminalCommand(
     tmux,
-    terminalRegistry,
     () => tree.refresh(),
     terminalSessionListCache,
     { pendingTerminalOpens, switcher },

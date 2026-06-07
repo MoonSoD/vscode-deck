@@ -27,7 +27,6 @@ vi.mock('vscode', () => ({
 }));
 
 import { AddTerminalCommand } from '../src/terminal/addTerminalCommand';
-import { TerminalSessionRegistry } from '../src/terminal/terminalSessionRegistry';
 
 describe('AddTerminalCommand', () => {
   beforeEach(() => {
@@ -52,17 +51,7 @@ describe('AddTerminalCommand', () => {
           { sessionName: 'wt-_work_repo__term-4', windowName: 'zsh' },
         ]),
       ensureSession: vi.fn(async () => undefined),
-      attachShellArgs: vi.fn(() => [
-        '-L',
-        'deck',
-        '-f',
-        '/ext/resources/deck.conf',
-        'attach-session',
-        '-t',
-        '=wt-_work_repo__term-4',
-      ]),
     };
-    const registry = new TerminalSessionRegistry();
     const refresh = vi.fn();
     const terminalSessionListCache = {
       set: vi.fn(async () => undefined),
@@ -70,7 +59,6 @@ describe('AddTerminalCommand', () => {
 
     await new AddTerminalCommand(
       tmux,
-      registry,
       refresh,
       terminalSessionListCache,
     ).run({ worktree: { path: '/work/repo' } });
@@ -91,7 +79,6 @@ describe('AddTerminalCommand', () => {
       { viewColumn: -1 },
     );
     expect(vscodeState.createTerminal).not.toHaveBeenCalled();
-    expect(registry.get('wt-_work_repo__term-4')).toBeUndefined();
     expect(terminalSessionListCache.set).toHaveBeenCalledWith('wt-_work_repo__', [
       { sessionName: 'wt-_work_repo__term-1', n: 1, windowName: 'zsh' },
       { sessionName: 'wt-_work_repo__term-3', n: 3, windowName: 'claude' },
@@ -110,9 +97,7 @@ describe('AddTerminalCommand', () => {
           { sessionName: 'wt-_work_beta-main__term-1', windowName: 'zsh' },
         ]),
       ensureSession: vi.fn(async () => undefined),
-      attachShellArgs: vi.fn(),
     };
-    const registry = new TerminalSessionRegistry();
     const refresh = vi.fn();
     const terminalSessionListCache = { set: vi.fn(async () => undefined) };
     const pendingTerminalOpens = { set: vi.fn(async () => undefined) };
@@ -120,7 +105,6 @@ describe('AddTerminalCommand', () => {
 
     await new AddTerminalCommand(
       tmux,
-      registry,
       refresh,
       terminalSessionListCache,
       { pendingTerminalOpens, switcher },

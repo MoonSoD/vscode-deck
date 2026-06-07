@@ -53,7 +53,7 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
 
   resolveCustomEditor(document: TerminalDocument, panel: vscode.WebviewPanel): void {
     const bridge = this.bridgeFactory();
-    const disposables: vscode.Disposable[] = [];
+    const bridgeDisposables: vscode.Disposable[] = [];
 
     panel.webview.options = {
       enableScripts: true,
@@ -61,13 +61,13 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
     };
     panel.webview.html = this.html(panel.webview);
 
-    disposables.push(
+    bridgeDisposables.push(
       bridge.onData((data) => {
         void panel.webview.postMessage({ type: 'data', payload: data });
-      }) as vscode.Disposable,
+      }),
       bridge.onExit((code) => {
         void panel.webview.postMessage({ type: 'exit', code });
-      }) as vscode.Disposable,
+      }),
       panel.webview.onDidReceiveMessage((message: TerminalWebviewMessage) => {
         if (message.type === 'ready') {
           bridge.start(document.sessionName, document.cwd, message.cols ?? 80, message.rows ?? 24);
@@ -76,11 +76,12 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
 
         if (message.type === 'input') bridge.write(message.payload);
       }),
-      panel.onDidDispose(() => {
-        bridge.dispose();
-        for (const disposable of disposables.splice(0)) disposable.dispose();
-      }),
     );
+
+    panel.onDidDispose(() => {
+      bridge.dispose();
+      for (const disposable of bridgeDisposables.splice(0)) disposable.dispose();
+    });
   }
 
   private html(webview: vscode.Webview): string {
