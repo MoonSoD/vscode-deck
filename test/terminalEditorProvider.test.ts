@@ -215,6 +215,8 @@ describe('TerminalEditorProvider', () => {
     expect(terminalPanel.webview.html).toContain('clipboard.writeText');
     expect(terminalPanel.webview.html).toContain('clipboard.readText');
     expect(terminalPanel.webview.html).toContain('context-menu');
+    // Context menu clamps into the viewport so a bottom/right click doesn't clip it.
+    expect(terminalPanel.webview.html).toContain('window.innerHeight - contextMenu.offsetHeight');
     expect(terminalPanel.webview.html).toContain('searchAddon.findNext');
     expect(terminalPanel.webview.html).toContain("matchBackground: '#5c3300'");
     expect(terminalPanel.webview.html).not.toContain('rgba(');

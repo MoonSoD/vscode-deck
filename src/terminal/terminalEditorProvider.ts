@@ -522,9 +522,13 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
 
       terminalElement.addEventListener('contextmenu', (event) => {
         event.preventDefault();
-        contextMenu.style.left = event.clientX + 'px';
-        contextMenu.style.top = event.clientY + 'px';
+        // Show first so the menu has measurable dimensions, then clamp into the
+        // viewport so a click near the bottom/right edge doesn't clip it.
         contextMenu.style.display = 'block';
+        const maxLeft = Math.max(0, window.innerWidth - contextMenu.offsetWidth);
+        const maxTop = Math.max(0, window.innerHeight - contextMenu.offsetHeight);
+        contextMenu.style.left = Math.min(event.clientX, maxLeft) + 'px';
+        contextMenu.style.top = Math.min(event.clientY, maxTop) + 'px';
       });
       document.addEventListener('click', hideContextMenu);
       document.addEventListener('keydown', (event) => {
