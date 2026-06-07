@@ -37,6 +37,7 @@ export class TmuxControlClient {
   private readonly seedHandlers = new Set<(seed: string) => void>();
   private readonly exitHandlers = new Set<(code: number | null) => void>();
   private readonly paneDecoder = new TextDecoder();
+  private titleFilterState: TitleFilterState = 'text';
   private exitFired = false;
   // Pane bytes streamed before the seed capture-pane reply are already inside
   // the capture; the gate drops them so the seed is the single source and
@@ -252,10 +253,51 @@ export class TmuxControlClient {
     if (secondSpace === -1) return;
 
     const payload = line.subarray(secondSpace + 1);
-    const bytes = decodeOctalEscapes(payload);
+    const bytes = this.stripScreenTitleSequences(decodeOctalEscapes(payload));
     const output = this.paneDecoder.decode(bytes, { stream: true });
     if (output.length === 0) return;
     for (const handler of this.outputHandlers) handler(output);
+  }
+
+  // Shells under TERM=tmux-256color emit screen-style title sequences
+  // (ESC k <title> ST|BEL) to name the tmux window. A rendering tmux consumes
+  // them, but control mode forwards raw pane bytes — and xterm.js doesn't
+  // implement ESC k, so it prints the title as literal text. Swallow them
+  // here; tmux already processed them server-side, so automatic-rename and
+  // the sidebar labels are unaffected. Stateful: sequences split across
+  // %output events.
+  private stripScreenTitleSequences(bytes: Buffer): Buffer {
+    const out: number[] = [];
+    for (const byte of bytes) {
+      switch (this.titleFilterState) {
+        case 'text':
+          if (byte === 0x1b) {
+            this.titleFilterState = 'esc';
+            continue;
+          }
+          out.push(byte);
+          continue;
+        case 'esc':
+          if (byte === 0x6b /* k */) {
+            this.titleFilterState = 'title';
+            continue;
+          }
+          out.push(0x1b);
+          if (byte === 0x1b) continue; // stay in 'esc' for the new ESC
+          out.push(byte);
+          this.titleFilterState = 'text';
+          continue;
+        case 'title':
+          if (byte === 0x1b) this.titleFilterState = 'title-esc';
+          else if (byte === 0x07 /* BEL */) this.titleFilterState = 'text';
+          continue;
+        case 'title-esc':
+          if (byte === 0x5c /* \ */) this.titleFilterState = 'text';
+          else if (byte !== 0x1b) this.titleFilterState = 'title';
+          continue;
+      }
+    }
+    return Buffer.from(out);
   }
 
   private fireExit(code: number | null): void {
@@ -271,6 +313,8 @@ export class TmuxControlClient {
     for (const reply of this.pendingReplies.splice(0)) reply.reject(error);
   }
 }
+
+type TitleFilterState = 'text' | 'esc' | 'title' | 'title-esc';
 
 function replyToken(text: string, prefix: string): string | undefined {
   if (!text.startsWith(prefix)) return undefined;

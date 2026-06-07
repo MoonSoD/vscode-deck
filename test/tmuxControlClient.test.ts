@@ -107,7 +107,26 @@ describe('TmuxControlClient', () => {
     ]));
 
     expect(output.mock.calls.map(([data]) => data).join('')).toBe(
-      'hello\r\nslash=\\ title=\x1bkseq\x1b\\ é',
+      'hello\r\nslash=\\ title= é',
+    );
+  });
+
+  it('strips screen-style title sequences that xterm.js cannot parse', async () => {
+    const child = fakeChild();
+    const client = new TmuxControlClient('/ext/resources/deck.conf', vi.fn(() => child));
+    const output = vi.fn();
+
+    client.onOutput(output);
+    await startClient(client, child);
+
+    // ESC k title ST split across %output events; ESC k title BEL; real
+    // escapes (SGR, lone ESC sequences) must survive untouched.
+    child.emitStdout('%output %0 a\\033kech');
+    child.emitStdout('o\\033');
+    child.emitStdout('\\134b\n%output %0 \\033kvim\\007c \\033[32mgreen\\033[39m\n');
+
+    expect(output.mock.calls.map(([data]) => data).join('')).toBe(
+      'abc \x1b[32mgreen\x1b[39m',
     );
   });
 
