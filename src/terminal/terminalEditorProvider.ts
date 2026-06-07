@@ -504,10 +504,6 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
       });
       document.addEventListener('click', hideContextMenu);
       document.addEventListener('keydown', (event) => {
-        if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'v') {
-          event.preventDefault();
-          void pasteClipboard();
-        }
         if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'f') {
           event.preventDefault();
           openFindWidget();
