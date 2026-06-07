@@ -530,9 +530,8 @@ describe('activate', () => {
     });
   });
 
-  it('opens a consumed pending terminal for the current worktree after loading terminal cache', async () => {
+  it('consumes a pending terminal for the current worktree and opens it as a Deck custom editor', async () => {
     const pendingTerminalOpens = {
-      peek: vi.fn(async () => 'wt-_work_alpha-main__term-1'),
       consume: vi.fn(async () => 'wt-_work_alpha-main__term-1'),
     };
     const terminalSessionListCache = {
@@ -550,7 +549,6 @@ describe('activate', () => {
       tmux,
     );
 
-    expect(pendingTerminalOpens.peek).toHaveBeenCalledWith('/work/alpha-main');
     expect(pendingTerminalOpens.consume).toHaveBeenCalledWith('/work/alpha-main');
     expect(terminalSessionListCache.set).toHaveBeenCalledWith('wt-_work_alpha-main__', [
       { sessionName: 'wt-_work_alpha-main__term-1', n: 1, windowName: 'zsh' },
@@ -570,7 +568,6 @@ describe('activate', () => {
 
   it('does nothing when no pending terminal intent matches the current worktree', async () => {
     const pendingTerminalOpens = {
-      peek: vi.fn(async () => undefined),
       consume: vi.fn(async () => undefined),
     };
     const terminalSessionListCache = {
@@ -586,18 +583,14 @@ describe('activate', () => {
       tmux,
     );
 
-    expect(vscode.commands.executeCommand).not.toHaveBeenCalledWith(
-      'deck.openTerminal',
-      expect.anything(),
-    );
+    expect(vscode.commands.executeCommand).not.toHaveBeenCalled();
     expect(tmux.listSessions).not.toHaveBeenCalled();
-    expect(pendingTerminalOpens.consume).not.toHaveBeenCalled();
+    expect(pendingTerminalOpens.consume).toHaveBeenCalledWith('/work/alpha-main');
   });
 
-  it('leaves the pending intent in place when the target session has vanished', async () => {
+  it('consumes the pending intent without opening when the target session has vanished', async () => {
     const pendingTerminalOpens = {
-      peek: vi.fn(async () => 'wt-_work_alpha-main__term-1'),
-      consume: vi.fn(async () => undefined),
+      consume: vi.fn(async () => 'wt-_work_alpha-main__term-1'),
     };
     const terminalSessionListCache = {
       set: vi.fn(async () => undefined),
@@ -612,12 +605,10 @@ describe('activate', () => {
       tmux,
     );
 
-    expect(pendingTerminalOpens.consume).not.toHaveBeenCalled();
+    expect(pendingTerminalOpens.consume).toHaveBeenCalledWith('/work/alpha-main');
+    expect(tmux.listSessions).toHaveBeenCalledWith('wt-_work_alpha-main__term-');
     expect(terminalSessionListCache.set).not.toHaveBeenCalled();
-    expect(vscode.commands.executeCommand).not.toHaveBeenCalledWith(
-      'deck.openTerminal',
-      expect.anything(),
-    );
+    expect(vscode.commands.executeCommand).not.toHaveBeenCalled();
   });
 
   it('ignores expired pending terminal intents on activation', async () => {
@@ -644,10 +635,7 @@ describe('activate', () => {
       tmux,
     );
 
-    expect(vscode.commands.executeCommand).not.toHaveBeenCalledWith(
-      'deck.openTerminal',
-      expect.anything(),
-    );
+    expect(vscode.commands.executeCommand).not.toHaveBeenCalled();
     expect(tmux.listSessions).not.toHaveBeenCalled();
   });
 
