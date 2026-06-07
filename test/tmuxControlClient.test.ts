@@ -34,7 +34,7 @@ describe('TmuxControlClient', () => {
     ], { cwd: '/work/repo', stdio: 'pipe' });
     expect(child.writes).toEqual([
       'list-panes -s -t =wt-_work_repo__term-1 -F "#{pane_id}"\n',
-      'capture-pane -p -e -J -S -5000\n',
+      'capture-pane -p -e -q -J -N -S -5000\n',
     ]);
   });
 
@@ -144,7 +144,7 @@ describe('TmuxControlClient', () => {
     await expect(captured).resolves.toBe('first line\nsecond line');
     expect(child.writes.slice(2)).toEqual([
       'refresh-client -C 120x40\n',
-      'capture-pane -p -e -J -S -5\n',
+      'capture-pane -p -e -q -J -N -S -5\n',
     ]);
   });
 
@@ -158,6 +158,33 @@ describe('TmuxControlClient', () => {
     child.emitStdout('%begin 1 4 1\n%end 9 9 9\n%error 9 9 9\nreal tail\n%end 1 4 1\n');
 
     await expect(captured).resolves.toBe('%end 9 9 9\n%error 9 9 9\nreal tail');
+  });
+
+  it('does not dequeue client commands for server-originated reply blocks', async () => {
+    const child = fakeChild();
+    const client = new TmuxControlClient('/ext/resources/deck.conf', vi.fn(() => child));
+    await startClient(client, child);
+
+    const captured = client.capturePane(5);
+    await untilWrites(child, 3);
+    // flags=0 block (e.g. hook output) arrives before the real reply
+    child.emitStdout('%begin 8 8 0\nhook noise\n%end 8 8 0\n%begin 1 4 1\nreal reply\n%end 1 4 1\n');
+
+    await expect(captured).resolves.toBe('real reply');
+  });
+
+  it('falls back to the attach reply when the initial block is client-originated', async () => {
+    const child = fakeChild();
+    const client = new TmuxControlClient('/ext/resources/deck.conf', vi.fn(() => child));
+
+    const started = client.start('wt-_work_repo__term-1', '/work/repo', 5000);
+    child.emitStdout('%begin 1 1 1\n%end 1 1 1\n');
+    await untilWrites(child, 1);
+    child.emitStdout('%begin 1 2 1\n%0\n%end 1 2 1\n');
+    await untilWrites(child, 2);
+    child.emitStdout('%begin 1 3 1\n%end 1 3 1\n');
+
+    await expect(started).resolves.toBeUndefined();
   });
 
   it('rejects an errored reply with the in-block message', async () => {

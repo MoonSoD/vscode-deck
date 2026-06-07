@@ -30,7 +30,8 @@ export class TmuxControlClient {
   private startPromise: Promise<void> | undefined;
   private lineBuffer = Buffer.alloc(0);
   private paneId: string | undefined;
-  private activeReply: { token: string; body: string[] } | undefined;
+  private activeReply: { token: string; clientOriginated: boolean; body: string[] } | undefined;
+  private attachReply: PendingReply | undefined;
   private readonly pendingReplies: PendingReply[] = [];
   private readonly outputHandlers = new Set<(data: string) => void>();
   private readonly seedHandlers = new Set<(seed: string) => void>();
@@ -57,7 +58,11 @@ export class TmuxControlClient {
   }
 
   private async startControlClient(sessionName: string, cwd: string, seedLines: number): Promise<void> {
-    const attach = this.enqueueReply();
+    // The attach reply is the one server-originated (flags=0) block we expect;
+    // it must not occupy the client-command FIFO.
+    const attach = new Promise<string>((resolve, reject) => {
+      this.attachReply = { resolve, reject };
+    });
     this.child = this.spawnFactory('tmux', [
       '-C',
       '-L',
@@ -88,9 +93,11 @@ export class TmuxControlClient {
       throw new Error(`expected exactly one tmux pane, got ${panes.length}`);
     }
     this.paneId = panes[0];
+    // -q: a pane that died between attach and capture is not a startup error.
+    // -N: preserve trailing spaces (tmux >= 3.1, our preflight floor).
     // A failed capture costs history, not the terminal: the gate still opens
     // on the %error so live output flows.
-    await this.command(`capture-pane -p -e -J -S -${seedLines}`, { seed: true }).catch(() => undefined);
+    await this.command(`capture-pane -p -e -q -J -N -S -${seedLines}`, { seed: true }).catch(() => undefined);
   }
 
   onOutput(handler: (data: string) => void): { dispose(): void } {
@@ -128,7 +135,7 @@ export class TmuxControlClient {
   }
 
   async capturePane(lines: number): Promise<string> {
-    return this.command(`capture-pane -p -e -J -S -${lines}`);
+    return this.command(`capture-pane -p -e -q -J -N -S -${lines}`);
   }
 
   kill(): void {
@@ -181,7 +188,11 @@ export class TmuxControlClient {
     }
 
     if (text.startsWith('%begin ')) {
-      this.activeReply = { token: replyToken(text, '%begin ') ?? '', body: [] };
+      this.activeReply = {
+        token: replyToken(text, '%begin ') ?? '',
+        clientOriginated: replyIsClientOriginated(text),
+        body: [],
+      };
       return;
     }
 
@@ -198,9 +209,27 @@ export class TmuxControlClient {
   }
 
   private closeReply(ok: boolean): void {
-    const reply = this.pendingReplies.shift();
     const body = this.activeReply?.body.join('\n') ?? '';
+    const clientOriginated = this.activeReply?.clientOriginated ?? true;
     this.activeReply = undefined;
+
+    // Server-originated blocks (flags=0) do not belong to our command FIFO —
+    // dequeuing on them would desync every later reply. The attach block is
+    // the one we expect; any other is swallowed.
+    if (!clientOriginated) {
+      const attach = this.takeAttachReply();
+      if (!attach) {
+        console.debug(`[deck] ignoring server-originated tmux reply block: ${body}`);
+        return;
+      }
+      if (ok) attach.resolve(body);
+      else attach.reject(new Error(body || 'tmux attach failed'));
+      return;
+    }
+
+    // Nothing in the FIFO: if attach is still pending this must be it (tmux
+    // could plausibly flag the new-session block client-originated).
+    const reply = this.pendingReplies.shift() ?? this.takeAttachReply();
     if (reply?.seed) {
       this.outputGated = false;
       if (ok) for (const handler of this.seedHandlers) handler(body);
@@ -208,6 +237,12 @@ export class TmuxControlClient {
     if (!reply) return;
     if (ok) reply.resolve(body);
     else reply.reject(new Error(body || 'tmux command failed'));
+  }
+
+  private takeAttachReply(): PendingReply | undefined {
+    const attach = this.attachReply;
+    this.attachReply = undefined;
+    return attach;
   }
 
   private acceptOutput(line: Buffer): void {
@@ -232,6 +267,7 @@ export class TmuxControlClient {
 
   private failPendingReplies(error: Error): void {
     this.activeReply = undefined;
+    this.takeAttachReply()?.reject(error);
     for (const reply of this.pendingReplies.splice(0)) reply.reject(error);
   }
 }
@@ -241,6 +277,16 @@ function replyToken(text: string, prefix: string): string | undefined {
   const fields = text.slice(prefix.length).split(' ');
   if (fields.length < 2) return undefined;
   return `${fields[0]} ${fields[1]}`;
+}
+
+// %begin <ts> <num> <flags>: flags bit 0 set = reply to a command this client
+// sent. Missing flags defaults to client-originated, after iTerm2's gateway.
+function replyIsClientOriginated(text: string): boolean {
+  const fields = text.split(' ');
+  if (fields.length < 4) return true;
+  const flags = Number.parseInt(fields[3], 10);
+  if (Number.isNaN(flags)) return true;
+  return (flags & 1) === 1;
 }
 
 function decodeOctalEscapes(input: Buffer): Buffer {

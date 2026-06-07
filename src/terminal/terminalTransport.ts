@@ -53,8 +53,9 @@ export class TerminalTransport {
       .then(() => {
         if (this.client === client) this.ready = true;
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         if (this.client !== client) return;
+        console.error('[deck] terminal transport failed to start:', error);
         client.kill();
         this.emitExit(1);
       });
