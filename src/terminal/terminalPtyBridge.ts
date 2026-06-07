@@ -22,6 +22,7 @@ const nodePtyFactory: PtyFactory = {
 
 export class TerminalPtyBridge {
   private pty: PtyLike | undefined;
+  private pendingSize: { cols: number; rows: number } | undefined;
   private readonly dataHandlers = new Set<(data: string) => void>();
   private readonly exitHandlers = new Set<(code: number) => void>();
   private readonly disposables: Array<{ dispose(): void }> = [];
@@ -33,6 +34,8 @@ export class TerminalPtyBridge {
 
   start(sessionName: string, cwd: string, cols: number, rows: number): void {
     if (this.pty) return;
+    const size = this.pendingSize ?? { cols, rows };
+    this.pendingSize = undefined;
 
     this.pty = this.factory.spawn('tmux', [
       '-L',
@@ -46,8 +49,8 @@ export class TerminalPtyBridge {
       '-c',
       cwd,
     ], {
-      cols,
-      rows,
+      cols: size.cols,
+      rows: size.rows,
       cwd,
       name: 'xterm-256color',
     });
@@ -77,7 +80,12 @@ export class TerminalPtyBridge {
   }
 
   resize(cols: number, rows: number): void {
-    this.pty?.resize(cols, rows);
+    if (!this.pty) {
+      this.pendingSize = { cols, rows };
+      return;
+    }
+
+    this.pty.resize(cols, rows);
   }
 
   dispose(): void {

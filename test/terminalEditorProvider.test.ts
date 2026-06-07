@@ -29,6 +29,7 @@ describe('TerminalEditorProvider', () => {
     const bridge = {
       start: vi.fn(),
       write: vi.fn(),
+      resize: vi.fn(),
       onData: vi.fn(() => ({ dispose: vi.fn() })),
       onExit: vi.fn(() => ({ dispose: vi.fn() })),
       dispose: vi.fn(),
@@ -77,6 +78,7 @@ describe('TerminalEditorProvider', () => {
     const bridge = {
       start: vi.fn(),
       write: vi.fn(),
+      resize: vi.fn(),
       onData: vi.fn(() => ({ dispose: vi.fn() })),
       onExit: vi.fn((handler: (code: number) => void) => {
         exitBridge = handler;
@@ -102,5 +104,94 @@ describe('TerminalEditorProvider', () => {
 
     expect(panel.webview.postMessage).toHaveBeenCalledWith({ type: 'exit', code: 0 });
     expect(panel.dispose).toHaveBeenCalledOnce();
+  });
+
+  it('routes resize messages to the pty bridge', () => {
+    let receiveMessage:
+      | ((message: { type: string; cols?: number; rows?: number; payload?: string }) => void)
+      | undefined;
+    const panel = {
+      webview: {
+        options: {},
+        html: '',
+        cspSource: 'vscode-resource:',
+        asWebviewUri: (uri: unknown) => uri,
+        postMessage: vi.fn(async () => true),
+        onDidReceiveMessage: vi.fn(
+          (handler: (message: { type: string; cols?: number; rows?: number }) => void) => {
+            receiveMessage = handler;
+            return { dispose: vi.fn() };
+          },
+        ),
+      },
+      onDidDispose: vi.fn(() => ({ dispose: vi.fn() })),
+    };
+    const bridge = {
+      start: vi.fn(),
+      write: vi.fn(),
+      resize: vi.fn(),
+      onData: vi.fn(() => ({ dispose: vi.fn() })),
+      onExit: vi.fn(() => ({ dispose: vi.fn() })),
+      dispose: vi.fn(),
+    };
+    const provider = new TerminalEditorProvider(
+      { fsPath: '/extension' } as never,
+      '/extension/resources/deck.conf',
+      undefined,
+      () => bridge,
+    );
+    const document = provider.openCustomDocument({
+      scheme: 'deck-terminal',
+      path: '/wt-_work_alpha-main__term-1',
+      query: 'cwd=%2Fwork%2Falpha-main',
+    } as never);
+
+    provider.resolveCustomEditor(document, panel as never);
+    receiveMessage?.({ type: 'resize', cols: 132, rows: 41 });
+
+    expect(bridge.resize).toHaveBeenCalledWith(132, 41);
+  });
+
+  it('renders a debounced fit resize observer before ready', () => {
+    const panel = {
+      webview: {
+        options: {},
+        html: '',
+        cspSource: 'vscode-resource:',
+        asWebviewUri: (uri: unknown) => uri,
+        postMessage: vi.fn(async () => true),
+        onDidReceiveMessage: vi.fn(() => ({ dispose: vi.fn() })),
+      },
+      onDidDispose: vi.fn(() => ({ dispose: vi.fn() })),
+    };
+    const bridge = {
+      start: vi.fn(),
+      write: vi.fn(),
+      resize: vi.fn(),
+      onData: vi.fn(() => ({ dispose: vi.fn() })),
+      onExit: vi.fn(() => ({ dispose: vi.fn() })),
+      dispose: vi.fn(),
+    };
+    const provider = new TerminalEditorProvider(
+      { fsPath: '/extension' } as never,
+      '/extension/resources/deck.conf',
+      undefined,
+      () => bridge,
+    );
+    const document = provider.openCustomDocument({
+      scheme: 'deck-terminal',
+      path: '/wt-_work_alpha-main__term-1',
+      query: 'cwd=%2Fwork%2Falpha-main',
+    } as never);
+
+    provider.resolveCustomEditor(document, panel as never);
+
+    expect(panel.webview.html).toContain('new ResizeObserver');
+    expect(panel.webview.html).toContain('setTimeout(postResize, 50)');
+    expect(panel.webview.html).toContain("vscode.postMessage({ type: 'resize'");
+    expect(panel.webview.html.indexOf("type: 'resize'")).toBeLessThan(
+      panel.webview.html.indexOf("type: 'ready'"),
+    );
+    expect(panel.webview.html).toContain('requestAnimationFrame');
   });
 });

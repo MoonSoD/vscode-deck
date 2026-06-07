@@ -24,11 +24,18 @@ interface ExitMessage {
   type: 'exit';
 }
 
-type TerminalWebviewMessage = ReadyMessage | InputMessage | ExitMessage;
+interface ResizeMessage {
+  type: 'resize';
+  cols: number;
+  rows: number;
+}
+
+type TerminalWebviewMessage = ReadyMessage | InputMessage | ExitMessage | ResizeMessage;
 
 export interface TerminalPtyBridgeLike {
   start(sessionName: string, cwd: string, cols: number, rows: number): void;
   write(data: string): void;
+  resize(cols: number, rows: number): void;
   onData(handler: (data: string) => void): { dispose(): void };
   onExit(handler: (code: number) => void): { dispose(): void };
   dispose(): void;
@@ -88,6 +95,7 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
         }
 
         if (message.type === 'input') bridge.write(message.payload);
+        if (message.type === 'resize') bridge.resize(message.cols, message.rows);
         if (message.type === 'exit') panel.dispose();
       }),
     );
@@ -143,12 +151,29 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
   <script nonce="${nonce}" src="${fitJs}"></script>
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
+    const terminalElement = document.getElementById('terminal');
     const terminal = new Terminal({ cursorBlink: true, convertEol: true });
     const fitAddon = new FitAddon.FitAddon();
+    let resizeTimer;
+    let lastCols = 0;
+    let lastRows = 0;
+
+    function postResize() {
+      fitAddon.fit();
+      if (terminal.cols === lastCols && terminal.rows === lastRows) return;
+      lastCols = terminal.cols;
+      lastRows = terminal.rows;
+      vscode.postMessage({ type: 'resize', cols: terminal.cols, rows: terminal.rows });
+    }
+
+    function debounceResize() {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(postResize, 50);
+    }
+
     terminal.loadAddon(fitAddon);
-    terminal.open(document.getElementById('terminal'));
-    fitAddon.fit();
-    terminal.focus();
+    terminal.open(terminalElement);
+    new ResizeObserver(debounceResize).observe(terminalElement);
     terminal.onData((payload) => vscode.postMessage({ type: 'input', payload }));
     window.addEventListener('message', (event) => {
       const message = event.data;
@@ -158,7 +183,11 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
         vscode.postMessage({ type: 'exit' });
       }
     });
-    vscode.postMessage({ type: 'ready', cols: terminal.cols, rows: terminal.rows });
+    requestAnimationFrame(() => {
+      postResize();
+      terminal.focus();
+      vscode.postMessage({ type: 'ready', cols: terminal.cols, rows: terminal.rows });
+    });
   </script>
 </body>
 </html>`;
