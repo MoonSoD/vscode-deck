@@ -20,15 +20,43 @@ interface InputMessage {
   payload: string;
 }
 
+interface OpenExternalMessage {
+  type: 'openExternal';
+  payload: string;
+}
+
+interface ResizeMessage {
+  type: 'resize';
+  cols: number;
+  rows: number;
+}
+
 interface ExitMessage {
   type: 'exit';
 }
 
-type TerminalWebviewMessage = ReadyMessage | InputMessage | ExitMessage;
+interface FocusedMessage {
+  type: 'focused';
+}
+
+interface TerminalConfig {
+  fontFamily: string;
+  fontSize: number;
+  theme: Record<string, string>;
+}
+
+type TerminalWebviewMessage =
+  | ReadyMessage
+  | InputMessage
+  | OpenExternalMessage
+  | ResizeMessage
+  | ExitMessage
+  | FocusedMessage;
 
 export interface TerminalPtyBridgeLike {
   start(sessionName: string, cwd: string, cols: number, rows: number): void;
   write(data: string): void;
+  resize(cols: number, rows: number): void;
   onData(handler: (data: string) => void): { dispose(): void };
   onExit(handler: (code: number) => void): { dispose(): void };
   dispose(): void;
@@ -39,6 +67,8 @@ export type TerminalEditorDisposeHandler = (sessionName: string) => Promise<void
 
 export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvider<TerminalDocument> {
   private readonly panels = new Map<string, vscode.WebviewPanel>();
+  private readonly configChangeSubscription: vscode.Disposable;
+  private activePanel: vscode.WebviewPanel | undefined;
 
   constructor(
     private readonly extensionUri: vscode.Uri,
@@ -47,7 +77,22 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
     private readonly bridgeFactory: TerminalPtyBridgeFactory = () =>
       new TerminalPtyBridge(this.configPath),
     private readonly onPanelDispose: TerminalEditorDisposeHandler = () => undefined,
-  ) {}
+  ) {
+    this.configChangeSubscription = vscode.workspace.onDidChangeConfiguration((event) => {
+      if (
+        !event.affectsConfiguration('editor.fontFamily') &&
+        !event.affectsConfiguration('editor.fontSize') &&
+        !event.affectsConfiguration('workbench.colorTheme')
+      ) {
+        return;
+      }
+      this.broadcastConfig();
+    });
+  }
+
+  dispose(): void {
+    this.configChangeSubscription.dispose();
+  }
 
   openCustomDocument(uri: vscode.Uri): TerminalDocument {
     const parts = this.codec.decode(uri);
@@ -63,8 +108,14 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
     return this.panels.get(sessionName);
   }
 
+  showFind(): void {
+    const panel = this.activePanel ?? this.panels.values().next().value;
+    if (panel) void panel.webview.postMessage({ type: 'find' });
+  }
+
   resolveCustomEditor(document: TerminalDocument, panel: vscode.WebviewPanel): void {
     this.panels.set(document.sessionName, panel);
+    this.activePanel = panel;
     const bridge = this.bridgeFactory();
     const bridgeDisposables: vscode.Disposable[] = [];
 
@@ -73,6 +124,7 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
       localResourceRoots: [vscode.Uri.joinPath(this.extensionUri, 'node_modules')],
     };
     panel.webview.html = this.html(panel.webview);
+    void panel.webview.postMessage({ type: 'config', payload: this.terminalConfig() });
 
     bridgeDisposables.push(
       bridge.onData((data) => {
@@ -88,6 +140,9 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
         }
 
         if (message.type === 'input') bridge.write(message.payload);
+        if (message.type === 'openExternal') void vscode.env.openExternal(vscode.Uri.parse(message.payload));
+        if (message.type === 'resize') bridge.resize(message.cols, message.rows);
+        if (message.type === 'focused') this.activePanel = panel;
         if (message.type === 'exit') panel.dispose();
       }),
     );
@@ -96,10 +151,27 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
       if (this.panels.get(document.sessionName) === panel) {
         this.panels.delete(document.sessionName);
       }
+      if (this.activePanel === panel) this.activePanel = undefined;
       void this.onPanelDispose(document.sessionName);
       bridge.dispose();
       for (const disposable of bridgeDisposables.splice(0)) disposable.dispose();
     });
+  }
+
+  private broadcastConfig(): void {
+    const payload = this.terminalConfig();
+    for (const panel of this.panels.values()) {
+      void panel.webview.postMessage({ type: 'config', payload });
+    }
+  }
+
+  private terminalConfig(): TerminalConfig {
+    const editor = vscode.workspace.getConfiguration('editor');
+    return {
+      fontFamily: editor.get('fontFamily', 'monospace'),
+      fontSize: editor.get('fontSize', 14),
+      theme: terminalThemeFor(vscode.window.activeColorTheme.kind),
+    };
   }
 
   private html(webview: vscode.Webview): string {
@@ -119,6 +191,26 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
         'addon-fit.js',
       ),
     );
+    const webLinksJs = webview.asWebviewUri(
+      vscode.Uri.joinPath(
+        this.extensionUri,
+        'node_modules',
+        '@xterm',
+        'addon-web-links',
+        'lib',
+        'addon-web-links.js',
+      ),
+    );
+    const searchJs = webview.asWebviewUri(
+      vscode.Uri.joinPath(
+        this.extensionUri,
+        'node_modules',
+        '@xterm',
+        'addon-search',
+        'lib',
+        'addon-search.js',
+      ),
+    );
     const nonce = String(Date.now());
 
     return `<!doctype html>
@@ -135,24 +227,219 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
       overflow: hidden;
       background: var(--vscode-editor-background);
     }
+    body {
+      color: var(--vscode-editor-foreground);
+      font-family: var(--vscode-font-family);
+    }
+    #terminal {
+      box-sizing: border-box;
+    }
+    #context-menu {
+      position: fixed;
+      display: none;
+      min-width: 128px;
+      padding: 4px 0;
+      background: var(--vscode-menu-background);
+      color: var(--vscode-menu-foreground);
+      border: 1px solid var(--vscode-menu-border);
+      z-index: 20;
+    }
+    #context-menu button {
+      display: block;
+      width: 100%;
+      padding: 5px 12px;
+      border: 0;
+      background: transparent;
+      color: inherit;
+      text-align: left;
+      font: inherit;
+    }
+    #context-menu button:hover {
+      background: var(--vscode-menu-selectionBackground);
+      color: var(--vscode-menu-selectionForeground);
+    }
+    #find-widget {
+      position: fixed;
+      top: 8px;
+      right: 8px;
+      display: none;
+      gap: 4px;
+      align-items: center;
+      padding: 4px;
+      background: var(--vscode-editorWidget-background);
+      color: var(--vscode-editorWidget-foreground);
+      border: 1px solid var(--vscode-editorWidget-border);
+      z-index: 10;
+    }
+    #find-widget input {
+      width: 180px;
+      min-width: 0;
+      background: var(--vscode-input-background);
+      color: var(--vscode-input-foreground);
+      border: 1px solid var(--vscode-input-border);
+      padding: 3px 6px;
+      font: inherit;
+    }
+    #find-widget button {
+      min-width: 24px;
+      height: 24px;
+      border: 0;
+      background: var(--vscode-button-secondaryBackground);
+      color: var(--vscode-button-secondaryForeground);
+      font: inherit;
+    }
   </style>
 </head>
 <body>
   <div id="terminal"></div>
+  <div id="find-widget">
+    <input id="find-input" type="text">
+    <button id="find-prev" type="button">Prev</button>
+    <button id="find-next" type="button">Next</button>
+    <button id="find-close" type="button">x</button>
+  </div>
+  <div id="context-menu">
+    <button type="button" data-action="copy">Copy</button>
+    <button type="button" data-action="paste">Paste</button>
+    <button type="button" data-action="select-all">Select All</button>
+    <button type="button" data-action="clear">Clear</button>
+  </div>
   <script nonce="${nonce}" src="${xtermJs}"></script>
   <script nonce="${nonce}" src="${fitJs}"></script>
+  <!-- @xterm/addon-web-links -->
+  <script nonce="${nonce}" src="${webLinksJs}"></script>
+  <!-- @xterm/addon-search -->
+  <script nonce="${nonce}" src="${searchJs}"></script>
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
-    const terminal = new Terminal({ cursorBlink: true, convertEol: true });
+    const terminal = new Terminal({ cursorBlink: true, convertEol: true, scrollback: 5000 });
     const fitAddon = new FitAddon.FitAddon();
+    const searchAddon = new SearchAddon.SearchAddon();
+    const webLinksAddon = new WebLinksAddon.WebLinksAddon((event, uri) => {
+      if (event.metaKey || event.ctrlKey) {
+        event.preventDefault();
+        vscode.postMessage({ type: 'openExternal', payload: uri });
+      }
+    });
     terminal.loadAddon(fitAddon);
+    terminal.loadAddon(searchAddon);
+    terminal.loadAddon(webLinksAddon);
     terminal.open(document.getElementById('terminal'));
     fitAddon.fit();
     terminal.focus();
     terminal.onData((payload) => vscode.postMessage({ type: 'input', payload }));
+    terminal.element.addEventListener('focusin', () => vscode.postMessage({ type: 'focused' }));
+
+    const terminalElement = document.getElementById('terminal');
+    const contextMenu = document.getElementById('context-menu');
+    const findWidget = document.getElementById('find-widget');
+    const findInput = document.getElementById('find-input');
+    const findOptions = {
+      decorations: {
+        matchBackground: 'rgba(234, 92, 0, 0.35)',
+        matchBorder: '#ea5c00',
+        activeMatchBackground: 'rgba(255, 214, 10, 0.45)',
+        activeMatchBorder: '#ffd60a',
+        matchOverviewRuler: '#ea5c00',
+        activeMatchColorOverviewRuler: '#ffd60a'
+      }
+    };
+
+    function hideContextMenu() {
+      contextMenu.style.display = 'none';
+    }
+
+    function copySelection() {
+      const text = terminal.getSelection();
+      if (!text) return;
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      textarea.remove();
+    }
+
+    async function pasteClipboard() {
+      const text = await navigator.clipboard.readText();
+      if (text) vscode.postMessage({ type: 'input', payload: text });
+    }
+
+    function openFindWidget() {
+      findWidget.style.display = 'flex';
+      findInput.focus();
+      findInput.select();
+    }
+
+    function closeFindWidget() {
+      findWidget.style.display = 'none';
+      searchAddon.clearDecorations();
+      terminal.focus();
+    }
+
+    function findNext() {
+      searchAddon.findNext(findInput.value, findOptions);
+    }
+
+    function findPrevious() {
+      searchAddon.findPrevious(findInput.value, findOptions);
+    }
+
+    terminalElement.addEventListener('mouseup', copySelection);
+    terminalElement.addEventListener('contextmenu', (event) => {
+      event.preventDefault();
+      contextMenu.style.left = event.clientX + 'px';
+      contextMenu.style.top = event.clientY + 'px';
+      contextMenu.style.display = 'block';
+    });
+    document.addEventListener('click', hideContextMenu);
+    document.addEventListener('keydown', (event) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'v') {
+        event.preventDefault();
+        void pasteClipboard();
+      }
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'f') {
+        event.preventDefault();
+        openFindWidget();
+      }
+      if (event.key === 'Escape' && findWidget.style.display !== 'none') {
+        closeFindWidget();
+      }
+    });
+    contextMenu.addEventListener('click', (event) => {
+      const action = event.target.dataset.action;
+      if (action === 'copy') copySelection();
+      if (action === 'paste') void pasteClipboard();
+      if (action === 'select-all') terminal.selectAll();
+      if (action === 'clear') terminal.clear();
+      hideContextMenu();
+    });
+    findInput.addEventListener('input', findNext);
+    findInput.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' && event.shiftKey) findPrevious();
+      if (event.key === 'Enter' && !event.shiftKey) findNext();
+    });
+    document.getElementById('find-prev').addEventListener('click', findPrevious);
+    document.getElementById('find-next').addEventListener('click', findNext);
+    document.getElementById('find-close').addEventListener('click', closeFindWidget);
+
+    new ResizeObserver(() => {
+      fitAddon.fit();
+      vscode.postMessage({ type: 'resize', cols: terminal.cols, rows: terminal.rows });
+    }).observe(terminalElement);
+
     window.addEventListener('message', (event) => {
       const message = event.data;
       if (message.type === 'data') terminal.write(message.payload);
+      if (message.type === 'config') {
+        terminal.options.fontFamily = message.payload.fontFamily;
+        terminal.options.fontSize = message.payload.fontSize;
+        terminal.options.theme = message.payload.theme;
+        fitAddon.fit();
+      }
+      if (message.type === 'find') openFindWidget();
       if (message.type === 'exit') {
         terminal.writeln('\\r\\n[process exited ' + message.code + ']');
         vscode.postMessage({ type: 'exit' });
@@ -163,4 +450,54 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
 </body>
 </html>`;
   }
+}
+
+function terminalThemeFor(kind: vscode.ColorThemeKind): Record<string, string> {
+  if (kind === vscode.ColorThemeKind.Light || kind === vscode.ColorThemeKind.HighContrastLight) {
+    return {
+      background: '#ffffff',
+      foreground: '#1f2328',
+      cursor: '#24292f',
+      selectionBackground: '#add6ff',
+      black: '#24292f',
+      red: '#cf222e',
+      green: '#116329',
+      yellow: '#4d2d00',
+      blue: '#0969da',
+      magenta: '#8250df',
+      cyan: '#1b7c83',
+      white: '#6e7781',
+      brightBlack: '#57606a',
+      brightRed: '#a40e26',
+      brightGreen: '#1a7f37',
+      brightYellow: '#633c01',
+      brightBlue: '#218bff',
+      brightMagenta: '#a475f9',
+      brightCyan: '#3192aa',
+      brightWhite: '#8c959f',
+    };
+  }
+
+  return {
+    background: '#1e1e1e',
+    foreground: '#cccccc',
+    cursor: '#aeafad',
+    selectionBackground: '#264f78',
+    black: '#000000',
+    red: '#cd3131',
+    green: '#0dbc79',
+    yellow: '#e5e510',
+    blue: '#2472c8',
+    magenta: '#bc3fbc',
+    cyan: '#11a8cd',
+    white: '#e5e5e5',
+    brightBlack: '#666666',
+    brightRed: '#f14c4c',
+    brightGreen: '#23d18b',
+    brightYellow: '#f5f543',
+    brightBlue: '#3b8eea',
+    brightMagenta: '#d670d6',
+    brightCyan: '#29b8db',
+    brightWhite: '#e5e5e5',
+  };
 }

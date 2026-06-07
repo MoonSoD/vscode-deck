@@ -52,6 +52,19 @@ describe('package contributions', () => {
     });
   });
 
+  it('contributes Deck Terminal find command and keybindings', () => {
+    expect(pkg.contributes.commands).toContainEqual({
+      command: 'deck.terminal.find',
+      title: 'Deck Terminal: Find',
+    });
+    expect(pkg.contributes.keybindings).toContainEqual({
+      command: 'deck.terminal.find',
+      key: 'ctrl+f',
+      mac: 'cmd+f',
+      when: "activeCustomEditorId == 'deck.terminal'",
+    });
+  });
+
   it('contributes add worktree as a project-only inline tree action', () => {
     expect(pkg.contributes.commands).toContainEqual({
       command: 'deck.addWorktree',

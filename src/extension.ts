@@ -178,6 +178,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       },
       supportsMultipleEditorsPerDocument: false,
     }),
+    terminalEditorProvider,
     vscode.commands.registerCommand('deck.refresh', () => {
       tree.refresh();
     }),
@@ -189,6 +190,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       openTerminalInNewWindow.run(node),
     ),
     vscode.commands.registerCommand('deck.killTerminal', (node) => closeTerminal.run(node)),
+    vscode.commands.registerCommand('deck.terminal.find', () => terminalEditorProvider.showFind()),
     vscode.commands.registerCommand('deck.removeProject', (node) => removeProject.run(node)),
     vscode.commands.registerCommand('deck.removeWorktree', (node) => removeWorktree.run(node)),
     vscode.commands.registerCommand('deck.openWorktreeInNewWindow', (node: { worktree: { path: string } }) =>
