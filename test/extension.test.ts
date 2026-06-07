@@ -29,12 +29,10 @@ const vscodeState = vi.hoisted(() => ({
   registerCustomEditorProvider: vi.fn(() => ({ dispose: vi.fn() })),
   settingsProjects: ['/settings/repo'],
   terminalSessionListCacheInstances: [] as Array<{ removeSession: ReturnType<typeof vi.fn> }>,
-  tabSnapshotStoreInstances: [] as Array<{ capture: ReturnType<typeof vi.fn>; restore: ReturnType<typeof vi.fn> }>,
   tmuxInstances: [] as Array<{
     killSession: ReturnType<typeof vi.fn>;
     listSessions: ReturnType<typeof vi.fn>;
   }>,
-  worktreeSwitcherArgs: undefined as unknown[] | undefined,
   workspaceFolders: [{ uri: { fsPath: '/work/alpha-main' } }],
   tmuxPreflight: vi.fn(async () => ({ available: true })),
 }));
@@ -133,25 +131,9 @@ vi.mock('../src/project/addProjectCommand', () => ({
 }));
 
 vi.mock('../src/switch/worktreeSwitcher', () => ({
-  WorktreeSwitcher: class {
-    constructor(...args: unknown[]) {
-      vscodeState.worktreeSwitcherArgs = args;
-    }
-  },
+  WorktreeSwitcher: class {},
 }));
 
-vi.mock('../src/terminal/tabSnapshotStore', () => ({
-  TabSnapshotStore: class {
-    capture = vi.fn(async () => undefined);
-    restore = vi.fn(async () => {
-      vscodeState.lifecycleOrder.push('tab-restore');
-    });
-
-    constructor() {
-      vscodeState.tabSnapshotStoreInstances.push(this);
-    }
-  },
-}));
 
 vi.mock('../src/worktree/addWorktreeCommand', () => ({
   AddWorktreeCommand: class {},
@@ -251,9 +233,7 @@ describe('activate', () => {
     vscodeState.projectTreeInstances = [];
     vscodeState.settingsProjects = ['/settings/repo'];
     vscodeState.terminalSessionListCacheInstances = [];
-    vscodeState.tabSnapshotStoreInstances = [];
     vscodeState.tmuxInstances = [];
-    vscodeState.worktreeSwitcherArgs = undefined;
     vscodeState.workspaceFolders = [{ uri: { fsPath: '/work/alpha-main' } }];
     vscodeState.configUpdate.mockResolvedValue(undefined);
     vscodeState.tmuxPreflight.mockResolvedValue({ available: true });
@@ -348,7 +328,7 @@ describe('activate', () => {
     expect(vscodeState.closeTerminalArgs?.at(-1)).toBe(terminalSessionListCache);
   });
 
-  it('restores terminal tabs, consumes pending intents, and registers no VS Code terminal listeners', async () => {
+  it('consumes pending intents and registers no VS Code terminal listeners', async () => {
     const context = createContext();
     context.values['deck.pendingTerminalOpen'] = {
       schemaVersion: 1,
@@ -364,9 +344,9 @@ describe('activate', () => {
     expect(vscodeState.onDidOpenTerminal).not.toHaveBeenCalled();
     expect(vscodeState.onDidCloseTerminal).not.toHaveBeenCalled();
     expect(vscodeState.onDidChangeActiveTerminal).not.toHaveBeenCalled();
-    expect(vscodeState.lifecycleOrder).toEqual(['tab-restore', 'pending-list']);
-    expect(vscodeState.tabSnapshotStoreInstances[0].restore).toHaveBeenCalledOnce();
-    expect(vscodeState.worktreeSwitcherArgs?.[1]).toBe(vscodeState.tabSnapshotStoreInstances[0]);
+    // Tab restoration is now VS Code's native custom-editor restore — Deck no
+    // longer replays a snapshot, so only the pending-intent step runs here.
+    expect(vscodeState.lifecycleOrder).toEqual(['pending-list']);
   });
 
   it('registers deck.addTerminal through AddTerminalCommand', async () => {

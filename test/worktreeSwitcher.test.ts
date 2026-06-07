@@ -29,19 +29,14 @@ describe('WorktreeSwitcher', () => {
     state.calls = [];
   });
 
-  it('captures terminal tabs immediately before switching folders', async () => {
+  it('persists the active worktree before switching folders', async () => {
     const activeWorktrees = {
       set: vi.fn(async () => {
         state.calls.push('setActive');
       }),
     };
-    const tabSnapshots = {
-      capture: vi.fn(async () => {
-        state.calls.push('capture');
-      }),
-    };
 
-    await new WorktreeSwitcher(activeWorktrees, tabSnapshots).switchTo('/repo/feature');
+    await new WorktreeSwitcher(activeWorktrees).switchTo('/repo/feature');
 
     expect(state.getCommonDir).toHaveBeenCalledWith('/repo/feature');
     expect(activeWorktrees.set).toHaveBeenCalledWith('/repo/.git/worktrees/feature', '/repo/feature');
@@ -50,6 +45,7 @@ describe('WorktreeSwitcher', () => {
       { fsPath: '/repo/feature' },
       { forceNewWindow: false },
     );
-    expect(state.calls).toEqual(['setActive', 'capture', 'openFolder']);
+    // set must persist before the reload so post-reload activation sees it
+    expect(state.calls).toEqual(['setActive', 'openFolder']);
   });
 });
