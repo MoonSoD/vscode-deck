@@ -319,7 +319,45 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
     const terminalElement = document.getElementById('terminal');
-    const terminal = new Terminal({ cursorBlink: true, convertEol: true, scrollback: 5000 });
+    const themeVarMap = {
+      background: '--vscode-terminal-background',
+      foreground: '--vscode-terminal-foreground',
+      cursor: '--vscode-terminalCursor-foreground',
+      cursorAccent: '--vscode-terminalCursor-background',
+      selectionBackground: '--vscode-terminal-selectionBackground',
+      selectionForeground: '--vscode-terminal-selectionForeground',
+      black: '--vscode-terminal-ansiBlack',
+      red: '--vscode-terminal-ansiRed',
+      green: '--vscode-terminal-ansiGreen',
+      yellow: '--vscode-terminal-ansiYellow',
+      blue: '--vscode-terminal-ansiBlue',
+      magenta: '--vscode-terminal-ansiMagenta',
+      cyan: '--vscode-terminal-ansiCyan',
+      white: '--vscode-terminal-ansiWhite',
+      brightBlack: '--vscode-terminal-ansiBrightBlack',
+      brightRed: '--vscode-terminal-ansiBrightRed',
+      brightGreen: '--vscode-terminal-ansiBrightGreen',
+      brightYellow: '--vscode-terminal-ansiBrightYellow',
+      brightBlue: '--vscode-terminal-ansiBrightBlue',
+      brightMagenta: '--vscode-terminal-ansiBrightMagenta',
+      brightCyan: '--vscode-terminal-ansiBrightCyan',
+      brightWhite: '--vscode-terminal-ansiBrightWhite',
+    };
+    function readVsCodeTheme() {
+      const cs = getComputedStyle(document.body);
+      const theme = {};
+      for (const key in themeVarMap) {
+        const raw = cs.getPropertyValue(themeVarMap[key]).trim();
+        if (raw) theme[key] = raw;
+      }
+      return theme;
+    }
+    const terminal = new Terminal({
+      cursorBlink: true,
+      convertEol: true,
+      scrollback: 5000,
+      theme: readVsCodeTheme(),
+    });
     const fitAddon = new FitAddon.FitAddon();
     const searchAddon = new SearchAddon.SearchAddon();
     const webLinksAddon = new WebLinksAddon.WebLinksAddon((event, uri) => {
@@ -345,39 +383,6 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
       resizeTimer = setTimeout(postResize, 50);
     }
 
-    function readVsCodeTheme() {
-      const cs = getComputedStyle(document.body);
-      const v = (name) => {
-        const raw = cs.getPropertyValue(name).trim();
-        return raw === '' ? undefined : raw;
-      };
-      return {
-        background: v('--vscode-terminal-background'),
-        foreground: v('--vscode-terminal-foreground'),
-        cursor: v('--vscode-terminalCursor-foreground'),
-        cursorAccent: v('--vscode-terminalCursor-background'),
-        selectionBackground: v('--vscode-terminal-selectionBackground'),
-        selectionForeground: v('--vscode-terminal-selectionForeground'),
-        black: v('--vscode-terminal-ansiBlack'),
-        red: v('--vscode-terminal-ansiRed'),
-        green: v('--vscode-terminal-ansiGreen'),
-        yellow: v('--vscode-terminal-ansiYellow'),
-        blue: v('--vscode-terminal-ansiBlue'),
-        magenta: v('--vscode-terminal-ansiMagenta'),
-        cyan: v('--vscode-terminal-ansiCyan'),
-        white: v('--vscode-terminal-ansiWhite'),
-        brightBlack: v('--vscode-terminal-ansiBrightBlack'),
-        brightRed: v('--vscode-terminal-ansiBrightRed'),
-        brightGreen: v('--vscode-terminal-ansiBrightGreen'),
-        brightYellow: v('--vscode-terminal-ansiBrightYellow'),
-        brightBlue: v('--vscode-terminal-ansiBrightBlue'),
-        brightMagenta: v('--vscode-terminal-ansiBrightMagenta'),
-        brightCyan: v('--vscode-terminal-ansiBrightCyan'),
-        brightWhite: v('--vscode-terminal-ansiBrightWhite'),
-      };
-    }
-
-    terminal.options.theme = readVsCodeTheme();
     terminal.loadAddon(fitAddon);
     terminal.loadAddon(searchAddon);
     terminal.loadAddon(webLinksAddon);
