@@ -37,6 +37,41 @@ describe('TerminalTransport', () => {
     expect(client.kill).toHaveBeenCalledOnce();
   });
 
+  it('seeds scrollback from tmux history before forwarding live output', async () => {
+    let resolveCapture: ((data: string) => void) | undefined;
+    const client = fakeClient();
+    client.capturePane.mockReturnValue(new Promise<string>((resolve) => {
+      resolveCapture = resolve;
+    }));
+    const transport = new TerminalTransport('/ext/resources/deck.conf', vi.fn(() => client));
+    const data = vi.fn();
+
+    transport.onData(data);
+    transport.start('wt-_work_repo__term-1', '/work/repo', 80, 24);
+    client.emitOutput('live\r\n');
+
+    expect(data).not.toHaveBeenCalled();
+
+    resolveCapture?.('seed\r\n');
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(client.capturePane).toHaveBeenCalledWith(5000);
+    expect(data.mock.calls.map(([payload]) => payload)).toEqual(['seed\r\n', 'live\r\n']);
+  });
+
+  it('drops trailing blank screen lines from the seeded scrollback', () => {
+    const client = fakeClient();
+    client.capturePane.mockReturnValue('prompt\r\n\r\n   \n');
+    const transport = new TerminalTransport('/ext/resources/deck.conf', vi.fn(() => client));
+    const data = vi.fn();
+
+    transport.onData(data);
+    transport.start('wt-_work_repo__term-1', '/work/repo', 80, 24);
+
+    expect(data).toHaveBeenCalledWith('prompt\r\n');
+  });
+
   it('uses the latest resize as the initial control-client size when resize arrives before start', () => {
     const client = fakeClient();
     const transport = new TerminalTransport('/ext/resources/deck.conf', vi.fn(() => client));
@@ -111,6 +146,7 @@ function fakeClient() {
     start: vi.fn(),
     sendKeys: vi.fn(),
     resize: vi.fn(),
+    capturePane: vi.fn(() => ''),
     onOutput: vi.fn((handler: (data: string) => void) => {
       outputHandler = handler;
       return { dispose: vi.fn() };

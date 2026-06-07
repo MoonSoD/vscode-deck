@@ -6,6 +6,7 @@ export interface TmuxControlClientLike {
   onExit(handler: (code: number | null) => void): { dispose(): void };
   sendKeys(data: string): Promise<void> | void;
   resize(cols: number, rows: number): Promise<void> | void;
+  capturePane(lines: number): Promise<string> | string;
   kill(): void;
 }
 
@@ -22,6 +23,7 @@ export class TerminalTransport {
   private readonly dataHandlers = new Set<(data: string) => void>();
   private readonly exitHandlers = new Set<(code: number) => void>();
   private readonly disposables: Array<{ dispose(): void }> = [];
+  private readonly pendingOutput: string[] = [];
 
   constructor(
     private readonly configPath: string,
@@ -37,7 +39,11 @@ export class TerminalTransport {
     const client = this.client;
     this.disposables.push(
       client.onOutput((data) => {
-        for (const handler of this.dataHandlers) handler(data);
+        if (!this.started) {
+          this.pendingOutput.push(data);
+          return;
+        }
+        this.emitData(data);
       }),
       client.onExit((code) => {
         for (const handler of this.exitHandlers) handler(code ?? 0);
@@ -45,14 +51,7 @@ export class TerminalTransport {
     );
 
     const started = client.start(sessionName, cwd);
-    if (isPromiseLike(started)) {
-      this.startPromise = started.then(() => {
-        if (this.client === client) this.started = true;
-      });
-    } else {
-      this.started = true;
-      this.startPromise = Promise.resolve();
-    }
+    this.startPromise = this.seedAfterStart(client, started);
     void client.resize(size.cols, size.rows);
   }
 
@@ -98,9 +97,42 @@ export class TerminalTransport {
     this.client = undefined;
     this.startPromise = undefined;
     this.started = false;
+    this.pendingOutput.length = 0;
+  }
+
+  private seedAfterStart(client: TmuxControlClientLike, started: Promise<void> | void): Promise<void> {
+    const seed = () => {
+      if (this.client !== client) return;
+      const captured = client.capturePane(5000);
+      if (isPromiseLike(captured)) return captured.then((data) => this.finishSeed(client, data));
+      this.finishSeed(client, captured);
+    };
+
+    if (isPromiseLike(started)) return started.then(seed);
+    const seeded = seed();
+    return isPromiseLike(seeded) ? seeded : Promise.resolve();
+  }
+
+  private finishSeed(client: TmuxControlClientLike, seed: string): void {
+    if (this.client !== client) return;
+    const scrollback = stripTrailingBlankLines(seed);
+    if (scrollback) this.emitData(scrollback);
+    for (const data of this.pendingOutput.splice(0)) this.emitData(data);
+    this.started = true;
+  }
+
+  private emitData(data: string): void {
+    for (const handler of this.dataHandlers) handler(data);
   }
 }
 
-function isPromiseLike(value: Promise<void> | void): value is Promise<void> {
+function stripTrailingBlankLines(data: string): string {
+  const lines = data.split('\n');
+  while (lines.length > 0 && lines.at(-1)?.trimEnd() === '') lines.pop();
+  if (lines.length === 0) return '';
+  return lines.join('\n') + (data.endsWith('\n') ? '\n' : '');
+}
+
+function isPromiseLike<T>(value: Promise<T> | T): value is Promise<T> {
   return typeof value === 'object' && value !== null && 'then' in value;
 }

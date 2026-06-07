@@ -251,7 +251,7 @@ describe('TerminalEditorProvider', () => {
     expect(bridge.resize).toHaveBeenCalledWith(132, 41);
   });
 
-  it('restores cached scrollback and renders a debounced fit resize observer before ready', () => {
+  it('does not use webview scrollback snapshots and renders a debounced fit resize observer before ready', () => {
     const panel = panelStub();
     const provider = new TerminalEditorProvider(
       { fsPath: '/extension' } as never,
@@ -267,9 +267,10 @@ describe('TerminalEditorProvider', () => {
 
     provider.resolveCustomEditor(document, panel as never);
 
-    expect(panel.webview.html).toContain('vscode.getState()');
-    expect(panel.webview.html).toContain('terminal.write(restoredState.scrollback)');
-    expect(panel.webview.html).toContain('serializeAddon.serialize({ scrollback: 5000 })');
+    expect(panel.webview.html).not.toContain('vscode.getState()');
+    expect(panel.webview.html).not.toContain('vscode.setState(');
+    expect(panel.webview.html).not.toContain('SerializeAddon');
+    expect(panel.webview.html).not.toContain('@xterm/addon-serialize');
     expect(panel.webview.html).toContain('new ResizeObserver');
     expect(panel.webview.html).toContain('setTimeout(postResize, 50)');
     expect(panel.webview.html).toContain("vscode.postMessage({ type: 'resize'");

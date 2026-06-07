@@ -8,9 +8,6 @@ describe('resources/deck.conf', () => {
       [
         'set -g automatic-rename on',
         'set -g history-limit 50000',
-        '# No alternate screen on the outer terminal: output flows into xterm\'s normal',
-        '# buffer so wheel scroll, find, and snapshot restore work xterm-natively.',
-        'set -ga terminal-overrides \',xterm*:smcup@:rmcup@\'',
         'set -g destroy-unattached off',
         'set -g status off',
         'set -g prefix None',
