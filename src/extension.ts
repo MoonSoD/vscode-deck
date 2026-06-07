@@ -236,10 +236,34 @@ export async function openPendingTerminalForCurrentWorktree(
 
   await terminalSessionListCache.set(terminalWorktreePrefix(worktreePath), terminals);
 
+  // VS Code natively restores this worktree's terminal tabs in their original
+  // groups on switch-back. If the clicked terminal is already a restored tab,
+  // reveal it in place — passing ViewColumn.Active would *move* it to the
+  // last-focused group. Only a terminal with no tab (session alive, tab closed)
+  // opens fresh in the active column.
+  const existingColumn = findTerminalTabColumn(sessionName);
   await vscode.commands.executeCommand(
     'vscode.openWith',
     new SessionUriCodec().encode({ sessionName, cwd: worktreePath }),
     terminalEditorViewType,
-    { viewColumn: vscode.ViewColumn.Active },
+    { viewColumn: existingColumn ?? vscode.ViewColumn.Active },
   );
+}
+
+// Scans open tabs (not the provider's panel map, which may not be populated yet
+// during post-switch restoration) for a Deck terminal tab matching sessionName.
+function findTerminalTabColumn(sessionName: string): vscode.ViewColumn | undefined {
+  const codec = new SessionUriCodec();
+  for (const group of vscode.window.tabGroups.all) {
+    for (const tab of group.tabs) {
+      const input = tab.input as { viewType?: unknown; uri?: vscode.Uri } | undefined;
+      if (input?.viewType !== terminalEditorViewType || !input.uri) continue;
+      try {
+        if (codec.decode(input.uri).sessionName === sessionName) return group.viewColumn;
+      } catch {
+        // Not a decodable Deck terminal URI; skip.
+      }
+    }
+  }
+  return undefined;
 }

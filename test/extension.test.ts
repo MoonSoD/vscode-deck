@@ -6,6 +6,7 @@ const vscodeState = vi.hoisted(() => ({
   addProjectRun: vi.fn(),
   addTerminalRun: vi.fn(),
   configUpdate: vi.fn(),
+  tabGroups: [] as Array<{ viewColumn: number; tabs: Array<{ input?: unknown }> }>,
   createTreeView: vi.fn(() => ({
     dispose: vi.fn(),
     onDidChangeVisibility: vi.fn(() => ({ dispose: vi.fn() })),
@@ -65,6 +66,9 @@ vi.mock('vscode', () => ({
     onDidCloseTerminal: vscodeState.onDidCloseTerminal,
     onDidChangeActiveTerminal: vscodeState.onDidChangeActiveTerminal,
     onDidOpenTerminal: vscodeState.onDidOpenTerminal,
+    get tabGroups() {
+      return { all: vscodeState.tabGroups };
+    },
   },
   workspace: {
     getConfiguration: () => ({
@@ -234,6 +238,7 @@ describe('activate', () => {
     vscodeState.settingsProjects = ['/settings/repo'];
     vscodeState.terminalSessionListCacheInstances = [];
     vscodeState.tmuxInstances = [];
+    vscodeState.tabGroups = [];
     vscodeState.workspaceFolders = [{ uri: { fsPath: '/work/alpha-main' } }];
     vscodeState.configUpdate.mockResolvedValue(undefined);
     vscodeState.tmuxPreflight.mockResolvedValue({ available: true });
@@ -498,6 +503,46 @@ describe('activate', () => {
       },
       'deck.terminal',
       { viewColumn: -1 },
+    );
+  });
+
+  it('reveals an already-restored pending terminal in its own group, not the active one', async () => {
+    // VS Code natively restored this terminal in editor group 2 on switch-back.
+    vscodeState.tabGroups = [
+      { viewColumn: 1, tabs: [] },
+      {
+        viewColumn: 2,
+        tabs: [
+          {
+            input: {
+              viewType: 'deck.terminal',
+              uri: {
+                scheme: 'deck-terminal',
+                path: '/wt-_work_alpha-main__term-1',
+                query: 'cwd=%2Fwork%2Falpha-main',
+              },
+            },
+          },
+        ],
+      },
+    ];
+    const pendingTerminalOpens = { consume: vi.fn(async () => 'wt-_work_alpha-main__term-1') };
+    const terminalSessionListCache = { set: vi.fn(async () => undefined) };
+    const tmux = {
+      listSessions: vi.fn(async () => [
+        { sessionName: 'wt-_work_alpha-main__term-1', windowName: 'zsh' },
+      ]),
+    };
+
+    await openPendingTerminalForCurrentWorktree(pendingTerminalOpens, terminalSessionListCache, tmux);
+
+    // Reveal in its restored group (2), not ViewColumn.Active (-1), which would
+    // yank the tab to the last-focused group.
+    expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
+      'vscode.openWith',
+      expect.anything(),
+      'deck.terminal',
+      { viewColumn: 2 },
     );
   });
 
