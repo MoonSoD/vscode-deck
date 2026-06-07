@@ -33,6 +33,25 @@ describe('TmuxControlClient', () => {
     expect(child.writes).toEqual(['list-panes -s -t =wt-_work_repo__term-1 -F "#{pane_id}"\n']);
   });
 
+  it('shares startup across overlapping start calls', async () => {
+    const child = fakeChild();
+    const spawn: TmuxControlSpawnFactory = vi.fn(() => child);
+    const client = new TmuxControlClient('/ext/resources/deck.conf', spawn);
+
+    const firstStart = client.start('wt-_work_repo__term-1', '/work/repo');
+    const secondStart = client.start('wt-_work_repo__term-1', '/work/repo');
+
+    expect(secondStart).toBe(firstStart);
+    expect(spawn).toHaveBeenCalledTimes(1);
+
+    child.emitStdout('%begin 1 1 0\n%end 1 1 0\n');
+    await untilWrites(child, 1);
+    child.emitStdout('%begin 1 2 1\n%0\n%end 1 2 1\n');
+
+    await Promise.all([firstStart, secondStart]);
+    expect(child.writes).toEqual(['list-panes -s -t =wt-_work_repo__term-1 -F "#{pane_id}"\n']);
+  });
+
   it('decodes pane output escapes after reassembling UTF-8 across output events', async () => {
     const child = fakeChild();
     const client = new TmuxControlClient('/ext/resources/deck.conf', vi.fn(() => child));

@@ -25,6 +25,7 @@ interface PendingReply {
 
 export class TmuxControlClient {
   private child: TmuxControlChild | undefined;
+  private startPromise: Promise<void> | undefined;
   private lineBuffer = Buffer.alloc(0);
   private paneId: string | undefined;
   private activeReply: { body: string[] } | undefined;
@@ -39,9 +40,14 @@ export class TmuxControlClient {
     private readonly spawnFactory: TmuxControlSpawnFactory = defaultSpawn,
   ) {}
 
-  async start(sessionName: string, cwd: string): Promise<void> {
-    if (this.child) return;
+  start(sessionName: string, cwd: string): Promise<void> {
+    if (this.startPromise) return this.startPromise;
 
+    this.startPromise = this.startControlClient(sessionName, cwd);
+    return this.startPromise;
+  }
+
+  private async startControlClient(sessionName: string, cwd: string): Promise<void> {
     const attach = this.enqueueReply();
     this.child = this.spawnFactory('tmux', [
       '-C',
