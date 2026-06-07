@@ -62,6 +62,17 @@ the editor tab and how reload is handled.
 
 ## Decision
 
+> **Superseded in part by [ADR-0012](./0012-terminal-transport-tmux-control-mode.md)
+> and [ADR-0013](./0013-vscode-native-custom-editor-restore.md).**
+> The custom-editor surface, URI identity, kill-on-dispose, and cascade all
+> carry forward. What changed: the *transport* — decision 3 (one node-pty
+> child per tab) and the pty-relay half of decision 4 — is replaced by a
+> `tmux -C` control-mode client (`TerminalTransport`); node-pty and its
+> `spawn-helper` postinstall hack are gone (ADR-0012). The reload-persistence
+> mechanism in decision 8 (`TabSnapshotStore`) is deleted wholesale — VS Code
+> restores custom-editor tabs natively across switches (ADR-0013). The
+> `spawn-helper` consequence note below is therefore historical.
+
 1. **Terminals are custom-editor tabs.** Register a `CustomEditorProvider`
    with `viewType: deck.terminal`. The custom editor renders an xterm.js
    webview attached to a tmux session on the DeckSocket. VS Code's
