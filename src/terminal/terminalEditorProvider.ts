@@ -425,6 +425,28 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
       // Width tables matching modern terminals: emoji and CJK are 2 cells, so
       // the shell's cursor math (p10k redraws) lines up with what xterm paints.
       terminal.unicode.activeVersion = '11';
+
+      // Every Deck terminal is a tmux control-mode pane, and tmux IS the pane's
+      // terminal emulator — it answers device-attribute / device-status queries
+      // (DA1/DA2/DA3, DSR/CPR) itself. tmux also relays the raw query bytes to
+      // us in %output so xterm's screen stays in sync; if xterm ALSO answers,
+      // that second reply is routed back via send-keys and lands at the shell
+      // after the querying program exits (the stray '1;2c' after nvim). Suppress
+      // xterm's built-in responders so tmux stays the single authority — exactly
+      // what iTerm2 does for tmux clients (terminalShouldSendReport:NO). OSC
+      // 10/11 colour queries are deliberately NOT suppressed here: tmux cannot
+      // know the outer colours, so those still need a client answer.
+      const suppress = () => true;
+      for (const id of [
+        { final: 'c' },               // DA1
+        { prefix: '>', final: 'c' },  // DA2
+        { prefix: '=', final: 'c' },  // DA3
+        { final: 'n' },               // DSR / CPR
+        { prefix: '?', final: 'n' },  // DEC DSR
+      ]) {
+        terminal.parser.registerCsiHandler(id, suppress);
+      }
+
       terminal.open(terminalElement);
       fitAddon.fit();
       terminal.focus();

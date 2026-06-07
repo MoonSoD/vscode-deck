@@ -172,6 +172,10 @@ describe('TerminalEditorProvider', () => {
     expect(terminalPanel.webview.html).toContain('@xterm/addon-search');
     expect(terminalPanel.webview.html).toContain('@xterm/addon-unicode11');
     expect(terminalPanel.webview.html).toContain("terminal.unicode.activeVersion = '11'");
+    // tmux answers DA/DSR for the pane; xterm must not also reply (would leak
+    // e.g. '1;2c' to the shell after the querying program exits).
+    expect(terminalPanel.webview.html).toContain('registerCsiHandler');
+    expect(terminalPanel.webview.html).toContain("{ prefix: '?', final: 'n' }");
     expect(terminalPanel.webview.html).toContain('clipboard.writeText');
     expect(terminalPanel.webview.html).toContain('clipboard.readText');
     expect(terminalPanel.webview.html).toContain('context-menu');
