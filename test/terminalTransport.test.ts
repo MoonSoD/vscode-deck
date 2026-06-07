@@ -68,6 +68,40 @@ describe('TerminalTransport', () => {
 
     expect(client.sendKeys).toHaveBeenCalledWith('echo ok\n');
   });
+
+  it('does not let a stale startup mark a restarted client as ready', async () => {
+    let resolveFirstStart: (() => void) | undefined;
+    let resolveSecondStart: (() => void) | undefined;
+    const firstClient = fakeClient();
+    const secondClient = fakeClient();
+    firstClient.start.mockReturnValue(new Promise<void>((resolve) => {
+      resolveFirstStart = resolve;
+    }));
+    secondClient.start.mockReturnValue(new Promise<void>((resolve) => {
+      resolveSecondStart = resolve;
+    }));
+    const transport = new TerminalTransport(
+      '/ext/resources/deck.conf',
+      vi.fn()
+        .mockReturnValueOnce(firstClient)
+        .mockReturnValueOnce(secondClient),
+    );
+
+    transport.start('wt-_work_repo__term-1', '/work/repo', 80, 24);
+    transport.kill();
+    transport.start('wt-_work_repo__term-1', '/work/repo', 80, 24);
+    resolveFirstStart?.();
+    await Promise.resolve();
+    transport.write('echo ok\n');
+
+    expect(secondClient.sendKeys).not.toHaveBeenCalled();
+
+    resolveSecondStart?.();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(secondClient.sendKeys).toHaveBeenCalledWith('echo ok\n');
+  });
 });
 
 function fakeClient() {

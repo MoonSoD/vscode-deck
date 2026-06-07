@@ -47,7 +47,7 @@ export class TerminalTransport {
     const started = client.start(sessionName, cwd);
     if (isPromiseLike(started)) {
       this.startPromise = started.then(() => {
-        this.started = true;
+        if (this.client === client) this.started = true;
       });
     } else {
       this.started = true;

@@ -73,7 +73,7 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
     private readonly extensionUri: vscode.Uri,
     private readonly configPath: string,
     private readonly codec: SessionUriCodec = new SessionUriCodec(),
-    private readonly bridgeFactory: TerminalTransportFactory = () =>
+    private readonly transportFactory: TerminalTransportFactory = () =>
       new TerminalTransport(this.configPath),
     private readonly onPanelDispose: TerminalEditorDisposeHandler = () => undefined,
   ) {
@@ -121,8 +121,8 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
 
     this.panels.set(document.sessionName, panel);
     this.activePanel = panel;
-    const bridge = this.bridgeFactory();
-    const bridgeDisposables: vscode.Disposable[] = [];
+    const transport = this.transportFactory();
+    const transportDisposables: vscode.Disposable[] = [];
 
     panel.webview.options = {
       enableScripts: true,
@@ -132,24 +132,29 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
     panel.webview.html = this.html(panel.webview, initialConfig);
     void panel.webview.postMessage({ type: 'config', payload: initialConfig });
 
-    bridgeDisposables.push(
-      bridge.onData((data) => {
+    transportDisposables.push(
+      transport.onData((data) => {
         void panel.webview.postMessage({ type: 'data', payload: data });
       }),
-      bridge.onExit((code) => {
+      transport.onExit((code) => {
         void panel.webview.postMessage({ type: 'exit', code });
       }),
       panel.webview.onDidReceiveMessage((message: TerminalWebviewMessage) => {
         if (message.type === 'ready') {
-          bridge.start(document.sessionName, document.cwd, message.cols ?? 80, message.rows ?? 24);
+          transport.start(
+            document.sessionName,
+            document.cwd,
+            message.cols ?? 80,
+            message.rows ?? 24,
+          );
           return;
         }
 
-        if (message.type === 'input') bridge.write(message.payload);
+        if (message.type === 'input') transport.write(message.payload);
         if (message.type === 'openExternal') {
           void vscode.env.openExternal(vscode.Uri.parse(message.payload));
         }
-        if (message.type === 'resize') bridge.resize(message.cols, message.rows);
+        if (message.type === 'resize') transport.resize(message.cols, message.rows);
         if (message.type === 'focused') this.activePanel = panel;
         if (message.type === 'exit') panel.dispose();
       }),
@@ -161,8 +166,8 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
       }
       if (this.activePanel === panel) this.activePanel = undefined;
       void this.onPanelDispose(document.sessionName);
-      bridge.dispose();
-      for (const disposable of bridgeDisposables.splice(0)) disposable.dispose();
+      transport.dispose();
+      for (const disposable of transportDisposables.splice(0)) disposable.dispose();
     });
   }
 
