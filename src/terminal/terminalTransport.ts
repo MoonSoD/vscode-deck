@@ -1,12 +1,12 @@
 import { TmuxControlClient } from './tmuxControlClient';
 
 export interface TmuxControlClientLike {
-  start(sessionName: string, cwd: string): Promise<void> | void;
+  start(sessionName: string, cwd: string, seedLines: number): Promise<void> | void;
   onOutput(handler: (data: string) => void): { dispose(): void };
+  onSeed(handler: (seed: string) => void): { dispose(): void };
   onExit(handler: (code: number | null) => void): { dispose(): void };
   sendKeys(data: string): Promise<void> | void;
   resize(cols: number, rows: number): Promise<void> | void;
-  capturePane(lines: number): Promise<string> | string;
   kill(): void;
 }
 
@@ -15,15 +15,18 @@ export type TmuxControlClientFactory = (configPath: string) => TmuxControlClient
 const defaultClientFactory: TmuxControlClientFactory = (configPath) =>
   new TmuxControlClient(configPath);
 
+// Matches the webview's xterm scrollback; seeding deeper is wasted writes.
+const SEED_LINES = 5000;
+
 export class TerminalTransport {
   private client: TmuxControlClientLike | undefined;
   private startPromise: Promise<void> | undefined;
-  private started = false;
+  private ready = false;
+  private exitEmitted = false;
   private pendingSize: { cols: number; rows: number } | undefined;
   private readonly dataHandlers = new Set<(data: string) => void>();
   private readonly exitHandlers = new Set<(code: number) => void>();
   private readonly disposables: Array<{ dispose(): void }> = [];
-  private readonly pendingOutput: string[] = [];
 
   constructor(
     private readonly configPath: string,
@@ -35,24 +38,27 @@ export class TerminalTransport {
     const size = this.pendingSize ?? { cols, rows };
     this.pendingSize = undefined;
 
-    this.client = this.clientFactory(this.configPath);
-    const client = this.client;
+    const client = this.clientFactory(this.configPath);
+    this.client = client;
     this.disposables.push(
-      client.onOutput((data) => {
-        if (!this.started) {
-          this.pendingOutput.push(data);
-          return;
-        }
-        this.emitData(data);
+      client.onSeed((seed) => {
+        const scrollback = normalizeSeedNewlines(stripTrailingBlankLines(seed));
+        if (scrollback) this.emitData(scrollback);
       }),
-      client.onExit((code) => {
-        for (const handler of this.exitHandlers) handler(code ?? 0);
-      }),
+      client.onOutput((data) => this.emitData(data)),
+      client.onExit((code) => this.emitExit(code ?? 0)),
     );
 
-    const started = client.start(sessionName, cwd);
-    this.startPromise = this.seedAfterStart(client, started);
-    void client.resize(size.cols, size.rows);
+    this.startPromise = Promise.resolve(client.start(sessionName, cwd, SEED_LINES))
+      .then(() => {
+        if (this.client === client) this.ready = true;
+      })
+      .catch(() => {
+        if (this.client !== client) return;
+        client.kill();
+        this.emitExit(1);
+      });
+    void Promise.resolve(client.resize(size.cols, size.rows)).catch(() => undefined);
   }
 
   onData(handler: (data: string) => void): { dispose(): void } {
@@ -68,13 +74,15 @@ export class TerminalTransport {
   write(data: string): void {
     const client = this.client;
     if (!client) return;
-    if (this.started) {
-      void client.sendKeys(data);
+    if (this.ready) {
+      void Promise.resolve(client.sendKeys(data)).catch(() => undefined);
       return;
     }
 
     void this.startPromise?.then(() => {
-      if (this.client === client) void client.sendKeys(data);
+      if (this.client === client && this.ready) {
+        void Promise.resolve(client.sendKeys(data)).catch(() => undefined);
+      }
     });
   }
 
@@ -84,7 +92,7 @@ export class TerminalTransport {
       return;
     }
 
-    void this.client.resize(cols, rows);
+    void Promise.resolve(this.client.resize(cols, rows)).catch(() => undefined);
   }
 
   dispose(): void {
@@ -96,33 +104,18 @@ export class TerminalTransport {
     this.client?.kill();
     this.client = undefined;
     this.startPromise = undefined;
-    this.started = false;
-    this.pendingOutput.length = 0;
-  }
-
-  private seedAfterStart(client: TmuxControlClientLike, started: Promise<void> | void): Promise<void> {
-    const seed = () => {
-      if (this.client !== client) return;
-      const captured = client.capturePane(5000);
-      if (isPromiseLike(captured)) return captured.then((data) => this.finishSeed(client, data));
-      this.finishSeed(client, captured);
-    };
-
-    if (isPromiseLike(started)) return started.then(seed);
-    const seeded = seed();
-    return isPromiseLike(seeded) ? seeded : Promise.resolve();
-  }
-
-  private finishSeed(client: TmuxControlClientLike, seed: string): void {
-    if (this.client !== client) return;
-    const scrollback = normalizeSeedNewlines(stripTrailingBlankLines(seed));
-    if (scrollback) this.emitData(scrollback);
-    for (const data of this.pendingOutput.splice(0)) this.emitData(data);
-    this.started = true;
+    this.ready = false;
+    this.exitEmitted = false;
   }
 
   private emitData(data: string): void {
     for (const handler of this.dataHandlers) handler(data);
+  }
+
+  private emitExit(code: number): void {
+    if (this.exitEmitted) return;
+    this.exitEmitted = true;
+    for (const handler of this.exitHandlers) handler(code);
   }
 }
 
@@ -135,8 +128,4 @@ function stripTrailingBlankLines(data: string): string {
 
 function normalizeSeedNewlines(data: string): string {
   return data.replace(/\r?\n/g, '\r\n');
-}
-
-function isPromiseLike<T>(value: Promise<T> | T): value is Promise<T> {
-  return typeof value === 'object' && value !== null && 'then' in value;
 }

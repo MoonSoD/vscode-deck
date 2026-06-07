@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { TerminalTransport, type TmuxControlClientFactory } from '../src/terminal/terminalTransport';
 
 describe('TerminalTransport', () => {
-  it('starts a tmux control client and applies the initial size', () => {
+  it('starts a tmux control client with the seed depth and applies the initial size', () => {
     const client = fakeClient();
     const factory: TmuxControlClientFactory = vi.fn(() => client);
     const transport = new TerminalTransport('/ext/resources/deck.conf', factory);
@@ -10,11 +10,11 @@ describe('TerminalTransport', () => {
     transport.start('wt-_work_repo__term-1', '/work/repo', 120, 32);
 
     expect(factory).toHaveBeenCalledWith('/ext/resources/deck.conf');
-    expect(client.start).toHaveBeenCalledWith('wt-_work_repo__term-1', '/work/repo');
+    expect(client.start).toHaveBeenCalledWith('wt-_work_repo__term-1', '/work/repo', 5000);
     expect(client.resize).toHaveBeenCalledWith(120, 32);
   });
 
-  it('forwards control output, writes, resize, exit events, and dispose', () => {
+  it('forwards control output, writes, resize, exit events, and dispose', async () => {
     const client = fakeClient();
     const transport = new TerminalTransport('/ext/resources/deck.conf', vi.fn(() => client));
     const data = vi.fn();
@@ -23,6 +23,7 @@ describe('TerminalTransport', () => {
     transport.onData(data);
     transport.onExit(exit);
     transport.start('wt-_work_repo__term-1', '/work/repo', 80, 24);
+    await Promise.resolve();
 
     client.emitOutput('hello');
     transport.write('ls\n');
@@ -37,51 +38,53 @@ describe('TerminalTransport', () => {
     expect(client.kill).toHaveBeenCalledOnce();
   });
 
-  it('seeds scrollback from tmux history before forwarding live output', async () => {
-    let resolveCapture: ((data: string) => void) | undefined;
+  it('forwards the seed and live output in client order', () => {
     const client = fakeClient();
-    client.capturePane.mockReturnValue(new Promise<string>((resolve) => {
-      resolveCapture = resolve;
-    }));
     const transport = new TerminalTransport('/ext/resources/deck.conf', vi.fn(() => client));
     const data = vi.fn();
 
     transport.onData(data);
     transport.start('wt-_work_repo__term-1', '/work/repo', 80, 24);
+    client.emitSeed('seed');
     client.emitOutput('live\r\n');
 
-    expect(data).not.toHaveBeenCalled();
-
-    resolveCapture?.('seed\r\n');
-    await Promise.resolve();
-    await Promise.resolve();
-
-    expect(client.capturePane).toHaveBeenCalledWith(5000);
-    expect(data.mock.calls.map(([payload]) => payload)).toEqual(['seed\r\n', 'live\r\n']);
+    expect(data.mock.calls.map(([payload]) => payload)).toEqual(['seed', 'live\r\n']);
   });
 
   it('drops trailing blank screen lines from the seeded scrollback', () => {
     const client = fakeClient();
-    client.capturePane.mockReturnValue('prompt\r\n\r\n   \n');
     const transport = new TerminalTransport('/ext/resources/deck.conf', vi.fn(() => client));
     const data = vi.fn();
 
     transport.onData(data);
     transport.start('wt-_work_repo__term-1', '/work/repo', 80, 24);
+    client.emitSeed('prompt\r\n\r\n   \n');
 
     expect(data).toHaveBeenCalledWith('prompt\r\n');
   });
 
   it('normalizes captured line feeds for xterm replay', () => {
     const client = fakeClient();
-    client.capturePane.mockReturnValue('one\ntwo');
     const transport = new TerminalTransport('/ext/resources/deck.conf', vi.fn(() => client));
     const data = vi.fn();
 
     transport.onData(data);
     transport.start('wt-_work_repo__term-1', '/work/repo', 80, 24);
+    client.emitSeed('one\ntwo');
 
     expect(data).toHaveBeenCalledWith('one\r\ntwo');
+  });
+
+  it('emits nothing for an empty seed', () => {
+    const client = fakeClient();
+    const transport = new TerminalTransport('/ext/resources/deck.conf', vi.fn(() => client));
+    const data = vi.fn();
+
+    transport.onData(data);
+    transport.start('wt-_work_repo__term-1', '/work/repo', 80, 24);
+    client.emitSeed('');
+
+    expect(data).not.toHaveBeenCalled();
   });
 
   it('uses the latest resize as the initial control-client size when resize arrives before start', () => {
@@ -110,10 +113,37 @@ describe('TerminalTransport', () => {
     expect(client.sendKeys).not.toHaveBeenCalled();
 
     resolveStart?.();
+    await vi.waitFor(() => expect(client.sendKeys).toHaveBeenCalledWith('echo ok\n'));
+  });
+
+  it('emits a single exit and kills the client when startup fails', async () => {
+    const client = fakeClient();
+    client.start.mockRejectedValue(new Error('expected exactly one tmux pane, got 0'));
+    const transport = new TerminalTransport('/ext/resources/deck.conf', vi.fn(() => client));
+    const exit = vi.fn();
+
+    transport.onExit(exit);
+    transport.start('wt-_work_repo__term-1', '/work/repo', 80, 24);
+    await vi.waitFor(() => expect(client.kill).toHaveBeenCalledOnce());
+    client.emitExit(0);
+
+    expect(client.kill).toHaveBeenCalledOnce();
+    expect(exit).toHaveBeenCalledTimes(1);
+    expect(exit).toHaveBeenCalledWith(1);
+  });
+
+  it('drops queued writes when startup fails instead of sending to a dead client', async () => {
+    const client = fakeClient();
+    client.start.mockRejectedValue(new Error('attach failed'));
+    const transport = new TerminalTransport('/ext/resources/deck.conf', vi.fn(() => client));
+
+    transport.start('wt-_work_repo__term-1', '/work/repo', 80, 24);
+    transport.write('echo ok\n');
+    await Promise.resolve();
     await Promise.resolve();
     await Promise.resolve();
 
-    expect(client.sendKeys).toHaveBeenCalledWith('echo ok\n');
+    expect(client.sendKeys).not.toHaveBeenCalled();
   });
 
   it('does not let a stale startup mark a restarted client as ready', async () => {
@@ -144,23 +174,24 @@ describe('TerminalTransport', () => {
     expect(secondClient.sendKeys).not.toHaveBeenCalled();
 
     resolveSecondStart?.();
-    await Promise.resolve();
-    await Promise.resolve();
-
-    expect(secondClient.sendKeys).toHaveBeenCalledWith('echo ok\n');
+    await vi.waitFor(() => expect(secondClient.sendKeys).toHaveBeenCalledWith('echo ok\n'));
   });
 });
 
 function fakeClient() {
   let outputHandler: ((data: string) => void) | undefined;
+  let seedHandler: ((seed: string) => void) | undefined;
   let exitHandler: ((code: number | null) => void) | undefined;
   return {
     start: vi.fn(),
     sendKeys: vi.fn(),
     resize: vi.fn(),
-    capturePane: vi.fn(() => ''),
     onOutput: vi.fn((handler: (data: string) => void) => {
       outputHandler = handler;
+      return { dispose: vi.fn() };
+    }),
+    onSeed: vi.fn((handler: (seed: string) => void) => {
+      seedHandler = handler;
       return { dispose: vi.fn() };
     }),
     onExit: vi.fn((handler: (code: number | null) => void) => {
@@ -169,6 +200,7 @@ function fakeClient() {
     }),
     kill: vi.fn(),
     emitOutput: (data: string) => outputHandler?.(data),
+    emitSeed: (seed: string) => seedHandler?.(seed),
     emitExit: (code: number | null) => exitHandler?.(code),
   };
 }

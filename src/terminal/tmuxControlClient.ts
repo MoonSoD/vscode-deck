@@ -6,6 +6,7 @@ export interface TmuxControlChild {
   stdout: Readable;
   stdin: Writable;
   on(event: 'exit', listener: (code: number | null) => void): unknown;
+  on(event: 'error', listener: (error: Error) => void): unknown;
   kill(): void;
 }
 
@@ -21,6 +22,7 @@ const defaultSpawn: TmuxControlSpawnFactory = (file, args, options) =>
 interface PendingReply {
   resolve(body: string): void;
   reject(error: Error): void;
+  seed?: boolean;
 }
 
 export class TmuxControlClient {
@@ -28,26 +30,33 @@ export class TmuxControlClient {
   private startPromise: Promise<void> | undefined;
   private lineBuffer = Buffer.alloc(0);
   private paneId: string | undefined;
-  private activeReply: { body: string[] } | undefined;
+  private activeReply: { token: string; body: string[] } | undefined;
   private readonly pendingReplies: PendingReply[] = [];
   private readonly outputHandlers = new Set<(data: string) => void>();
+  private readonly seedHandlers = new Set<(seed: string) => void>();
   private readonly exitHandlers = new Set<(code: number | null) => void>();
   private readonly paneDecoder = new TextDecoder();
   private exitFired = false;
+  // Pane bytes streamed before the seed capture-pane reply are already inside
+  // the capture; the gate drops them so the seed is the single source and
+  // reattach never duplicates content (ADR-0012 decision 5). The gate opens
+  // synchronously when the seed reply's %end is parsed, so seed-then-live
+  // ordering is exact stream order.
+  private outputGated = true;
 
   constructor(
     private readonly configPath: string,
     private readonly spawnFactory: TmuxControlSpawnFactory = defaultSpawn,
   ) {}
 
-  start(sessionName: string, cwd: string): Promise<void> {
+  start(sessionName: string, cwd: string, seedLines: number): Promise<void> {
     if (this.startPromise) return this.startPromise;
 
-    this.startPromise = this.startControlClient(sessionName, cwd);
+    this.startPromise = this.startControlClient(sessionName, cwd, seedLines);
     return this.startPromise;
   }
 
-  private async startControlClient(sessionName: string, cwd: string): Promise<void> {
+  private async startControlClient(sessionName: string, cwd: string, seedLines: number): Promise<void> {
     const attach = this.enqueueReply();
     this.child = this.spawnFactory('tmux', [
       '-C',
@@ -65,6 +74,10 @@ export class TmuxControlClient {
 
     this.child.stdout.on('data', (chunk: Buffer) => this.acceptStdout(chunk));
     this.child.on('exit', (code) => this.fireExit(code));
+    this.child.on('error', (error: Error) => {
+      this.failPendingReplies(error);
+      this.fireExit(1);
+    });
 
     await attach;
     const panes = (await this.command(`list-panes -s -t =${sessionName} -F "#{pane_id}"`))
@@ -75,11 +88,19 @@ export class TmuxControlClient {
       throw new Error(`expected exactly one tmux pane, got ${panes.length}`);
     }
     this.paneId = panes[0];
+    // A failed capture costs history, not the terminal: the gate still opens
+    // on the %error so live output flows.
+    await this.command(`capture-pane -p -e -J -S -${seedLines}`, { seed: true }).catch(() => undefined);
   }
 
   onOutput(handler: (data: string) => void): { dispose(): void } {
     this.outputHandlers.add(handler);
     return { dispose: () => this.outputHandlers.delete(handler) };
+  }
+
+  onSeed(handler: (seed: string) => void): { dispose(): void } {
+    this.seedHandlers.add(handler);
+    return { dispose: () => this.seedHandlers.delete(handler) };
   }
 
   onExit(handler: (code: number | null) => void): { dispose(): void } {
@@ -91,11 +112,15 @@ export class TmuxControlClient {
     if (!this.paneId) throw new Error('tmux control client has not started');
     const bytes = Buffer.from(data, 'utf8');
     if (bytes.length === 0) return;
+    // Write all chunks in one synchronous burst so a concurrent sendKeys
+    // (a keystroke during a large paste) cannot interleave between chunks.
+    const replies: Array<Promise<string>> = [];
     for (let offset = 0; offset < bytes.length; offset += 4096) {
       const chunk = bytes.subarray(offset, offset + 4096);
       const hexBytes = Array.from(chunk, (byte) => byte.toString(16).padStart(2, '0'));
-      await this.command(`send-keys -t ${this.paneId} -H ${hexBytes.join(' ')}`);
+      replies.push(this.command(`send-keys -t ${this.paneId} -H ${hexBytes.join(' ')}`));
     }
+    await Promise.all(replies);
   }
 
   async resize(cols: number, rows: number): Promise<void> {
@@ -110,16 +135,16 @@ export class TmuxControlClient {
     this.child?.kill();
   }
 
-  private command(command: string): Promise<string> {
+  private command(command: string, options: { seed?: boolean } = {}): Promise<string> {
     if (!this.child) throw new Error('tmux control client has not started');
-    const reply = this.enqueueReply();
+    const reply = this.enqueueReply(options.seed);
     this.child.stdin.write(`${command}\n`);
     return reply;
   }
 
-  private enqueueReply(): Promise<string> {
+  private enqueueReply(seed?: boolean): Promise<string> {
     return new Promise((resolve, reject) => {
-      this.pendingReplies.push({ resolve, reject });
+      this.pendingReplies.push({ resolve, reject, seed });
     });
   }
 
@@ -138,24 +163,25 @@ export class TmuxControlClient {
 
   private acceptLine(line: Buffer): void {
     const text = line.toString('utf8');
+
+    if (this.activeReply) {
+      // Pane content can contain lines that look like protocol — only a
+      // %end/%error whose <ts> <num> matches the opening %begin closes the
+      // reply; everything else is body.
+      if (replyToken(text, '%end ') === this.activeReply.token) {
+        this.closeReply(true);
+        return;
+      }
+      if (replyToken(text, '%error ') === this.activeReply.token) {
+        this.closeReply(false);
+        return;
+      }
+      this.activeReply.body.push(text);
+      return;
+    }
+
     if (text.startsWith('%begin ')) {
-      this.activeReply = { body: [] };
-      return;
-    }
-
-    if (text.startsWith('%end ')) {
-      const reply = this.pendingReplies.shift();
-      const body = this.activeReply?.body.join('\n') ?? '';
-      this.activeReply = undefined;
-      reply?.resolve(body);
-      return;
-    }
-
-    if (text.startsWith('%error ')) {
-      const reply = this.pendingReplies.shift();
-      const message = this.activeReply?.body.join('\n') || 'tmux command failed';
-      this.activeReply = undefined;
-      reply?.reject(new Error(message));
+      this.activeReply = { token: replyToken(text, '%begin ') ?? '', body: [] };
       return;
     }
 
@@ -166,12 +192,26 @@ export class TmuxControlClient {
 
     if (text.startsWith('%exit')) return;
 
-    if (this.activeReply) {
-      this.activeReply.body.push(text);
+    if (text.startsWith('%')) {
+      console.debug(`[deck] ignoring tmux control-mode notification: ${text}`);
     }
   }
 
+  private closeReply(ok: boolean): void {
+    const reply = this.pendingReplies.shift();
+    const body = this.activeReply?.body.join('\n') ?? '';
+    this.activeReply = undefined;
+    if (reply?.seed) {
+      this.outputGated = false;
+      if (ok) for (const handler of this.seedHandlers) handler(body);
+    }
+    if (!reply) return;
+    if (ok) reply.resolve(body);
+    else reply.reject(new Error(body || 'tmux command failed'));
+  }
+
   private acceptOutput(line: Buffer): void {
+    if (this.outputGated) return;
     const firstSpace = line.indexOf(0x20);
     const secondSpace = line.indexOf(0x20, firstSpace + 1);
     if (secondSpace === -1) return;
@@ -186,8 +226,21 @@ export class TmuxControlClient {
   private fireExit(code: number | null): void {
     if (this.exitFired) return;
     this.exitFired = true;
+    this.failPendingReplies(new Error(`tmux control client exited (${code ?? 'killed'})`));
     for (const handler of this.exitHandlers) handler(code);
   }
+
+  private failPendingReplies(error: Error): void {
+    this.activeReply = undefined;
+    for (const reply of this.pendingReplies.splice(0)) reply.reject(error);
+  }
+}
+
+function replyToken(text: string, prefix: string): string | undefined {
+  if (!text.startsWith(prefix)) return undefined;
+  const fields = text.slice(prefix.length).split(' ');
+  if (fields.length < 2) return undefined;
+  return `${fields[0]} ${fields[1]}`;
 }
 
 function decodeOctalEscapes(input: Buffer): Buffer {
