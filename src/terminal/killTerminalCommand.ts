@@ -44,8 +44,8 @@ export class CloseTerminalCommand {
   }
 
   private sessionForTab(tab: vscode.Tab): string | undefined {
-    const input = tab.input as { viewType?: unknown; uri?: vscode.Uri };
-    if (input.viewType !== terminalEditorViewType || !input.uri) return undefined;
+    const input = tab.input as { viewType?: unknown; uri?: vscode.Uri } | undefined;
+    if (input?.viewType !== terminalEditorViewType || !input.uri) return undefined;
 
     try {
       return this.sessionUriCodec.decode(input.uri).sessionName;
