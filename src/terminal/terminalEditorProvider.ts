@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { SessionUriCodec } from './sessionUriCodec';
-import { TerminalPtyBridge } from './terminalPtyBridge';
+import { TerminalTransport } from './terminalTransport';
 
 export const terminalEditorViewType = 'deck.terminal';
 
@@ -52,7 +52,7 @@ type TerminalWebviewMessage =
   | ExitMessage
   | FocusedMessage;
 
-export interface TerminalPtyBridgeLike {
+export interface TerminalTransportLike {
   start(sessionName: string, cwd: string, cols: number, rows: number): void;
   write(data: string): void;
   resize(cols: number, rows: number): void;
@@ -61,7 +61,7 @@ export interface TerminalPtyBridgeLike {
   dispose(): void;
 }
 
-export type TerminalPtyBridgeFactory = () => TerminalPtyBridgeLike;
+export type TerminalTransportFactory = () => TerminalTransportLike;
 export type TerminalEditorDisposeHandler = (sessionName: string) => Promise<void> | void;
 
 export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvider<TerminalDocument> {
@@ -73,8 +73,8 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
     private readonly extensionUri: vscode.Uri,
     private readonly configPath: string,
     private readonly codec: SessionUriCodec = new SessionUriCodec(),
-    private readonly bridgeFactory: TerminalPtyBridgeFactory = () =>
-      new TerminalPtyBridge(this.configPath),
+    private readonly bridgeFactory: TerminalTransportFactory = () =>
+      new TerminalTransport(this.configPath),
     private readonly onPanelDispose: TerminalEditorDisposeHandler = () => undefined,
   ) {
     this.configChangeSubscription = vscode.workspace.onDidChangeConfiguration((event) => {
@@ -551,4 +551,3 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
 </html>`;
   }
 }
-

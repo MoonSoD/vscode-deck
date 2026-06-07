@@ -97,7 +97,7 @@ describe('TerminalEditorProvider', () => {
     expect(closeSession).toHaveBeenCalledWith('wt-_work_alpha-main__term-1');
   });
 
-  it('disposes the panel when the webview acknowledges pty exit', () => {
+  it('disposes the panel when the webview acknowledges terminal exit', () => {
     let receiveMessage: ((message: { type: string }) => void) | undefined;
     let exitBridge: ((code: number) => void) | undefined;
     const terminalPanel = panel();
@@ -205,7 +205,7 @@ describe('TerminalEditorProvider', () => {
     expect(bridgeFactory).toHaveBeenCalledOnce();
   });
 
-  it('routes resize messages to the pty bridge', () => {
+  it('routes resize messages to the terminal transport', () => {
     let receiveMessage:
       | ((message: { type: string; cols?: number; rows?: number; payload?: string }) => void)
       | undefined;
