@@ -122,9 +122,6 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
   private readonly resolvingProjectPaths = new Set<string>();
   private readonly refreshingWorktrees = new Set<string>();
   private readonly refreshingTerminals = new Set<string>();
-  // Prefixes whose terminal list changed again while a refresh was in flight;
-  // drained by a trailing refresh so the final state isn't missed.
-  private readonly pendingTerminalRefresh = new Set<string>();
   private readonly tmux: TerminalSessionLister;
   private readonly tmuxAvailable: boolean;
 
@@ -327,15 +324,7 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
     cacheKey: string,
     previous: readonly CachedTerminalSession[],
   ): void {
-    if (this.refreshingTerminals.has(prefix)) {
-      // A refresh is already in flight. Its list-sessions may have read a
-      // transient state (e.g. a foreground command mid-exit), so remember to
-      // run one more pass afterward — without this trailing refresh, rapid
-      // rename events (top exits -> zsh) can leave the row stuck on the
-      // intermediate name.
-      this.pendingTerminalRefresh.add(prefix);
-      return;
-    }
+    if (this.refreshingTerminals.has(prefix)) return;
     this.refreshingTerminals.add(prefix);
     void this.tmux
       .listSessions(prefix)
@@ -348,12 +337,6 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
       .catch(() => undefined)
       .finally(() => {
         this.refreshingTerminals.delete(prefix);
-        if (this.pendingTerminalRefresh.delete(prefix)) {
-          // Re-run against the latest cached value so the comparison reflects
-          // what was just written, not the now-stale `previous`.
-          const latest = this.terminalSessionListCache.get(cacheKey) ?? previous;
-          this.refreshTerminalsInBackground(element, prefix, cacheKey, latest);
-        }
       });
   }
 

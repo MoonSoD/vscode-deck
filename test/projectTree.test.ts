@@ -326,50 +326,6 @@ describe('ProjectTreeProvider', () => {
     expect(tmux.listSessions).toHaveBeenCalledWith('wt-_work_alpha-main__term-');
   });
 
-  it('runs a trailing terminal refresh so a rename arriving mid-refresh is not missed', async () => {
-    let cached = [{ sessionName: 'wt-_work_alpha-main__term-1', n: 1, windowName: 'zsh' }];
-    const cache = {
-      get: vi.fn(() => cached),
-      set: vi.fn(async (_key: string, value: typeof cached) => {
-        cached = value;
-      }),
-    };
-    let resolveFirst: ((sessions: Array<{ sessionName: string; windowName: string }>) => void) | undefined;
-    const listSessions = vi
-      .fn()
-      // First (in-flight) read catches the foreground command mid-exit: still 'top'.
-      .mockImplementationOnce(() => new Promise((resolve) => {
-        resolveFirst = resolve;
-      }))
-      // Trailing read, after top has fully exited: settled on 'zsh'.
-      .mockResolvedValue([{ sessionName: 'wt-_work_alpha-main__term-1', windowName: 'zsh' }]);
-    const provider = new ProjectTreeProvider(
-      registry(['/work/alpha-main']),
-      { get: vi.fn() } as unknown as ActiveWorktreeStore,
-      { get: vi.fn() } as unknown as WorktreeOrderStore,
-      { get: vi.fn(), set: vi.fn(async () => undefined) } as unknown as WorktreeListCacheStore,
-      { get: vi.fn(() => '/git/alpha'), set: vi.fn(async () => undefined) } as unknown as ProjectCommonDirCache,
-      { listSessions } as never,
-      true,
-      cache as never,
-    );
-    const projects = provider.getChildren();
-    if (!Array.isArray(projects)) throw new Error('expected sync project roots');
-    const worktrees = await provider.getChildren(projects[0]);
-    if (!Array.isArray(worktrees)) throw new Error('expected worktree children');
-
-    // First rename event kicks a background refresh (list #1, still pending).
-    provider.getChildren(worktrees[0]);
-    // A second event arrives while #1 is in flight → must be remembered, not dropped.
-    provider.getChildren(worktrees[0]);
-
-    resolveFirst?.([{ sessionName: 'wt-_work_alpha-main__term-1', windowName: 'top' }]);
-
-    // The trailing refresh re-reads and lands on the settled 'zsh'.
-    await vi.waitFor(() => expect(listSessions).toHaveBeenCalledTimes(2));
-    await vi.waitFor(() => expect(cached[0].windowName).toBe('zsh'));
-  });
-
   it('marks terminals in the current workspace folder as active', async () => {
     const tmux = {
       listSessions: vi.fn(async () => [
