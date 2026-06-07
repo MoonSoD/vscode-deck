@@ -1,8 +1,7 @@
 import * as vscode from 'vscode';
 import { SessionUriCodec } from './sessionUriCodec';
+import { terminalEditorViewType } from './terminalEditorProvider';
 import { terminalSessionPrefix } from './tmuxSafe';
-
-const terminalEditorViewType = 'deck.terminal';
 
 interface TmuxLike {
   listSessions(): Promise<Array<{ sessionName: string }>>;
