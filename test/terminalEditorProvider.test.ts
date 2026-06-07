@@ -1,17 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('vscode', () => ({
-  ColorThemeKind: {
-    Light: 1,
-    Dark: 2,
-    HighContrast: 3,
-    HighContrastLight: 4,
-  },
   Uri: {
     joinPath: (base: unknown, ...paths: string[]) => ({ base, paths }),
-  },
-  window: {
-    activeColorTheme: { kind: 2 },
   },
   workspace: {
     getConfiguration: () => ({
@@ -131,7 +122,7 @@ describe('TerminalEditorProvider', () => {
     expect(terminalPanel.dispose).toHaveBeenCalledOnce();
   });
 
-  it('posts terminal font and theme config when resolving an editor', () => {
+  it('posts terminal font config when resolving an editor', () => {
     const terminalPanel = panel();
     const { provider, document } = providerDocument();
 
@@ -139,14 +130,7 @@ describe('TerminalEditorProvider', () => {
 
     expect(terminalPanel.webview.postMessage).toHaveBeenCalledWith({
       type: 'config',
-      payload: expect.objectContaining({
-        fontFamily: 'JetBrains Mono',
-        fontSize: 15,
-        theme: expect.objectContaining({
-          background: expect.any(String),
-          foreground: expect.any(String),
-        }),
-      }),
+      payload: { fontFamily: 'JetBrains Mono', fontSize: 15 },
     });
   });
 

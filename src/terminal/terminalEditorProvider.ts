@@ -42,7 +42,6 @@ interface FocusedMessage {
 interface TerminalConfig {
   fontFamily: string;
   fontSize: number;
-  theme: Record<string, string>;
 }
 
 type TerminalWebviewMessage =
@@ -81,8 +80,7 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
     this.configChangeSubscription = vscode.workspace.onDidChangeConfiguration((event) => {
       if (
         !event.affectsConfiguration('editor.fontFamily') &&
-        !event.affectsConfiguration('editor.fontSize') &&
-        !event.affectsConfiguration('workbench.colorTheme')
+        !event.affectsConfiguration('editor.fontSize')
       ) {
         return;
       }
@@ -179,7 +177,6 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
     return {
       fontFamily: editor.get('fontFamily', 'monospace'),
       fontSize: editor.get('fontSize', 14),
-      theme: terminalThemeFor(vscode.window.activeColorTheme.kind),
     };
   }
 
@@ -348,6 +345,39 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
       resizeTimer = setTimeout(postResize, 50);
     }
 
+    function readVsCodeTheme() {
+      const cs = getComputedStyle(document.body);
+      const v = (name) => {
+        const raw = cs.getPropertyValue(name).trim();
+        return raw === '' ? undefined : raw;
+      };
+      return {
+        background: v('--vscode-terminal-background'),
+        foreground: v('--vscode-terminal-foreground'),
+        cursor: v('--vscode-terminalCursor-foreground'),
+        cursorAccent: v('--vscode-terminalCursor-background'),
+        selectionBackground: v('--vscode-terminal-selectionBackground'),
+        selectionForeground: v('--vscode-terminal-selectionForeground'),
+        black: v('--vscode-terminal-ansiBlack'),
+        red: v('--vscode-terminal-ansiRed'),
+        green: v('--vscode-terminal-ansiGreen'),
+        yellow: v('--vscode-terminal-ansiYellow'),
+        blue: v('--vscode-terminal-ansiBlue'),
+        magenta: v('--vscode-terminal-ansiMagenta'),
+        cyan: v('--vscode-terminal-ansiCyan'),
+        white: v('--vscode-terminal-ansiWhite'),
+        brightBlack: v('--vscode-terminal-ansiBrightBlack'),
+        brightRed: v('--vscode-terminal-ansiBrightRed'),
+        brightGreen: v('--vscode-terminal-ansiBrightGreen'),
+        brightYellow: v('--vscode-terminal-ansiBrightYellow'),
+        brightBlue: v('--vscode-terminal-ansiBrightBlue'),
+        brightMagenta: v('--vscode-terminal-ansiBrightMagenta'),
+        brightCyan: v('--vscode-terminal-ansiBrightCyan'),
+        brightWhite: v('--vscode-terminal-ansiBrightWhite'),
+      };
+    }
+
+    terminal.options.theme = readVsCodeTheme();
     terminal.loadAddon(fitAddon);
     terminal.loadAddon(searchAddon);
     terminal.loadAddon(webLinksAddon);
@@ -355,6 +385,10 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
     fitAddon.fit();
     terminal.focus();
     new ResizeObserver(debounceResize).observe(terminalElement);
+    new MutationObserver(() => { terminal.options.theme = readVsCodeTheme(); }).observe(
+      document.documentElement,
+      { attributes: true, attributeFilter: ['class', 'data-vscode-theme-kind', 'data-vscode-theme-name'] },
+    );
     const scrollbackLimit = 65536;
     const restoredState = vscode.getState() || {};
     let scrollback = restoredState.scrollback || '';
@@ -469,7 +503,6 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
       if (message.type === 'config') {
         terminal.options.fontFamily = message.payload.fontFamily;
         terminal.options.fontSize = message.payload.fontSize;
-        terminal.options.theme = message.payload.theme;
         fitAddon.fit();
       }
       if (message.type === 'find') openFindWidget();
@@ -489,52 +522,3 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
   }
 }
 
-function terminalThemeFor(kind: vscode.ColorThemeKind): Record<string, string> {
-  if (kind === vscode.ColorThemeKind.Light || kind === vscode.ColorThemeKind.HighContrastLight) {
-    return {
-      background: '#ffffff',
-      foreground: '#1f2328',
-      cursor: '#24292f',
-      selectionBackground: '#add6ff',
-      black: '#24292f',
-      red: '#cf222e',
-      green: '#116329',
-      yellow: '#4d2d00',
-      blue: '#0969da',
-      magenta: '#8250df',
-      cyan: '#1b7c83',
-      white: '#6e7781',
-      brightBlack: '#57606a',
-      brightRed: '#a40e26',
-      brightGreen: '#1a7f37',
-      brightYellow: '#633c01',
-      brightBlue: '#218bff',
-      brightMagenta: '#a475f9',
-      brightCyan: '#3192aa',
-      brightWhite: '#8c959f',
-    };
-  }
-
-  return {
-    background: '#1e1e1e',
-    foreground: '#cccccc',
-    cursor: '#aeafad',
-    selectionBackground: '#264f78',
-    black: '#000000',
-    red: '#cd3131',
-    green: '#0dbc79',
-    yellow: '#e5e510',
-    blue: '#2472c8',
-    magenta: '#bc3fbc',
-    cyan: '#11a8cd',
-    white: '#e5e5e5',
-    brightBlack: '#666666',
-    brightRed: '#f14c4c',
-    brightGreen: '#23d18b',
-    brightYellow: '#f5f543',
-    brightBlue: '#3b8eea',
-    brightMagenta: '#d670d6',
-    brightCyan: '#29b8db',
-    brightWhite: '#e5e5e5',
-  };
-}
