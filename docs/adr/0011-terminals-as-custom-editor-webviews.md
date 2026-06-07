@@ -67,13 +67,18 @@ the editor tab and how reload is handled.
    webview attached to a tmux session on the DeckSocket. VS Code's
    built-in terminal-in-editor is no longer used for Deck Terminals.
 
-2. **URI carries the session name.** Tabs are addressed by
-   `deck-terminal://<workspace-id>/<sessionName>`. `sessionName` is the
-   same `wt-<sanitized(worktree.path)>__term-N` ADR-0008 §2 specifies.
-   `<workspace-id>` is a redundant authority for URI legibility; the
-   sessionName alone is sufficient for identity. The provider's
-   `resolveCustomEditor(document, panel)` decodes the URI to recover
-   `sessionName` — there is no other identification heuristic.
+2. **URI carries the session name and the cwd.** Tabs are addressed by
+   `deck-terminal://<workspace-id>/<sessionName>?cwd=<encodeURIComponent(worktreePath)>`.
+   `sessionName` is the same `wt-<sanitized(worktree.path)>__term-N`
+   ADR-0008 §2 specifies. `<workspace-id>` is a redundant authority for
+   URI legibility. The `cwd` query carries the unsanitized worktree path
+   so `new-session -A -c <cwd>` always has a real path even if the
+   session was killed externally between resolves — sessionName
+   sanitization is lossy and not reversible. On normal attach (session
+   exists) tmux ignores `-c`, so carrying `cwd` is harmless. The
+   provider's `resolveCustomEditor(document, panel)` decodes the URI to
+   recover `(sessionName, cwd)` — there is no other identification
+   heuristic.
 
 3. **One node-pty child per tab, spawned through the DeckSocket wrapper.**
    On `resolveCustomEditor`, the provider mints a `TerminalPtyBridge`
@@ -107,7 +112,13 @@ the editor tab and how reload is handled.
    once mounted; the extension then starts the pty and begins relaying
    `data`. `input`/`resize` are forwarded to the pty unmodified. The
    bridge's `onExit` posts `exit`; the webview displays the code briefly
-   and the panel disposes itself.
+   and the extension disposes the panel via `panel.dispose()` (webviews
+   cannot self-dispose).
+
+   `data` and `input` payloads are UTF-8 strings. node-pty is configured
+   with `encoding: 'utf8'`; non-UTF-8 binary output (rare in practice —
+   `cat /dev/urandom > /dev/tty` and the like) degrades to U+FFFD
+   replacement characters. Accepted as a non-issue for shell I/O.
 
 5. **Reload reattaches by URI re-resolution, not PID matching.** VS Code
    persists `(uri, viewType)` for each custom-editor tab in workspace
@@ -131,13 +142,22 @@ the editor tab and how reload is handled.
    (xterm-addon-search), scrollback inside the buffer (xterm's own,
    independent of tmux's `history-limit`), and live resize
    (xterm-addon-fit → `TerminalPtyBridge.resize` → node-pty resize →
-   SIGWINCH) all live in the webview. The extension posts `config`
-   messages on resolve and on `onDidChangeConfiguration` for
-   `editor.fontFamily`, `editor.fontSize`, and theme changes; the
-   webview applies via xterm's theme API. Theme colors are computed
-   extension-side from `vscode.window.activeColorTheme` since webviews
-   can't read `--vscode-*` CSS vars with enough fidelity for the full
-   ANSI palette.
+   SIGWINCH) all live in the webview.
+
+   **Theme via CSS vars.** VS Code injects `--vscode-terminal-foreground`,
+   `--vscode-terminal-background`, and the full `--vscode-terminal-ansi*`
+   palette into webview iframes. The webview reads them via
+   `getComputedStyle(document.body).getPropertyValue(...)` and feeds
+   xterm.js's theme API directly — no extension-side
+   `activeColorTheme` reading, no `config`-message round-trip for colors.
+   A `MutationObserver` on `document.documentElement`'s
+   `data-vscode-theme-kind` attribute triggers a re-read on theme change.
+
+   **Font via `config` message.** Font family/size are
+   `editor.fontFamily`/`editor.fontSize` *settings*, not CSS vars, so the
+   extension posts a `config` message on resolve and on
+   `onDidChangeConfiguration` for those keys; the webview applies via
+   xterm's options API.
 
 8. **Per-worktree placement snapshot.** VS Code's per-folder workspace
    storage handles same-worktree reload of custom-editor tabs natively
@@ -189,11 +209,12 @@ the editor tab and how reload is handled.
 11. **No in-place migration of pre-cutover built-in Deck terminal tabs.**
     The cutover is atomic at the slice-#54 cleanup. Stale tabs from the
     pre-cutover surface that VS Code restores on first launch after the
-    cutover land without a Deck-side identifier and are simply ignored
-    by the new code. Their underlying tmux sessions are intact on the
-    DeckSocket and reachable by clicking the sidebar row, which opens a
-    fresh custom-editor tab attached to the same session. Documented in
-    release notes; no migration UI.
+    cutover remain visibly open as orphans — the new code doesn't
+    recognise them, so it neither manages nor closes them. The user
+    closes them manually; the underlying tmux sessions are intact on the
+    DeckSocket and reachable by clicking the corresponding sidebar row,
+    which opens a fresh custom-editor tab attached to the same session.
+    Documented in release notes; no migration UI.
 
 12. **What carries over from ADR-0008.** §2 (Terminal = single-window
     tmux session, naming scheme), §3 (label = `#{window_name}`), §4
@@ -265,6 +286,30 @@ the editor tab and how reload is handled.
   same schema-version-gated `workspaceState` pattern.
 - ADR-0006. Tree rows still live in the secondary sidebar; what they
   open is now a custom-editor tab instead of a built-in terminal tab.
+
+## Validation
+
+Two prototypes ran ahead of implementation to verify the load-bearing
+claims:
+
+- **Prototype 2** (decision 5 — URI re-resolution on reload).
+  `CustomEditorProvider` restores virtual-scheme URIs across window
+  reload and full quit without a `FileSystemProvider`. Tab placement
+  (viewColumn, group, index, active) is preserved natively. No
+  `DeckTerminalFileSystemProvider` module needed.
+- **Prototype 3** (decision 6 — kill-on-dispose vs reload-reattach).
+  `panel.onDidDispose` fires only on user-initiated close (Cmd+W, tab X,
+  Close All, group close) and stays silent on `Developer: Reload
+  Window`, full quit + reopen, and drag-between-groups. It is a clean
+  discriminator on its own — no flag, no `tabGroups.onDidChangeTabs`
+  cross-check, no debounce.
+
+Results archived at `prototypes/terminal-restoration/` and
+`prototypes/close-vs-reload/`. Prototype 3 also surfaced an
+implementation pitfall worth recording: drag-between-groups emits
+`tabs.closed` for the source tab without disposing the panel; any code
+that ever listens to `tabs.closed` must cross-check against
+`panel.onDidDispose` to avoid acting on drags.
 
 ## Status
 
