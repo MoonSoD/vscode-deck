@@ -1,11 +1,27 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const vscodeState = vi.hoisted(() => ({
+  closeTab: vi.fn(async () => true),
+  tabGroups: [] as unknown[],
+}));
 
 vi.mock('vscode', () => ({
   window: {
     activeTerminal: undefined,
+    tabGroups: {
+      get all() {
+        return vscodeState.tabGroups;
+      },
+      close: vscodeState.closeTab,
+    },
   },
   commands: {
     executeCommand: vi.fn(),
+  },
+  Uri: {
+    from(value: { scheme: string; authority?: string; path: string; query: string }) {
+      return value;
+    },
   },
 }));
 
@@ -22,6 +38,11 @@ class MockRunner implements CommandRunner {
 }
 
 describe('CloseTerminalCommand', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vscodeState.tabGroups = [];
+  });
+
   it('kills the selected terminal session, disposes the editor terminal, and refreshes the tree', async () => {
     const tmux = {
       killSession: vi.fn(async () => undefined),
@@ -68,6 +89,38 @@ describe('CloseTerminalCommand', () => {
     expect(terminal.dispose).toHaveBeenCalledOnce();
     expect(terminalSessionListCache.removeSession).toHaveBeenCalledTimes(2);
     expect(refresh).toHaveBeenCalledTimes(2);
+  });
+
+  it('closes the matching Deck custom-editor tab after killing the session', async () => {
+    const tmux = {
+      killSession: vi.fn(async () => undefined),
+    };
+    const terminalSessionListCache = {
+      removeSession: vi.fn(async () => undefined),
+    };
+    const tab = {
+      input: {
+        viewType: 'deck.terminal',
+        uri: {
+          scheme: 'deck-terminal',
+          path: '/wt-_work_repo__term-1',
+          query: 'cwd=%2Fwork%2Frepo',
+        },
+      },
+    };
+    vscodeState.tabGroups = [{ tabs: [tab] }];
+
+    await new CloseTerminalCommand(
+      tmux,
+      new TerminalSessionRegistry(),
+      vi.fn(),
+      terminalSessionListCache,
+    ).run({ terminal: { sessionName: 'wt-_work_repo__term-1' } });
+
+    expect(vscodeState.closeTab).toHaveBeenCalledWith(tab);
+    expect(vscodeState.closeTab.mock.invocationCallOrder[0]).toBeGreaterThan(
+      tmux.killSession.mock.invocationCallOrder[0],
+    );
   });
 
   it('survives a missing tmux server', async () => {

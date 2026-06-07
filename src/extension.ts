@@ -81,6 +81,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const terminalEditorProvider = new TerminalEditorProvider(
     context.extensionUri,
     join(context.extensionPath, 'resources', 'deck.conf'),
+    undefined,
+    undefined,
+    async (sessionName) => {
+      await tmux.killSession(sessionName);
+      await terminalSessionListCache.removeSession(sessionName);
+      tree.refresh();
+    },
   );
   const openTerminal = new OpenTerminalCommand({
     pendingTerminalOpens,

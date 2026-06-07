@@ -1,5 +1,8 @@
+import * as vscode from 'vscode';
+import { SessionUriCodec } from './sessionUriCodec';
 import type { TerminalSessionListCacheStore } from './terminalSessionListCacheStore';
 import type { TerminalSessionRegistry } from './terminalSessionRegistry';
+import { terminalEditorViewType } from './terminalEditorProvider';
 
 export interface CloseTerminalTmuxCli {
   killSession(session: string): Promise<void>;
@@ -19,6 +22,7 @@ export class CloseTerminalCommand {
     private readonly terminalSessionListCache: Pick<TerminalSessionListCacheStore, 'removeSession'> = {
       removeSession: async () => undefined,
     },
+    private readonly sessionUriCodec: SessionUriCodec = new SessionUriCodec(),
   ) {}
 
   async run(node: TerminalNodeLike | undefined): Promise<void> {
@@ -30,7 +34,29 @@ export class CloseTerminalCommand {
     const terminal = this.registry.getTerminal(session);
     this.registry.deleteSession(session);
     terminal?.dispose?.();
+    await this.closeMatchingEditorTab(session);
     this.refresh();
+  }
+
+  private async closeMatchingEditorTab(session: string): Promise<void> {
+    for (const group of vscode.window.tabGroups.all) {
+      for (const tab of group.tabs) {
+        if (this.sessionForTab(tab) !== session) continue;
+        await vscode.window.tabGroups.close(tab);
+        return;
+      }
+    }
+  }
+
+  private sessionForTab(tab: vscode.Tab): string | undefined {
+    const input = tab.input as { viewType?: unknown; uri?: vscode.Uri };
+    if (input.viewType !== terminalEditorViewType || !input.uri) return undefined;
+
+    try {
+      return this.sessionUriCodec.decode(input.uri).sessionName;
+    } catch {
+      return undefined;
+    }
   }
 }
 

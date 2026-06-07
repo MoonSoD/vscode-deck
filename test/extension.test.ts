@@ -452,6 +452,43 @@ describe('activate', () => {
     });
   });
 
+  it('kills tmux and refreshes when a Deck custom-editor tab is disposed', async () => {
+    const context = createContext();
+    let disposePanel: (() => void) | undefined;
+    const panel = {
+      webview: {
+        options: {},
+        html: '',
+        cspSource: 'vscode-resource:',
+        asWebviewUri: (uri: unknown) => uri,
+        postMessage: vi.fn(async () => true),
+        onDidReceiveMessage: vi.fn(() => ({ dispose: vi.fn() })),
+      },
+      onDidDispose: vi.fn((handler: () => void) => {
+        disposePanel = handler;
+        return { dispose: vi.fn() };
+      }),
+    };
+
+    await activate(context as never);
+    const provider = vscodeState.registerCustomEditorProvider.mock.calls[0][1] as {
+      openCustomDocument(uri: unknown): unknown;
+      resolveCustomEditor(document: unknown, panel: unknown): void;
+    };
+    const document = provider.openCustomDocument({
+      scheme: 'deck-terminal',
+      path: '/wt-_work_repo__term-1',
+      query: 'cwd=%2Fwork%2Frepo',
+    });
+    provider.resolveCustomEditor(document, panel);
+    disposePanel?.();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(vscodeState.tmuxInstances[0].killSession).toHaveBeenCalledWith('wt-_work_repo__term-1');
+    expect(vscodeState.projectTreeInstances[0].refresh).toHaveBeenCalledOnce();
+  });
+
   it('registers deck.openTerminalInNewWindow through OpenTerminalInNewWindowCommand', async () => {
     const context = createContext();
 

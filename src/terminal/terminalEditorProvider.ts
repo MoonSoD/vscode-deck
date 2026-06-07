@@ -20,7 +20,11 @@ interface InputMessage {
   payload: string;
 }
 
-type TerminalWebviewMessage = ReadyMessage | InputMessage;
+interface ExitMessage {
+  type: 'exit';
+}
+
+type TerminalWebviewMessage = ReadyMessage | InputMessage | ExitMessage;
 
 export interface TerminalPtyBridgeLike {
   start(sessionName: string, cwd: string, cols: number, rows: number): void;
@@ -31,6 +35,7 @@ export interface TerminalPtyBridgeLike {
 }
 
 export type TerminalPtyBridgeFactory = () => TerminalPtyBridgeLike;
+export type TerminalEditorDisposeHandler = (sessionName: string) => Promise<void> | void;
 
 export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvider<TerminalDocument> {
   private readonly panels = new Map<string, vscode.WebviewPanel>();
@@ -41,6 +46,7 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
     private readonly codec: SessionUriCodec = new SessionUriCodec(),
     private readonly bridgeFactory: TerminalPtyBridgeFactory = () =>
       new TerminalPtyBridge(this.configPath),
+    private readonly onPanelDispose: TerminalEditorDisposeHandler = () => undefined,
   ) {}
 
   openCustomDocument(uri: vscode.Uri): TerminalDocument {
@@ -82,6 +88,7 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
         }
 
         if (message.type === 'input') bridge.write(message.payload);
+        if (message.type === 'exit') panel.dispose();
       }),
     );
 
@@ -89,6 +96,7 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
       if (this.panels.get(document.sessionName) === panel) {
         this.panels.delete(document.sessionName);
       }
+      void this.onPanelDispose(document.sessionName);
       bridge.dispose();
       for (const disposable of bridgeDisposables.splice(0)) disposable.dispose();
     });
@@ -145,7 +153,10 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
     window.addEventListener('message', (event) => {
       const message = event.data;
       if (message.type === 'data') terminal.write(message.payload);
-      if (message.type === 'exit') terminal.writeln('\\r\\n[process exited ' + message.code + ']');
+      if (message.type === 'exit') {
+        terminal.writeln('\\r\\n[process exited ' + message.code + ']');
+        vscode.postMessage({ type: 'exit' });
+      }
     });
     vscode.postMessage({ type: 'ready', cols: terminal.cols, rows: terminal.rows });
   </script>
