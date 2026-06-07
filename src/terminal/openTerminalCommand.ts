@@ -1,6 +1,5 @@
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { awaitProcessId } from './awaitProcessId';
 import { TerminalSessionRegistry } from './terminalSessionRegistry';
 
 export interface OpenTerminalTmuxCli {
@@ -24,14 +23,9 @@ interface WorktreeSwitcherLike {
   switchTo(worktreePath: string): Promise<void>;
 }
 
-interface TerminalPidStoreLike {
-  set(sessionName: string, pid: number): Promise<void>;
-}
-
 interface OpenTerminalCommandOptions {
   pendingTerminalOpens?: PendingTerminalOpenStoreLike;
   switcher?: WorktreeSwitcherLike;
-  pidStore?: TerminalPidStoreLike;
 }
 
 export class OpenTerminalCommand {
@@ -53,19 +47,13 @@ export class OpenTerminalCommand {
     }
 
     // Mirror sidebar's `<n> <command>` — see AddTerminalCommand.
-    // cwd anchors the tab to the worktree so it survives reload persistence
-    // (see AddTerminalCommand for the full rationale).
-    const cwd = node.worktreePath ?? vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
     const terminal = vscode.window.createTerminal({
       name: `${node.n} ${node.terminal.windowName}`,
-      ...(cwd ? { cwd } : {}),
       shellPath: 'tmux',
       shellArgs: this.tmux.attachShellArgs(node.terminal.sessionName),
       location: { viewColumn: vscode.ViewColumn.Active },
     });
     this.registry.set(node.terminal.sessionName, terminal);
-    const pid = await awaitProcessId(terminal);
-    if (pid !== undefined) await this.options.pidStore?.set(node.terminal.sessionName, pid);
     terminal.show(false);
   }
 

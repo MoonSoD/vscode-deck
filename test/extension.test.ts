@@ -35,7 +35,6 @@ const vscodeState = vi.hoisted(() => ({
     findSession: ReturnType<typeof vi.fn>;
     deleteSession: ReturnType<typeof vi.fn>;
   }>,
-  terminalPidStoreInstances: [] as Array<{ remove: ReturnType<typeof vi.fn> }>,
   terminals: [] as unknown[],
   tmuxInstances: [] as Array<{
     killSession: ReturnType<typeof vi.fn>;
@@ -235,16 +234,6 @@ vi.mock('../src/terminal/terminalSessionRegistry', () => ({
   },
 }));
 
-vi.mock('../src/terminal/terminalPidStore', () => ({
-  TerminalPidStore: class {
-    remove = vi.fn(async () => undefined);
-
-    constructor() {
-      vscodeState.terminalPidStoreInstances.push(this);
-    }
-  },
-}));
-
 vi.mock('../src/terminal/editorTerminalHydrator', () => ({
   EditorTerminalHydrator: class {
     hydrateOne = vi.fn(async () => undefined);
@@ -277,7 +266,6 @@ describe('activate', () => {
     vscodeState.settingsProjects = ['/settings/repo'];
     vscodeState.terminalSessionListCacheInstances = [];
     vscodeState.terminalSessionRegistryInstances = [];
-    vscodeState.terminalPidStoreInstances = [];
     vscodeState.terminals = [];
     vscodeState.tmuxInstances = [];
     vscodeState.workspaceFolders = [{ uri: { fsPath: '/work/alpha-main' } }];
@@ -383,7 +371,7 @@ describe('activate', () => {
     const terminalSessionListCache = vscodeState.projectTreeArgs?.at(-2);
     expect(terminalSessionListCache).toBeDefined();
     expect(vscodeState.addTerminalArgs?.at(-2)).toBe(terminalSessionListCache);
-    expect(vscodeState.closeTerminalArgs?.at(-2)).toBe(terminalSessionListCache);
+    expect(vscodeState.closeTerminalArgs?.at(-1)).toBe(terminalSessionListCache);
   });
 
   it('subscribes to terminal opens, hydrates restored terminals, then consumes pending intents', async () => {
@@ -609,9 +597,6 @@ describe('activate', () => {
     expect(vscodeState.terminalSessionListCacheInstances[0].removeSession).toHaveBeenCalledWith(
       'wt-_work_repo__term-1',
     );
-    expect(vscodeState.terminalPidStoreInstances[0].remove).toHaveBeenCalledWith(
-      'wt-_work_repo__term-1',
-    );
     expect(vscodeState.terminalSessionRegistryInstances[0].deleteSession).toHaveBeenCalledWith(
       'wt-_work_repo__term-1',
     );
@@ -628,7 +613,6 @@ describe('activate', () => {
 
     expect(vscodeState.tmuxInstances[0].killSession).not.toHaveBeenCalled();
     expect(vscodeState.terminalSessionListCacheInstances[0].removeSession).not.toHaveBeenCalled();
-    expect(vscodeState.terminalPidStoreInstances[0].remove).not.toHaveBeenCalled();
     // Registry entry is still cleared so the next attach in the new window
     // starts fresh.
     expect(vscodeState.terminalSessionRegistryInstances[0].deleteSession).toHaveBeenCalledWith(

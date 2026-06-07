@@ -1,6 +1,5 @@
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { awaitProcessId } from './awaitProcessId';
 import {
   allocateTermN,
   terminalSessionName,
@@ -34,14 +33,9 @@ interface WorktreeSwitcherLike {
   switchTo(worktreePath: string): Promise<void>;
 }
 
-interface TerminalPidStoreLike {
-  set(sessionName: string, pid: number): Promise<void>;
-}
-
 interface AddTerminalCommandOptions {
   pendingTerminalOpens?: PendingTerminalOpenStoreLike;
   switcher?: WorktreeSwitcherLike;
-  pidStore?: TerminalPidStoreLike;
 }
 
 export class AddTerminalCommand {
@@ -77,20 +71,11 @@ export class AddTerminalCommand {
     const tabName = newRow ? `${newRow.n} ${newRow.windowName}` : `${termN}`;
     const terminal = vscode.window.createTerminal({
       name: tabName,
-      // cwd anchors the tab to the worktree so it survives VS Code's reload
-      // persistence — Terminal.creationOptions.cwd is one of the few fields
-      // restoration faithfully preserves (terminal.creationOptions.shellArgs
-      // gets overwritten by the active profile on restore; cwd does not).
-      // The hydrator uses cwd at activate to identify which Deck session each
-      // restored tab represents.
-      cwd: node.worktree.path,
       shellPath: 'tmux',
       shellArgs: this.tmux.attachShellArgs(session),
       location: { viewColumn: vscode.ViewColumn.Active },
     });
     this.registry.set(session, terminal);
-    const pid = await awaitProcessId(terminal);
-    if (pid !== undefined) await this.options.pidStore?.set(session, pid);
     terminal.show(false);
     this.refresh();
   }

@@ -22,7 +22,6 @@ import { CloseTerminalCommand } from './terminal/killTerminalCommand';
 import { OpenTerminalCommand } from './terminal/openTerminalCommand';
 import { OpenTerminalInNewWindowCommand } from './terminal/openTerminalInNewWindowCommand';
 import { PendingTerminalOpenStore } from './terminal/pendingTerminalOpenStore';
-import { TerminalPidStore } from './terminal/terminalPidStore';
 import { TerminalCascade } from './terminal/terminalCascade';
 import { TerminalSessionRegistry } from './terminal/terminalSessionRegistry';
 import {
@@ -53,12 +52,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const switcher = new WorktreeSwitcher(activeWorktrees);
   const detachedOpener = new DetachedOpener();
   const terminalRegistry = new TerminalSessionRegistry();
-  const terminalPidStore = new TerminalPidStore(context.workspaceState);
-  const editorTerminalHydrator = new EditorTerminalHydrator(
-    tmux,
-    terminalRegistry,
-    terminalPidStore,
-  );
+  const editorTerminalHydrator = new EditorTerminalHydrator(tmux, terminalRegistry);
   const terminalOpenSubscription = vscode.window.onDidOpenTerminal((terminal) => {
     void editorTerminalHydrator.hydrateOne(terminal);
   });
@@ -81,12 +75,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     terminalRegistry,
     () => tree.refresh(),
     terminalSessionListCache,
-    { pendingTerminalOpens, switcher, pidStore: terminalPidStore },
+    { pendingTerminalOpens, switcher },
   );
   const openTerminal = new OpenTerminalCommand(tmux, terminalRegistry, {
     pendingTerminalOpens,
     switcher,
-    pidStore: terminalPidStore,
   });
   const openTerminalInNewWindow = new OpenTerminalInNewWindowCommand(pendingTerminalOpens);
   const closeTerminal = new CloseTerminalCommand(
@@ -94,7 +87,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     terminalRegistry,
     () => tree.refresh(),
     terminalSessionListCache,
-    terminalPidStore,
   );
   const terminalCascade = new TerminalCascade(tmux);
   const addWorktree = new AddWorktreeCommand(
@@ -209,7 +201,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       }
       await tmux.killSession(session);
       await terminalSessionListCache.removeSession(session);
-      await terminalPidStore.remove(session);
       terminalRegistry.deleteSession(session);
       tree.refresh();
     }),

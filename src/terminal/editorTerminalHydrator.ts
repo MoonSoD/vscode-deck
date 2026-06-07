@@ -1,34 +1,39 @@
 import * as vscode from 'vscode';
-import { awaitProcessId } from './awaitProcessId';
 import { terminalSessionName } from './tmuxSafe';
 import type { TerminalLike, TerminalSessionRegistry } from './terminalSessionRegistry';
 import type { TmuxSession } from './tmuxCli';
 
 interface HydratorTmuxCli {
   listSessions(prefix?: string): Promise<TmuxSession[]>;
-  attachShellArgs(session: string): string[];
-}
-
-interface TerminalPidStoreLike {
-  get(sessionName: string): number | undefined;
-  set(sessionName: string, pid: number): Promise<void>;
-  remove(sessionName: string): Promise<void>;
-  prune(liveSessionNames: readonly string[]): Promise<void>;
 }
 
 type HydratableTerminal = vscode.Terminal & TerminalLike;
 
-export interface TabPosition {
-  viewColumn: vscode.ViewColumn;
-  tabIndex: number;
-  groupSize: number;
-}
-
+// VS Code's terminal persistence preserves a Deck tab's pty across "Reload
+// Window" (attachPersistentProcess) and re-launches its original
+// shellPath/shellArgs across workspace switch + Cmd+Q (saved editor state).
+// In every case the restored tab is correctly attached to its Deck tmux
+// session (or to a session-not-found error if the tmux server died — handled
+// here via the listSessions check). So hydration's only job is:
+//
+//   1. Identify each restored tab by its Deck-shaped name + current workspace
+//      folder.
+//   2. If the corresponding tmux session exists, put the tab into our
+//      in-memory registry so subsequent sidebar clicks reuse it.
+//   3. If the session is gone, dispose the orphan tab.
+//
+// Earlier versions kept a per-tab PID store to detect "wrong attachment"
+// scenarios (where VS Code restored a Deck tab attached to the user's
+// default tmux server instead of -L deck). The check was over-zealous: it
+// forced dispose+recreate on every workspace switch and full restart, since
+// VS Code only preserves the original pty across RELOAD — workspace switch
+// (LOAD) and Cmd+Q (QUIT) re-launch with new PIDs even when the tab is still
+// correctly Deck-attached. The PID check made hydration lose xterm
+// scrollback on every switch. Dropped.
 export class EditorTerminalHydrator {
   constructor(
     private readonly tmux: HydratorTmuxCli,
     private readonly registry: TerminalSessionRegistry,
-    private readonly pidStore: TerminalPidStoreLike,
   ) {}
 
   async hydrateOne(terminal: HydratableTerminal): Promise<void> {
@@ -38,14 +43,12 @@ export class EditorTerminalHydrator {
   }
 
   async hydrateSnapshot(terminals: readonly HydratableTerminal[]): Promise<void> {
-    const liveSessionNames = (await this.tmux.listSessions()).map((session) => session.sessionName);
-    const liveSessions = new Set(liveSessionNames);
+    const liveSessions = await this.liveSessionNames();
     for (const terminal of terminals) {
       const sessionName = this.sessionNameFor(terminal);
       if (!sessionName) continue;
       await this.hydrateTerminal(terminal, sessionName, liveSessions);
     }
-    await this.pidStore.prune(liveSessionNames);
   }
 
   private async liveSessionNames(): Promise<Set<string>> {
@@ -58,89 +61,37 @@ export class EditorTerminalHydrator {
     liveSessions: ReadonlySet<string>,
   ): Promise<void> {
     if (!liveSessions.has(sessionName)) {
-      await this.pidStore.remove(sessionName);
       terminal.dispose?.();
       return;
     }
 
-    const pid = await awaitProcessId(terminal);
-    const storedPid = this.pidStore.get(sessionName);
     const existing = this.registry.getTerminal(sessionName);
-    const pidMatches = storedPid !== undefined && pid === storedPid;
-
     if (existing && existing !== terminal) {
-      if (pidMatches) {
-        existing.dispose?.();
-        this.registry.set(sessionName, terminal);
-      } else {
-        terminal.dispose?.();
-      }
+      // Two terminals claim the same Deck session — e.g. an out-of-band
+      // duplicate from a prior buggy build, or a race between the activate
+      // snapshot pass and the onDidOpenTerminal subscription registering
+      // the same restored tab twice. Keep the first; dispose the later
+      // arrival so it can't accumulate.
+      terminal.dispose?.();
       return;
     }
 
-    if (pidMatches) {
-      this.registry.set(sessionName, terminal);
-      return;
-    }
-
-    await this.recreateTerminal(terminal, sessionName);
+    this.registry.set(sessionName, terminal);
   }
 
   private sessionNameFor(terminal: vscode.Terminal): string | undefined {
     const n = parseDeckTerminalNumber(terminal.name);
     if (!n) return undefined;
-    // We can't cross-check the terminal's own cwd: VS Code's restoration
-    // pipeline drops creationOptions.cwd by design. mainThreadTerminalService
-    // builds the DTO from shellLaunchConfig.cwd, which is intentionally
-    // undefined on restored terminals (the live cwd lives on
-    // attachPersistentProcess.cwd / instance._cwd internally but never
-    // surfaces through the stable Terminal API). So identification falls back
-    // to "name pattern + current workspace folder". A user who manually
-    // names a non-Deck terminal `N word` in this worktree would false-match;
-    // accepted given the default-profile-named "tmux" panel terminals don't
-    // collide with our `^\d+ \S+` shape.
+    // VS Code drops creationOptions.cwd on restored terminals
+    // (terminalInstance.ts:549 only fills executable/args from the default
+    // profile on restore; cwd never makes it back to shellLaunchConfig.cwd,
+    // so the ext-host DTO at mainThreadTerminalService.ts:_onTerminalOpened
+    // reports cwd=undefined). Identify by name pattern + current workspace
+    // folder alone. False positives require a user to manually name a
+    // non-Deck terminal `N word` in this worktree — accepted.
     const currentWorktreePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
     if (!currentWorktreePath) return undefined;
     return terminalSessionName(currentWorktreePath, n);
-  }
-
-  private async recreateTerminal(
-    terminal: HydratableTerminal,
-    sessionName: string,
-  ): Promise<void> {
-    const originalPos = findTabPosition(terminal);
-    if (originalPos === undefined) {
-      // No editor strip slot found (the tab isn't in tabGroups.all yet —
-      // common during activate when restoration hasn't fully wired tabs to
-      // groups, or the tab is genuinely panel-located). Dispose first; the
-      // "only tab in column" footgun doesn't apply when there's no column.
-      terminal.dispose?.();
-    }
-    // Always target the editor area. Omitting `location` would make VS Code
-    // honor `terminal.integrated.defaultLocation` ("view" by default = panel),
-    // which silently relocates the recreated terminal out of the editor strip
-    // — the bug that surfaced as "after cross-worktree click, my tabs ended
-    // up in the panel".
-    const location: vscode.TerminalEditorLocationOptions = {
-      viewColumn: originalPos?.viewColumn ?? vscode.ViewColumn.Active,
-    };
-    const options: vscode.TerminalOptions = {
-      name: terminal.name,
-      shellPath: 'tmux',
-      shellArgs: this.tmux.attachShellArgs(sessionName),
-      location,
-    };
-    const recreated = vscode.window.createTerminal(options) as HydratableTerminal;
-    if (originalPos !== undefined) {
-      recreated.show(false);
-      await moveActiveEditorLeft(originalPos.groupSize - originalPos.tabIndex - 1);
-      terminal.dispose?.();
-    }
-    this.registry.set(sessionName, recreated);
-    const pid = await awaitProcessId(recreated);
-    if (pid !== undefined) {
-      await this.pidStore.set(sessionName, pid);
-    }
   }
 }
 
@@ -149,27 +100,4 @@ function parseDeckTerminalNumber(name: string): number | undefined {
   if (!match) return undefined;
   const n = Number(match[1]);
   return Number.isInteger(n) ? n : undefined;
-}
-
-export function findTabPosition(terminal: vscode.Terminal): TabPosition | undefined {
-  for (const group of vscode.window.tabGroups?.all ?? []) {
-    const tabIndex = group.tabs.findIndex((tab) => {
-      if (!(tab.input instanceof vscode.TabInputTerminal)) return false;
-      return (tab.input as { terminal?: vscode.Terminal }).terminal === terminal;
-    });
-    if (tabIndex !== -1) {
-      return { viewColumn: group.viewColumn, tabIndex, groupSize: group.tabs.length };
-    }
-  }
-  return undefined;
-}
-
-export async function moveActiveEditorLeft(times: number): Promise<void> {
-  for (let i = 0; i < times; i += 1) {
-    try {
-      await vscode.commands.executeCommand('workbench.action.moveEditorLeftInGroup');
-    } catch {
-      // Best-effort tab strip repair; attachment correctness does not depend on it.
-    }
-  }
 }
