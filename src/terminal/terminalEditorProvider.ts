@@ -378,6 +378,9 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
       await warmFonts(initialConfig.fontFamily, initialConfig.fontSize);
 
       const terminal = new Terminal({
+        // Search-addon match decorations use registerDecoration, gated as
+        // proposed API in xterm 6.
+        allowProposedApi: true,
         cursorBlink: true,
         convertEol: true,
         scrollback: 5000,
