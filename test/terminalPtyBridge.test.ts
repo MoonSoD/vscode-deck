@@ -52,6 +52,23 @@ describe('TerminalPtyBridge', () => {
     expect(pty.resize).toHaveBeenCalledWith(100, 40);
     expect(exit).toHaveBeenCalledWith(7);
   });
+
+  it('uses the latest resize as the initial pty size when resize arrives before start', () => {
+    const pty = fakePty();
+    const factory: PtyFactory = {
+      spawn: vi.fn(() => pty),
+    };
+    const bridge = new TerminalPtyBridge('/ext/resources/deck.conf', factory);
+
+    bridge.resize(132, 41);
+    bridge.start('wt-_work_repo__term-1', '/work/repo', 80, 24);
+
+    expect(factory.spawn).toHaveBeenCalledWith(
+      'tmux',
+      expect.any(Array),
+      expect.objectContaining({ cols: 132, rows: 41 }),
+    );
+  });
 });
 
 function fakePty() {
