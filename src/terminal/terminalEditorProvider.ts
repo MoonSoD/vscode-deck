@@ -528,7 +528,7 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
         }
         if (message.type === 'find') openFindWidget();
         if (message.type === 'exit') {
-          terminal.writeln('\\r\n[process exited ' + message.code + ']');
+          terminal.writeln('\\r\\n[process exited ' + message.code + ']');
           vscode.postMessage({ type: 'exit' });
         }
       });
