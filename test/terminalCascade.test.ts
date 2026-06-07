@@ -3,8 +3,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const vscodeState = vi.hoisted(() => ({
   closeTab: vi.fn(async () => true),
   tabGroups: [] as unknown[],
-  terminals: [] as Array<{ name: string; dispose: ReturnType<typeof vi.fn> }>,
-  workspaceFolders: [{ uri: { fsPath: '/repo/feature' } }],
 }));
 
 vi.mock('vscode', () => ({
@@ -15,14 +13,6 @@ vi.mock('vscode', () => ({
       },
       close: vscodeState.closeTab,
     },
-    get terminals() {
-      return vscodeState.terminals;
-    },
-  },
-  workspace: {
-    get workspaceFolders() {
-      return vscodeState.workspaceFolders;
-    },
   },
 }));
 
@@ -32,8 +22,6 @@ describe('TerminalCascade', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vscodeState.tabGroups = [];
-    vscodeState.terminals = [];
-    vscodeState.workspaceFolders = [{ uri: { fsPath: '/repo/feature' } }];
   });
 
   it('kills only sessions matching the removed Worktree prefix', async () => {
@@ -101,10 +89,7 @@ describe('TerminalCascade', () => {
         },
       },
     };
-    const legacyTerminal = { name: '2 claude', dispose: vi.fn() };
-    const otherLegacyTerminal = { name: 'zsh', dispose: vi.fn() };
     vscodeState.tabGroups = [{ tabs: [matchingTab, otherTab] }];
-    vscodeState.terminals = [legacyTerminal, otherLegacyTerminal];
     const cascade = new TerminalCascade(tmux);
 
     await cascade.killWorktree('/repo/feature');
@@ -112,8 +97,6 @@ describe('TerminalCascade', () => {
     expect(tmux.killSession).toHaveBeenCalledTimes(2);
     expect(vscodeState.closeTab).toHaveBeenCalledWith(matchingTab);
     expect(vscodeState.closeTab).not.toHaveBeenCalledWith(otherTab);
-    expect(legacyTerminal.dispose).not.toHaveBeenCalled();
-    expect(otherLegacyTerminal.dispose).not.toHaveBeenCalled();
     expect(vscodeState.closeTab.mock.invocationCallOrder[0]).toBeGreaterThan(
       tmux.killSession.mock.invocationCallOrder[1],
     );

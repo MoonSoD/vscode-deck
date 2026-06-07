@@ -30,7 +30,6 @@ const vscodeState = vi.hoisted(() => ({
   settingsProjects: ['/settings/repo'],
   terminalSessionListCacheInstances: [] as Array<{ removeSession: ReturnType<typeof vi.fn> }>,
   tabSnapshotStoreInstances: [] as Array<{ capture: ReturnType<typeof vi.fn>; restore: ReturnType<typeof vi.fn> }>,
-  terminals: [] as unknown[],
   tmuxInstances: [] as Array<{
     killSession: ReturnType<typeof vi.fn>;
     listSessions: ReturnType<typeof vi.fn>;
@@ -68,9 +67,6 @@ vi.mock('vscode', () => ({
     onDidCloseTerminal: vscodeState.onDidCloseTerminal,
     onDidChangeActiveTerminal: vscodeState.onDidChangeActiveTerminal,
     onDidOpenTerminal: vscodeState.onDidOpenTerminal,
-    get terminals() {
-      return vscodeState.terminals;
-    },
   },
   workspace: {
     getConfiguration: () => ({
@@ -256,7 +252,6 @@ describe('activate', () => {
     vscodeState.settingsProjects = ['/settings/repo'];
     vscodeState.terminalSessionListCacheInstances = [];
     vscodeState.tabSnapshotStoreInstances = [];
-    vscodeState.terminals = [];
     vscodeState.tmuxInstances = [];
     vscodeState.worktreeSwitcherArgs = undefined;
     vscodeState.workspaceFolders = [{ uri: { fsPath: '/work/alpha-main' } }];
@@ -364,8 +359,6 @@ describe('activate', () => {
         },
       },
     };
-    vscodeState.terminals = [{ name: '1 zsh' }];
-
     await activate(context as never);
 
     expect(vscodeState.onDidOpenTerminal).not.toHaveBeenCalled();
