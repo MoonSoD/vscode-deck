@@ -15,6 +15,7 @@ Reference repos live as **siblings** in `~/code/`. Local paths are tracked in `.
 | **vscode** | microsoft/vscode source. Reference for VS Code API internals — verifying contribution-point gates (e.g. `secondarySidebar`), built-in command names, and how VS Code itself implements tree views, view containers, and walkthroughs. |
 | **sanctel** | Tauri + tmux Arc-shaped workspace. Reference for per-worktree PTY/tmux persistence patterns and multi-context workspace UX (profiles / spaces / tabs / agent flows). |
 | **iterm2** | The canonical tmux control-mode (`-C`) client. Reference for the protocol handling behind ADR-0012: reply correlation, %output decoding, history seeding, flow control. |
+| **tmux** | The server side of ADR-0012's transport. Ground truth for what the control-mode protocol actually emits and accepts — read this instead of guessing from client behavior. |
 
 ## By subsystem
 
@@ -61,6 +62,11 @@ tree hierarchy. |
 | `iterm2:sources/tmux/TmuxGateway.m` | Control-mode protocol parsing: %begin/%end/%error correlation, %output octal decoding, notification dispatch, %pause/%continue flow control. The battle-tested counterpart to `TmuxControlClient`. |
 | `iterm2:sources/tmux/TmuxController.m` | Session/window lifecycle over the gateway: attach/detach, resize strategy (`window-size` handling), command batching. |
 | `iterm2:sources/tmux/TmuxHistoryParser.m` | Seeding scrollback from tmux history into the terminal buffer — iTerm2's equivalent of our capture-pane seed. |
+| `tmux:control.c` | What the server writes to a `-C` client: %output octal escaping (`control_write_output`), %begin/%end/%error block emission, pause-mode offsets. |
+| `tmux:control-notify.c` | Every `%`-notification the server can emit (%window-add, %session-changed, …) — the complete list our parser must tolerate. |
+| `tmux:cmd-send-keys.c` | The `-H` literal-byte path our `sendKeys` rides (`args_has 'H'` → `KEYC_LITERAL`). |
+| `tmux:cmd-capture-pane.c` | Exact semantics of the seed flags `-p -e -q -J -N -S`. |
+| `tmux:cmd-parse.y` | The command grammar whose yacc stack depth caps send-keys at <16384 args (why we chunk at 4096). |
 
 ## Cloning fresh
 
@@ -76,4 +82,5 @@ git clone --depth 1 git@github.com:superset-sh/superset.git
 git clone --depth 1 https://github.com/microsoft/vscode
 git clone --depth 1 git@github.com:sanctel/sanctel.git
 git clone --depth 1 https://github.com/gnachman/iTerm2 iterm2
+git clone --depth 1 https://github.com/tmux/tmux
 ```

@@ -7,6 +7,7 @@
     "tabstronaut": "../tabstronaut",
     "vscode": "../vscode",
     "sanctel": "../sanctel",
-    "iterm2": "../iterm2"
+    "iterm2": "../iterm2",
+    "tmux": "../tmux"
   }
 }
