@@ -76,6 +76,7 @@ describe('AddTerminalCommand', () => {
     );
     expect(vscodeState.createTerminal).toHaveBeenCalledWith({
       name: '4 zsh',
+      cwd: '/work/repo',
       shellPath: 'tmux',
       shellArgs: [
         '-L',

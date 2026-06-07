@@ -77,6 +77,13 @@ export class AddTerminalCommand {
     const tabName = newRow ? `${newRow.n} ${newRow.windowName}` : `${termN}`;
     const terminal = vscode.window.createTerminal({
       name: tabName,
+      // cwd anchors the tab to the worktree so it survives VS Code's reload
+      // persistence — Terminal.creationOptions.cwd is one of the few fields
+      // restoration faithfully preserves (terminal.creationOptions.shellArgs
+      // gets overwritten by the active profile on restore; cwd does not).
+      // The hydrator uses cwd at activate to identify which Deck session each
+      // restored tab represents.
+      cwd: node.worktree.path,
       shellPath: 'tmux',
       shellArgs: this.tmux.attachShellArgs(session),
       location: { viewColumn: vscode.ViewColumn.Active },

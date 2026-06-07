@@ -53,8 +53,12 @@ export class OpenTerminalCommand {
     }
 
     // Mirror sidebar's `<n> <command>` — see AddTerminalCommand.
+    // cwd anchors the tab to the worktree so it survives reload persistence
+    // (see AddTerminalCommand for the full rationale).
+    const cwd = node.worktreePath ?? vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
     const terminal = vscode.window.createTerminal({
       name: `${node.n} ${node.terminal.windowName}`,
+      ...(cwd ? { cwd } : {}),
       shellPath: 'tmux',
       shellArgs: this.tmux.attachShellArgs(node.terminal.sessionName),
       location: { viewColumn: vscode.ViewColumn.Active },
