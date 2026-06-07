@@ -20,6 +20,7 @@ const vscodeState = vi.hoisted(() => ({
   }>,
   lifecycleOrder: [] as string[],
   onDidCloseTerminal: vi.fn(() => ({ dispose: vi.fn() })),
+  onDidChangeConfiguration: vi.fn(() => ({ dispose: vi.fn() })),
   onDidChangeWorkspaceFolders: vi.fn(() => ({ dispose: vi.fn() })),
   onDidOpenTerminal: vi.fn(() => ({ dispose: vi.fn() })),
   openTerminalInNewWindowRun: vi.fn(),
@@ -57,6 +58,12 @@ vi.mock('vscode', () => ({
     User: 3,
     Extension: 4,
   },
+  ColorThemeKind: {
+    Light: 1,
+    Dark: 2,
+    HighContrast: 3,
+    HighContrastLight: 4,
+  },
   commands: {
     executeCommand: vscodeState.executeCommand,
     registerCommand: vscodeState.registerCommand,
@@ -68,6 +75,7 @@ vi.mock('vscode', () => ({
     },
   },
   window: {
+    activeColorTheme: { kind: 2 },
     createTreeView: vscodeState.createTreeView,
     registerCustomEditorProvider: vscodeState.registerCustomEditorProvider,
     onDidCloseTerminal: vscodeState.onDidCloseTerminal,
@@ -86,6 +94,7 @@ vi.mock('vscode', () => ({
         (vscodeState.settingsProjects as T | undefined) ?? defaultValue,
       update: vscodeState.configUpdate,
     }),
+    onDidChangeConfiguration: vscodeState.onDidChangeConfiguration,
     onDidChangeWorkspaceFolders: vscodeState.onDidChangeWorkspaceFolders,
     get workspaceFolders() {
       return vscodeState.workspaceFolders;
@@ -450,6 +459,17 @@ describe('activate', () => {
     expect(vscodeState.closeTerminalRun).toHaveBeenCalledWith({
       terminal: { sessionName: 's', windowName: 'zsh' },
     });
+  });
+
+  it('registers deck.terminal.find', async () => {
+    const context = createContext();
+
+    await activate(context as never);
+
+    expect(vscodeState.registerCommand).toHaveBeenCalledWith(
+      'deck.terminal.find',
+      expect.any(Function),
+    );
   });
 
   it('kills tmux and refreshes when a Deck custom-editor tab is disposed', async () => {
