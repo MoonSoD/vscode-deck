@@ -50,6 +50,15 @@ state, not the user's whole tmux. Sanctel solved this with `-L sanctel -f
 
 ## Decision
 
+> **Superseded in part by [ADR-0011](./0011-terminals-as-custom-editor-webviews.md).**
+> The Terminal *model* (decisions 1–5, 7, 8, 10–15, and the sessionName
+> derivation in 16) carries forward verbatim. The Terminal *surface* —
+> decision 6 (attach via `shellPath: 'tmux'`), decision 9 (reload
+> persistence via PID-liveness hydration), and the hydration mechanics
+> of decision 16 — is replaced by a `CustomEditorProvider` rendering
+> xterm.js in a webview, with URI-based identity and native custom-
+> editor restoration. See ADR-0011 for the new surface.
+
 1. **DeckSocket.** All Deck-managed tmux interactions go through a
    dedicated server: `tmux -L deck -f <ext>/resources/deck.conf`. The
    user's default socket (where their existing `vscode:${workspaceFolder}`
