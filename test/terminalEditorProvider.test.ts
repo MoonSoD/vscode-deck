@@ -170,6 +170,8 @@ describe('TerminalEditorProvider', () => {
 
     expect(terminalPanel.webview.html).toContain('@xterm/addon-web-links');
     expect(terminalPanel.webview.html).toContain('@xterm/addon-search');
+    expect(terminalPanel.webview.html).toContain('@xterm/addon-unicode11');
+    expect(terminalPanel.webview.html).toContain("terminal.unicode.activeVersion = '11'");
     expect(terminalPanel.webview.html).toContain('clipboard.writeText');
     expect(terminalPanel.webview.html).toContain('clipboard.readText');
     expect(terminalPanel.webview.html).toContain('context-menu');

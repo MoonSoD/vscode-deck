@@ -223,6 +223,16 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
         'addon-search.js',
       ),
     );
+    const unicode11Js = webview.asWebviewUri(
+      vscode.Uri.joinPath(
+        this.extensionUri,
+        'node_modules',
+        '@xterm',
+        'addon-unicode11',
+        'lib',
+        'addon-unicode11.js',
+      ),
+    );
     const nonce = String(Date.now());
 
     return `<!doctype html>
@@ -322,6 +332,8 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
   <script nonce="${nonce}" src="${webLinksJs}"></script>
   <!-- @xterm/addon-search -->
   <script nonce="${nonce}" src="${searchJs}"></script>
+  <!-- @xterm/addon-unicode11 -->
+  <script nonce="${nonce}" src="${unicode11Js}"></script>
   <script nonce="${nonce}">
     (async () => {
       const vscode = acquireVsCodeApi();
@@ -382,6 +394,7 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
       });
       const fitAddon = new FitAddon.FitAddon();
       const searchAddon = new SearchAddon.SearchAddon();
+      const unicode11Addon = new Unicode11Addon.Unicode11Addon();
       const webLinksAddon = new WebLinksAddon.WebLinksAddon((event, uri) => {
         if (event.metaKey || event.ctrlKey) {
           event.preventDefault();
@@ -408,6 +421,10 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
       terminal.loadAddon(fitAddon);
       terminal.loadAddon(searchAddon);
       terminal.loadAddon(webLinksAddon);
+      terminal.loadAddon(unicode11Addon);
+      // Width tables matching modern terminals: emoji and CJK are 2 cells, so
+      // the shell's cursor math (p10k redraws) lines up with what xterm paints.
+      terminal.unicode.activeVersion = '11';
       terminal.open(terminalElement);
       fitAddon.fit();
       terminal.focus();
