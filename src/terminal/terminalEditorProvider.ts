@@ -33,6 +33,8 @@ export interface TerminalPtyBridgeLike {
 export type TerminalPtyBridgeFactory = () => TerminalPtyBridgeLike;
 
 export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvider<TerminalDocument> {
+  private readonly panels = new Map<string, vscode.WebviewPanel>();
+
   constructor(
     private readonly extensionUri: vscode.Uri,
     private readonly configPath: string,
@@ -51,7 +53,12 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
     };
   }
 
+  panelFor(sessionName: string): vscode.WebviewPanel | undefined {
+    return this.panels.get(sessionName);
+  }
+
   resolveCustomEditor(document: TerminalDocument, panel: vscode.WebviewPanel): void {
+    this.panels.set(document.sessionName, panel);
     const bridge = this.bridgeFactory();
     const bridgeDisposables: vscode.Disposable[] = [];
 
@@ -79,6 +86,9 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
     );
 
     panel.onDidDispose(() => {
+      if (this.panels.get(document.sessionName) === panel) {
+        this.panels.delete(document.sessionName);
+      }
       bridge.dispose();
       for (const disposable of bridgeDisposables.splice(0)) disposable.dispose();
     });

@@ -78,9 +78,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     terminalSessionListCache,
     { pendingTerminalOpens, switcher },
   );
+  const terminalEditorProvider = new TerminalEditorProvider(
+    context.extensionUri,
+    join(context.extensionPath, 'resources', 'deck.conf'),
+  );
   const openTerminal = new OpenTerminalCommand(tmux, terminalRegistry, {
     pendingTerminalOpens,
     switcher,
+    terminalPanels: terminalEditorProvider,
   });
   const openTerminalInNewWindow = new OpenTerminalInNewWindowCommand(pendingTerminalOpens);
   const closeTerminal = new CloseTerminalCommand(
@@ -90,10 +95,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     terminalSessionListCache,
   );
   const terminalCascade = new TerminalCascade(tmux);
-  const terminalEditorProvider = new TerminalEditorProvider(
-    context.extensionUri,
-    join(context.extensionPath, 'resources', 'deck.conf'),
-  );
   const addWorktree = new AddWorktreeCommand(
     switcher,
     detachedOpener,

@@ -2,11 +2,20 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const vscodeState = vi.hoisted(() => ({
   createTerminal: vi.fn(() => ({ show: vi.fn() })),
+  executeCommand: vi.fn(async () => undefined),
   workspaceFolders: [{ uri: { fsPath: '/work/alpha-main' } }],
 }));
 
 vi.mock('vscode', () => ({
   ViewColumn: { Active: -1 },
+  Uri: {
+    from(value: { scheme: string; authority: string; path: string; query: string }) {
+      return value;
+    },
+  },
+  commands: {
+    executeCommand: vscodeState.executeCommand,
+  },
   window: {
     createTerminal: vscodeState.createTerminal,
   },
@@ -24,46 +33,53 @@ describe('OpenTerminalCommand', () => {
     vscodeState.workspaceFolders = [{ uri: { fsPath: '/work/alpha-main' } }];
   });
 
-  it('attaches a new editor terminal on registry miss', async () => {
-    const tmux = {
-      attachShellArgs: vi.fn(() => ['attach-session', '-t', '=wt-_work_repo__term-1']),
-    };
-    const terminal = { show: vi.fn() };
-    vscodeState.createTerminal.mockReturnValue(terminal);
-    const registry = new TerminalSessionRegistry();
-
-    await new OpenTerminalCommand(tmux, registry).run({
-      terminal: { sessionName: 'wt-_work_repo__term-1', windowName: 'zsh' },
-      n: 1,
-      worktreePath: '/work/alpha-main',
-    });
-
-    expect(vscodeState.createTerminal).toHaveBeenCalledWith({
-      name: '1 zsh',
-      shellPath: 'tmux',
-      shellArgs: ['attach-session', '-t', '=wt-_work_repo__term-1'],
-      location: { viewColumn: -1 },
-    });
-    expect(terminal.show).toHaveBeenCalledWith(false);
-    expect(registry.get('wt-_work_repo__term-1')).toBe(terminal);
-  });
-
-  it('focuses the existing editor terminal on registry hit', async () => {
+  it('opens a same-worktree terminal row as a Deck custom editor', async () => {
     const tmux = {
       attachShellArgs: vi.fn(),
     };
-    const terminal = { show: vi.fn() };
     const registry = new TerminalSessionRegistry();
-    registry.set('wt-_work_repo__term-1', terminal);
 
     await new OpenTerminalCommand(tmux, registry).run({
-      terminal: { sessionName: 'wt-_work_repo__term-1', windowName: 'zsh' },
+      terminal: { sessionName: 'wt-_work_alpha-main__term-1', windowName: 'zsh' },
       n: 1,
       worktreePath: '/work/alpha-main',
     });
 
+    expect(vscodeState.executeCommand).toHaveBeenCalledWith(
+      'vscode.openWith',
+      {
+        scheme: 'deck-terminal',
+        authority: 'session',
+        path: '/wt-_work_alpha-main__term-1',
+        query: 'cwd=%2Fwork%2Falpha-main',
+      },
+      'deck.terminal',
+      { viewColumn: -1 },
+    );
     expect(vscodeState.createTerminal).not.toHaveBeenCalled();
-    expect(terminal.show).toHaveBeenCalledWith(false);
+    expect(tmux.attachShellArgs).not.toHaveBeenCalled();
+  });
+
+  it('focuses an existing custom-editor tab on re-click', async () => {
+    const tmux = {
+      attachShellArgs: vi.fn(),
+    };
+    const panel = { reveal: vi.fn() };
+    const registry = new TerminalSessionRegistry();
+    const terminalPanels = {
+      panelFor: vi.fn(() => panel),
+    };
+
+    await new OpenTerminalCommand(tmux, registry, { terminalPanels }).run({
+      terminal: { sessionName: 'wt-_work_alpha-main__term-1', windowName: 'zsh' },
+      n: 1,
+      worktreePath: '/work/alpha-main',
+    });
+
+    expect(terminalPanels.panelFor).toHaveBeenCalledWith('wt-_work_alpha-main__term-1');
+    expect(panel.reveal).toHaveBeenCalledWith();
+    expect(vscodeState.executeCommand).not.toHaveBeenCalled();
+    expect(vscodeState.createTerminal).not.toHaveBeenCalled();
   });
 
   it('stores a pending intent and switches worktree for cross-worktree terminal clicks', async () => {
@@ -90,5 +106,6 @@ describe('OpenTerminalCommand', () => {
     );
     expect(switcher.switchTo).toHaveBeenCalledWith('/work/beta-main');
     expect(vscodeState.createTerminal).not.toHaveBeenCalled();
+    expect(vscodeState.executeCommand).not.toHaveBeenCalled();
   });
 });
