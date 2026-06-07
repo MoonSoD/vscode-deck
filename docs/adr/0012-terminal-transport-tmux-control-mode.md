@@ -121,6 +121,27 @@ Alternatives considered:
 - Commit 0531645 (serialize-addon snapshot restore) is substantially
   reverted by decision 5.
 
+## Known limitations
+
+- **Seed cursor seam.** The reattach seed is `capture-pane` *text* replayed
+  into xterm; `capture-pane` does not carry the cursor position, so the seed
+  ends at the last content line (trailing blank rows stripped, no trailing
+  newline) and the cursor lands there. This is correct for the common case —
+  reattaching at an idle prompt — but if you reload at the *exact instant* a
+  program is streaming output (cursor on a blank line below the last line,
+  e.g. a sleeping `while …; do …; done`), the first live line concatenates
+  onto the last seeded line: a one-line visual seam that self-corrects on the
+  next output or keystroke. This is the same limitation **tmux-resurrect**
+  (the de-facto tmux content-restore tool) has — text replay does not restore
+  the cursor. The only known full fix is iTerm2's approach: capture history
+  and visible screen separately, query `cursor_x`/`cursor_y` via
+  `list-panes -F`, and reconstruct a fixed-dimension grid placing the cursor
+  at absolute coordinates. That grid reconstruction is disproportionate to a
+  rare, self-correcting, cosmetic artifact; deferred. An attempt to
+  approximate it with line-counted trimming was rejected — `capture-pane`
+  trailing-blank trimming and `-J` wrap-joining make capture-line ↔ tmux-row
+  mapping unreliable, and it regressed the common idle-prompt case.
+
 ## Refines
 
 - ADR-0011. Supersedes decision 3 (node-pty spawn) and the
