@@ -128,8 +128,9 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
       enableScripts: true,
       localResourceRoots: [vscode.Uri.joinPath(this.extensionUri, 'node_modules')],
     };
-    panel.webview.html = this.html(panel.webview);
-    void panel.webview.postMessage({ type: 'config', payload: this.terminalConfig() });
+    const initialConfig = this.terminalConfig();
+    panel.webview.html = this.html(panel.webview, initialConfig);
+    void panel.webview.postMessage({ type: 'config', payload: initialConfig });
 
     bridgeDisposables.push(
       bridge.onData((data) => {
@@ -180,7 +181,7 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
     };
   }
 
-  private html(webview: vscode.Webview): string {
+  private html(webview: vscode.Webview, initialConfig: TerminalConfig): string {
     const xtermJs = webview.asWebviewUri(
       vscode.Uri.joinPath(this.extensionUri, 'node_modules', '@xterm', 'xterm', 'lib', 'xterm.js'),
     );
@@ -317,199 +318,226 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
   <!-- @xterm/addon-search -->
   <script nonce="${nonce}" src="${searchJs}"></script>
   <script nonce="${nonce}">
-    const vscode = acquireVsCodeApi();
-    const terminalElement = document.getElementById('terminal');
-    // VS Code does NOT inject --vscode-terminal-* CSS vars into custom-editor
-    // webviews — those live only inside the integrated terminal iframe. We
-    // borrow the editor's bg/fg/cursor/selection so the terminal at least
-    // matches the surrounding editor; the ANSI palette stays at xterm.js's
-    // defaults (close to the VS Code default dark/light schemes).
-    const themeVarMap = {
-      background: '--vscode-editor-background',
-      foreground: '--vscode-editor-foreground',
-      cursor: '--vscode-editorCursor-foreground',
-      cursorAccent: '--vscode-editorCursor-background',
-      selectionBackground: '--vscode-editor-selectionBackground',
-      selectionForeground: '--vscode-editor-selectionForeground',
-    };
-    function readVsCodeTheme() {
-      const cs = getComputedStyle(document.body);
-      const theme = {};
-      for (const key in themeVarMap) {
-        const raw = cs.getPropertyValue(themeVarMap[key]).trim();
-        if (raw) theme[key] = raw;
+    (async () => {
+      const vscode = acquireVsCodeApi();
+      const terminalElement = document.getElementById('terminal');
+      const initialConfig = ${JSON.stringify(initialConfig).replace(/<\//g, "<\\/")};
+
+      // Theme: borrow editor-namespace CSS vars (terminal.* vars aren't
+      // injected into custom-editor webviews). ANSI palette stays at xterm's
+      // built-in defaults.
+      const themeVarMap = {
+        background: '--vscode-editor-background',
+        foreground: '--vscode-editor-foreground',
+        cursor: '--vscode-editorCursor-foreground',
+        cursorAccent: '--vscode-editorCursor-background',
+        selectionBackground: '--vscode-editor-selectionBackground',
+        selectionForeground: '--vscode-editor-selectionForeground',
+      };
+      function readVsCodeTheme() {
+        const cs = getComputedStyle(document.body);
+        const theme = {};
+        for (const key in themeVarMap) {
+          const raw = cs.getPropertyValue(themeVarMap[key]).trim();
+          if (raw) theme[key] = raw;
+        }
+        return theme;
       }
-      return theme;
-    }
-    const terminal = new Terminal({
-      cursorBlink: true,
-      convertEol: true,
-      scrollback: 5000,
-      theme: readVsCodeTheme(),
-    });
-    const fitAddon = new FitAddon.FitAddon();
-    const searchAddon = new SearchAddon.SearchAddon();
-    const webLinksAddon = new WebLinksAddon.WebLinksAddon((event, uri) => {
-      if (event.metaKey || event.ctrlKey) {
-        event.preventDefault();
-        vscode.postMessage({ type: 'openExternal', payload: uri });
+
+      // Pre-warm the configured font before xterm's Canvas atlas rasterizes.
+      // OS-installed fonts (e.g. ~/Library/Fonts) aren't available to Canvas
+      // measurement until something on the page has used them — xterm's atlas
+      // caches missing-glyph boxes if we initialize first. See xtermjs/xterm.js
+      // #3287 and #3807; CoderPad/xterm-webfont solved this for xterm 4.x;
+      // document.fonts.load is the modern dependency-free equivalent.
+      async function warmFonts(fontFamily, fontSize) {
+        const primary = (fontFamily.split(',')[0] || '').trim();
+        if (!primary) return;
+        const spec = fontSize + 'px ' + primary;
+        try {
+          await Promise.all([
+            document.fonts.load(spec),
+            document.fonts.load('bold ' + spec),
+          ]);
+        } catch (_) {
+          // Fall back to xterm's defaults; not worth blocking init on.
+        }
       }
-    });
-    let resizeTimer;
-    let lastCols = 0;
-    let lastRows = 0;
+      await warmFonts(initialConfig.fontFamily, initialConfig.fontSize);
 
-    function postResize() {
-      fitAddon.fit();
-      if (terminal.cols === lastCols && terminal.rows === lastRows) return;
-      lastCols = terminal.cols;
-      lastRows = terminal.rows;
-      vscode.postMessage({ type: 'resize', cols: terminal.cols, rows: terminal.rows });
-    }
+      const terminal = new Terminal({
+        cursorBlink: true,
+        convertEol: true,
+        scrollback: 5000,
+        theme: readVsCodeTheme(),
+        fontFamily: initialConfig.fontFamily,
+        fontSize: initialConfig.fontSize,
+      });
+      const fitAddon = new FitAddon.FitAddon();
+      const searchAddon = new SearchAddon.SearchAddon();
+      const webLinksAddon = new WebLinksAddon.WebLinksAddon((event, uri) => {
+        if (event.metaKey || event.ctrlKey) {
+          event.preventDefault();
+          vscode.postMessage({ type: 'openExternal', payload: uri });
+        }
+      });
+      let resizeTimer;
+      let lastCols = 0;
+      let lastRows = 0;
 
-    function debounceResize() {
-      clearTimeout(resizeTimer);
-      resizeTimer = setTimeout(postResize, 50);
-    }
-
-    terminal.loadAddon(fitAddon);
-    terminal.loadAddon(searchAddon);
-    terminal.loadAddon(webLinksAddon);
-    terminal.open(terminalElement);
-    fitAddon.fit();
-    terminal.focus();
-    new ResizeObserver(debounceResize).observe(terminalElement);
-    new MutationObserver(() => { terminal.options.theme = readVsCodeTheme(); }).observe(
-      document.documentElement,
-      { attributes: true, attributeFilter: ['class', 'data-vscode-theme-kind', 'data-vscode-theme-name'] },
-    );
-    const scrollbackLimit = 65536;
-    const restoredState = vscode.getState() || {};
-    let scrollback = restoredState.scrollback || '';
-    if (restoredState.scrollback) terminal.write(restoredState.scrollback);
-    function rememberScrollback(payload) {
-      scrollback = (scrollback + payload).slice(-scrollbackLimit);
-      vscode.setState({ scrollback });
-    }
-    terminal.onData((payload) => vscode.postMessage({ type: 'input', payload }));
-    terminal.element.addEventListener('focusin', () => vscode.postMessage({ type: 'focused' }));
-
-    const contextMenu = document.getElementById('context-menu');
-    const findWidget = document.getElementById('find-widget');
-    const findInput = document.getElementById('find-input');
-    const findOptions = {
-      decorations: {
-        matchBackground: '#5c3300',
-        matchBorder: '#ea5c00',
-        activeMatchBackground: '#665500',
-        activeMatchBorder: '#ffd60a',
-        matchOverviewRuler: '#ea5c00',
-        activeMatchColorOverviewRuler: '#ffd60a'
-      }
-    };
-
-    function hideContextMenu() {
-      contextMenu.style.display = 'none';
-    }
-
-    function copySelection() {
-      const text = terminal.getSelection();
-      if (!text) return;
-      const textarea = document.createElement('textarea');
-      textarea.value = text;
-      textarea.style.position = 'fixed';
-      textarea.style.opacity = '0';
-      document.body.appendChild(textarea);
-      textarea.select();
-      document.execCommand('copy');
-      textarea.remove();
-    }
-
-    async function pasteClipboard() {
-      const text = await navigator.clipboard.readText();
-      if (text) vscode.postMessage({ type: 'input', payload: text });
-    }
-
-    function openFindWidget() {
-      findWidget.style.display = 'flex';
-      findInput.focus();
-      findInput.select();
-    }
-
-    function closeFindWidget() {
-      findWidget.style.display = 'none';
-      searchAddon.clearDecorations();
-      terminal.focus();
-    }
-
-    function findNext() {
-      searchAddon.findNext(findInput.value, findOptions);
-    }
-
-    function findPrevious() {
-      searchAddon.findPrevious(findInput.value, findOptions);
-    }
-
-    terminalElement.addEventListener('mouseup', copySelection);
-    terminalElement.addEventListener('contextmenu', (event) => {
-      event.preventDefault();
-      contextMenu.style.left = event.clientX + 'px';
-      contextMenu.style.top = event.clientY + 'px';
-      contextMenu.style.display = 'block';
-    });
-    document.addEventListener('click', hideContextMenu);
-    document.addEventListener('keydown', (event) => {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'v') {
-        event.preventDefault();
-        void pasteClipboard();
-      }
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'f') {
-        event.preventDefault();
-        openFindWidget();
-      }
-      if (event.key === 'Escape' && findWidget.style.display !== 'none') {
-        closeFindWidget();
-      }
-    });
-    contextMenu.addEventListener('click', (event) => {
-      const action = event.target.dataset.action;
-      if (action === 'copy') copySelection();
-      if (action === 'paste') void pasteClipboard();
-      if (action === 'select-all') terminal.selectAll();
-      if (action === 'clear') terminal.clear();
-      hideContextMenu();
-    });
-    findInput.addEventListener('input', findNext);
-    findInput.addEventListener('keydown', (event) => {
-      if (event.key === 'Enter' && event.shiftKey) findPrevious();
-      if (event.key === 'Enter' && !event.shiftKey) findNext();
-    });
-    document.getElementById('find-prev').addEventListener('click', findPrevious);
-    document.getElementById('find-next').addEventListener('click', findNext);
-    document.getElementById('find-close').addEventListener('click', closeFindWidget);
-
-    window.addEventListener('message', (event) => {
-      const message = event.data;
-      if (message.type === 'data') {
-        rememberScrollback(message.payload);
-        terminal.write(message.payload);
-      }
-      if (message.type === 'config') {
-        terminal.options.fontFamily = message.payload.fontFamily;
-        terminal.options.fontSize = message.payload.fontSize;
+      function postResize() {
         fitAddon.fit();
+        if (terminal.cols === lastCols && terminal.rows === lastRows) return;
+        lastCols = terminal.cols;
+        lastRows = terminal.rows;
+        vscode.postMessage({ type: 'resize', cols: terminal.cols, rows: terminal.rows });
       }
-      if (message.type === 'find') openFindWidget();
-      if (message.type === 'exit') {
-        terminal.writeln('\\r\\n[process exited ' + message.code + ']');
-        vscode.postMessage({ type: 'exit' });
+
+      function debounceResize() {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(postResize, 50);
       }
-    });
-    requestAnimationFrame(() => {
-      postResize();
+
+      terminal.loadAddon(fitAddon);
+      terminal.loadAddon(searchAddon);
+      terminal.loadAddon(webLinksAddon);
+      terminal.open(terminalElement);
+      fitAddon.fit();
       terminal.focus();
-      vscode.postMessage({ type: 'ready', cols: terminal.cols, rows: terminal.rows });
-    });
+      new ResizeObserver(debounceResize).observe(terminalElement);
+      new MutationObserver(() => { terminal.options.theme = readVsCodeTheme(); }).observe(
+        document.documentElement,
+        { attributes: true, attributeFilter: ['class', 'data-vscode-theme-kind', 'data-vscode-theme-name'] },
+      );
+      const scrollbackLimit = 65536;
+      const restoredState = vscode.getState() || {};
+      let scrollback = restoredState.scrollback || '';
+      if (restoredState.scrollback) terminal.write(restoredState.scrollback);
+      function rememberScrollback(payload) {
+        scrollback = (scrollback + payload).slice(-scrollbackLimit);
+        vscode.setState({ scrollback });
+      }
+      terminal.onData((payload) => vscode.postMessage({ type: 'input', payload }));
+      terminal.element.addEventListener('focusin', () => vscode.postMessage({ type: 'focused' }));
+
+      const contextMenu = document.getElementById('context-menu');
+      const findWidget = document.getElementById('find-widget');
+      const findInput = document.getElementById('find-input');
+      const findOptions = {
+        decorations: {
+          matchBackground: '#5c3300',
+          matchBorder: '#ea5c00',
+          activeMatchBackground: '#665500',
+          activeMatchBorder: '#ffd60a',
+          matchOverviewRuler: '#ea5c00',
+          activeMatchColorOverviewRuler: '#ffd60a'
+        }
+      };
+
+      function hideContextMenu() {
+        contextMenu.style.display = 'none';
+      }
+
+      function copySelection() {
+        const text = terminal.getSelection();
+        if (!text) return;
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        textarea.remove();
+      }
+
+      async function pasteClipboard() {
+        const text = await navigator.clipboard.readText();
+        if (text) vscode.postMessage({ type: 'input', payload: text });
+      }
+
+      function openFindWidget() {
+        findWidget.style.display = 'flex';
+        findInput.focus();
+        findInput.select();
+      }
+
+      function closeFindWidget() {
+        findWidget.style.display = 'none';
+        searchAddon.clearDecorations();
+        terminal.focus();
+      }
+
+      function findNext() {
+        searchAddon.findNext(findInput.value, findOptions);
+      }
+
+      function findPrevious() {
+        searchAddon.findPrevious(findInput.value, findOptions);
+      }
+
+      terminalElement.addEventListener('mouseup', copySelection);
+      terminalElement.addEventListener('contextmenu', (event) => {
+        event.preventDefault();
+        contextMenu.style.left = event.clientX + 'px';
+        contextMenu.style.top = event.clientY + 'px';
+        contextMenu.style.display = 'block';
+      });
+      document.addEventListener('click', hideContextMenu);
+      document.addEventListener('keydown', (event) => {
+        if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'v') {
+          event.preventDefault();
+          void pasteClipboard();
+        }
+        if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'f') {
+          event.preventDefault();
+          openFindWidget();
+        }
+        if (event.key === 'Escape' && findWidget.style.display !== 'none') {
+          closeFindWidget();
+        }
+      });
+      contextMenu.addEventListener('click', (event) => {
+        const action = event.target.dataset.action;
+        if (action === 'copy') copySelection();
+        if (action === 'paste') void pasteClipboard();
+        if (action === 'select-all') terminal.selectAll();
+        if (action === 'clear') terminal.clear();
+        hideContextMenu();
+      });
+      findInput.addEventListener('input', findNext);
+      findInput.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' && event.shiftKey) findPrevious();
+        if (event.key === 'Enter' && !event.shiftKey) findNext();
+      });
+      document.getElementById('find-prev').addEventListener('click', findPrevious);
+      document.getElementById('find-next').addEventListener('click', findNext);
+      document.getElementById('find-close').addEventListener('click', closeFindWidget);
+
+      window.addEventListener('message', async (event) => {
+        const message = event.data;
+        if (message.type === 'data') {
+          rememberScrollback(message.payload);
+          terminal.write(message.payload);
+        }
+        if (message.type === 'config') {
+          await warmFonts(message.payload.fontFamily, message.payload.fontSize);
+          terminal.options.fontFamily = message.payload.fontFamily;
+          terminal.options.fontSize = message.payload.fontSize;
+          fitAddon.fit();
+        }
+        if (message.type === 'find') openFindWidget();
+        if (message.type === 'exit') {
+          terminal.writeln('\\r\n[process exited ' + message.code + ']');
+          vscode.postMessage({ type: 'exit' });
+        }
+      });
+      requestAnimationFrame(() => {
+        postResize();
+        terminal.focus();
+        vscode.postMessage({ type: 'ready', cols: terminal.cols, rows: terminal.rows });
+      });
+    })();
   </script>
 </body>
 </html>`;
