@@ -72,8 +72,8 @@ vi.mock('vscode', () => ({
   },
   workspace: {
     getConfiguration: () => ({
-      get: <T>(_key: string, defaultValue: T) =>
-        (vscodeState.settingsProjects as T | undefined) ?? defaultValue,
+      get: <T>(key: string, defaultValue: T) =>
+        key === 'projects' ? ((vscodeState.settingsProjects as T | undefined) ?? defaultValue) : defaultValue,
       update: vscodeState.configUpdate,
     }),
     onDidChangeConfiguration: vscodeState.onDidChangeConfiguration,

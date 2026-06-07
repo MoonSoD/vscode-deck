@@ -169,11 +169,13 @@ the editor tab and how reload is handled.
    `data-vscode-theme-kind` / `data-vscode-theme-name` triggers a re-read
    on theme change.
 
-   **Font via `config` message.** Font family/size are
-   `editor.fontFamily`/`editor.fontSize` *settings*, not CSS vars, so the
-   extension posts a `config` message on resolve and on
-   `onDidChangeConfiguration` for those keys; the webview applies via
-   xterm's options API.
+   **Font via `config` message.** Font family/size are *settings*, not CSS
+   vars, so the extension posts a `config` message on resolve and on
+   `onDidChangeConfiguration` for the relevant keys; the webview applies via
+   xterm's options API. These are terminals to the user, so the resolved font
+   prefers `terminal.integrated.fontFamily`/`fontSize` and falls back to
+   `editor.fontFamily`/`fontSize` — matching how VS Code's own integrated
+   terminal resolves its font.
 
 8. **Per-worktree placement snapshot.** VS Code's per-folder workspace
    storage handles same-worktree reload of custom-editor tabs natively

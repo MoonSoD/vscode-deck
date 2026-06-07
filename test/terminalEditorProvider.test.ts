@@ -1,16 +1,17 @@
 import { describe, expect, it, vi } from 'vitest';
 
+const cfg = vi.hoisted(() => ({
+  editor: { fontFamily: 'JetBrains Mono', fontSize: 15 } as Record<string, unknown>,
+  'terminal.integrated': { fontFamily: '', fontSize: 0 } as Record<string, unknown>,
+}));
+
 vi.mock('vscode', () => ({
   Uri: {
     joinPath: (base: unknown, ...paths: string[]) => ({ base, paths }),
   },
   workspace: {
-    getConfiguration: () => ({
-      get: (key: string) => {
-        if (key === 'fontFamily') return 'JetBrains Mono';
-        if (key === 'fontSize') return 15;
-        return undefined;
-      },
+    getConfiguration: (section: 'editor' | 'terminal.integrated') => ({
+      get: (key: string, defaultValue: unknown) => cfg[section]?.[key] ?? defaultValue,
     }),
     onDidChangeConfiguration: vi.fn(() => ({ dispose: vi.fn() })),
   },
@@ -122,7 +123,7 @@ describe('TerminalEditorProvider', () => {
     expect(terminalPanel.dispose).toHaveBeenCalledOnce();
   });
 
-  it('posts terminal font config when resolving an editor', () => {
+  it('posts terminal font config when resolving an editor (editor font when terminal font unset)', () => {
     const terminalPanel = panel();
     const { provider, document } = providerDocument();
 
@@ -131,6 +132,40 @@ describe('TerminalEditorProvider', () => {
     expect(terminalPanel.webview.postMessage).toHaveBeenCalledWith({
       type: 'config',
       payload: { fontFamily: 'JetBrains Mono', fontSize: 15 },
+    });
+  });
+
+  it('prefers terminal.integrated font over editor font', () => {
+    cfg['terminal.integrated'] = { fontFamily: 'Fira Code', fontSize: 18 };
+    try {
+      const terminalPanel = panel();
+      const { provider, document } = providerDocument();
+
+      provider.resolveCustomEditor(document, terminalPanel as never);
+
+      expect(terminalPanel.webview.postMessage).toHaveBeenCalledWith({
+        type: 'config',
+        payload: { fontFamily: 'Fira Code', fontSize: 18 },
+      });
+    } finally {
+      cfg['terminal.integrated'] = { fontFamily: '', fontSize: 0 };
+    }
+  });
+
+  it('broadcasts when a terminal.integrated font setting changes', () => {
+    const terminalPanel = panel();
+    const { provider, document } = providerDocument();
+    provider.resolveCustomEditor(document, terminalPanel as never);
+    terminalPanel.webview.postMessage.mockClear();
+
+    const handler = vi.mocked(vscode.workspace.onDidChangeConfiguration).mock.calls.at(-1)?.[0];
+    handler?.({
+      affectsConfiguration: (section: string) => section === 'terminal.integrated.fontFamily',
+    } as never);
+
+    expect(terminalPanel.webview.postMessage).toHaveBeenCalledWith({
+      type: 'config',
+      payload: expect.objectContaining({ fontFamily: 'JetBrains Mono' }),
     });
   });
 

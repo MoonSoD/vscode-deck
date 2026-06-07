@@ -78,12 +78,13 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
     private readonly onPanelDispose: TerminalEditorDisposeHandler = () => undefined,
   ) {
     this.configChangeSubscription = vscode.workspace.onDidChangeConfiguration((event) => {
-      if (
-        !event.affectsConfiguration('editor.fontFamily') &&
-        !event.affectsConfiguration('editor.fontSize')
-      ) {
-        return;
-      }
+      const fontKeys = [
+        'terminal.integrated.fontFamily',
+        'terminal.integrated.fontSize',
+        'editor.fontFamily',
+        'editor.fontSize',
+      ];
+      if (!fontKeys.some((key) => event.affectsConfiguration(key))) return;
       this.broadcastConfig();
     });
   }
@@ -179,10 +180,16 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
   }
 
   private terminalConfig(): TerminalConfig {
+    // These are terminals to the user, so honor the terminal font settings
+    // first, falling back to the editor font — matching how VS Code's own
+    // integrated terminal resolves `terminal.integrated.font*` over `editor.*`.
     const editor = vscode.workspace.getConfiguration('editor');
+    const terminal = vscode.workspace.getConfiguration('terminal.integrated');
+    const terminalFontFamily = terminal.get<string>('fontFamily', '').trim();
+    const terminalFontSize = terminal.get<number>('fontSize', 0);
     return {
-      fontFamily: editor.get('fontFamily', 'monospace'),
-      fontSize: editor.get('fontSize', 14),
+      fontFamily: terminalFontFamily || editor.get('fontFamily', 'monospace'),
+      fontSize: terminalFontSize > 0 ? terminalFontSize : editor.get('fontSize', 14),
     };
   }
 
