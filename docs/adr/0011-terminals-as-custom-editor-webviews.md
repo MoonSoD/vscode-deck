@@ -136,7 +136,10 @@ the editor tab and how reload is handled.
    attaches to the surviving tmux session. No hydrator, no PID store,
    no name+cwd heuristic. ADR-0008 §9 and §16 are superseded.
 
-6. **Close-tab kills the tmux session.** Disposing the webview panel
+6. **Close-tab kills the tmux session.**
+   > **Superseded by [ADR-0017](./0017-terminals-persist-across-tab-close.md):** close-tab now detaches and persists; only TerminalRemoval, shell `exit`, WorktreeRemoval, or RepositoryRemoval destroy a Terminal.
+
+   Disposing the webview panel
    (user closes the tab, drag-closes the group, etc.) runs
    `tmux -L deck kill-session -t =<sessionName>` via TmuxCli. ADR-0008
    §10's lifecycle stays: inline X also kills, `exit` inside the shell

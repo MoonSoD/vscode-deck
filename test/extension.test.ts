@@ -11,6 +11,9 @@ const vscodeState = vi.hoisted(() => ({
     dispose: vi.fn(),
     onDidChangeVisibility: vi.fn(() => ({ dispose: vi.fn() })),
     reveal: vi.fn(async () => undefined),
+    get selection() {
+      return vscodeState.treeViewSelection;
+    },
   })),
   executeCommand: vi.fn(),
   closeTerminalRun: vi.fn(),
@@ -36,6 +39,7 @@ const vscodeState = vi.hoisted(() => ({
   }>,
   workspaceFolders: [{ uri: { fsPath: '/work/alpha-main' } }],
   tmuxPreflight: vi.fn(async () => ({ available: true })),
+  treeViewSelection: [] as unknown[],
 }));
 
 vi.mock('vscode', () => ({
@@ -198,7 +202,7 @@ vi.mock('../src/terminal/openTerminalInNewWindowCommand', () => ({
 }));
 
 vi.mock('../src/terminal/killTerminalCommand', () => ({
-  CloseTerminalCommand: class {
+  TerminalRemovalCommand: class {
     constructor(...args: unknown[]) {
       vscodeState.closeTerminalArgs = args;
     }
@@ -225,6 +229,7 @@ describe('activate', () => {
     vscodeState.settingsRepositories = ['/settings/repo'];
     vscodeState.tmuxInstances = [];
     vscodeState.tabGroups = [];
+    vscodeState.treeViewSelection = [];
     vscodeState.workspaceFolders = [{ uri: { fsPath: '/work/alpha-main' } }];
     vscodeState.configUpdate.mockResolvedValue(undefined);
     vscodeState.tmuxPreflight.mockResolvedValue({ available: true });
@@ -366,7 +371,7 @@ describe('activate', () => {
     );
   });
 
-  it('registers deck.killTerminal through CloseTerminalCommand', async () => {
+  it('registers deck.killTerminal through TerminalRemovalCommand', async () => {
     const context = createContext();
 
     await activate(context as never);
@@ -381,6 +386,21 @@ describe('activate', () => {
     });
   });
 
+  it('deletes the selected Terminal when deck.killTerminal is invoked from a keybinding', async () => {
+    const context = createContext();
+    const selectedTerminal = { terminal: { sessionName: 's', windowName: 'zsh' } };
+
+    await activate(context as never);
+    vscodeState.treeViewSelection = [selectedTerminal];
+    const closeTerminalRegistration = vscodeState.registerCommand.mock.calls.find(
+      ([command]) => command === 'deck.killTerminal',
+    );
+    if (!closeTerminalRegistration) throw new Error('missing deck.killTerminal registration');
+    await closeTerminalRegistration[1]();
+
+    expect(vscodeState.closeTerminalRun).toHaveBeenCalledWith(selectedTerminal);
+  });
+
   it('registers deck.terminal.find', async () => {
     const context = createContext();
 
@@ -392,7 +412,7 @@ describe('activate', () => {
     );
   });
 
-  it('kills tmux and refreshes when a Deck custom-editor tab is disposed', async () => {
+  it('refreshes without killing tmux when a Deck custom-editor tab is disposed', async () => {
     const context = createContext();
     let disposePanel: (() => void) | undefined;
     const panel = {
@@ -424,7 +444,7 @@ describe('activate', () => {
     await Promise.resolve();
     await Promise.resolve();
 
-    expect(vscodeState.tmuxInstances[0].killSession).toHaveBeenCalledWith('wt-_work_repo__term-1');
+    expect(vscodeState.tmuxInstances[0].killSession).not.toHaveBeenCalled();
     expect(vscodeState.repositoryTreeInstances[0].refresh).toHaveBeenCalledOnce();
   });
 

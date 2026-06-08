@@ -16,12 +16,16 @@ import { WorktreeRootStore } from './worktree/worktreeRootStore';
 import { DeckTreeDragAndDropController } from './tree/deckTreeDragAndDropController';
 import { WorktreeOrderStore } from './worktree/worktreeOrderStore';
 import { AddTerminalCommand } from './terminal/addTerminalCommand';
-import { CloseTerminalCommand } from './terminal/killTerminalCommand';
+import { TerminalRemovalCommand } from './terminal/killTerminalCommand';
 import { OpenTerminalCommand } from './terminal/openTerminalCommand';
 import { OpenTerminalInNewWindowCommand } from './terminal/openTerminalInNewWindowCommand';
 import { PendingTerminalOpenStore } from './terminal/pendingTerminalOpenStore';
 import { TerminalCascade } from './terminal/terminalCascade';
-import { TerminalEditorProvider, terminalEditorViewType } from './terminal/terminalEditorProvider';
+import {
+  TerminalEditorProvider,
+  terminalEditorViewType,
+  type TerminalEditorDisposeHandler,
+} from './terminal/terminalEditorProvider';
 import { TmuxCli, type TmuxSession } from './terminal/tmuxCli';
 import { terminalSessionNumber, terminalSessionPrefix } from './terminal/tmuxSafe';
 import { tmuxPreflight } from './terminal/tmuxPreflight';
@@ -58,29 +62,23 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const addTerminal = new AddTerminalCommand(
     tmux,
     () => tree.refresh(),
-    { pendingTerminalOpens, switcher },
   );
   const terminalEditorProvider = new TerminalEditorProvider(
     context.extensionUri,
     tmuxConfigPath,
     undefined,
     undefined,
-    async (sessionName) => {
-      await tmux.killSession(sessionName);
-      tree.refresh();
-    },
+    refreshTerminalTreeOnEditorDispose(() => tree.refresh()),
     // %window-renamed from any open terminal's control client → relabel the row
     // live (automatic-rename tracks the foreground command); event-driven, no poll.
     () => tree.refresh(),
     (sessionName) => tmux.windowName(sessionName),
   );
   const openTerminal = new OpenTerminalCommand({
-    pendingTerminalOpens,
-    switcher,
     terminalPanels: terminalEditorProvider,
   });
   const openTerminalInNewWindow = new OpenTerminalInNewWindowCommand(pendingTerminalOpens);
-  const closeTerminal = new CloseTerminalCommand(
+  const closeTerminal = new TerminalRemovalCommand(
     tmux,
     () => tree.refresh(),
   );
@@ -165,7 +163,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand('deck.openTerminalInNewWindow', (node) =>
       openTerminalInNewWindow.run(node),
     ),
-    vscode.commands.registerCommand('deck.killTerminal', (node) => closeTerminal.run(node)),
+    vscode.commands.registerCommand('deck.killTerminal', (node) =>
+      closeTerminal.run(node ?? treeView.selection[0]),
+    ),
     vscode.commands.registerCommand('deck.terminal.find', () => terminalEditorProvider.showFind()),
     vscode.commands.registerCommand('deck.removeRepository', (node) => removeRepository.run(node)),
     vscode.commands.registerCommand('deck.removeWorktree', (node) => removeWorktree.run(node)),
@@ -187,6 +187,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 }
 
 export function deactivate(): void {}
+
+export function refreshTerminalTreeOnEditorDispose(refresh: () => void): TerminalEditorDisposeHandler {
+  return () => {
+    refresh();
+  };
+}
 
 interface PendingTerminalOpenConsumer {
   consume(worktreePath: string): Promise<string | undefined>;

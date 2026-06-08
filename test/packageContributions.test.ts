@@ -228,11 +228,11 @@ describe('package contributions', () => {
     ).toBe(false);
   });
 
-  it('contributes close Terminal as the inline X action on Terminal rows', () => {
+  it('contributes Delete Terminal as the inline trash action on Terminal rows', () => {
     expect(pkg.contributes.commands).toContainEqual({
       command: 'deck.killTerminal',
-      title: 'Deck: Close Terminal',
-      icon: '$(close)',
+      title: 'Deck: Delete Terminal',
+      icon: '$(trash)',
     });
 
     expect(
@@ -247,6 +247,13 @@ describe('package contributions', () => {
     expect(pkg.contributes.menus.commandPalette).toContainEqual({
       command: 'deck.killTerminal',
       when: 'false',
+    });
+    expect(pkg.contributes.keybindings).toContainEqual({
+      command: 'deck.killTerminal',
+      key: 'ctrl+backspace',
+      mac: 'cmd+backspace',
+      when:
+        "focusedView == 'deck.repositories' && (viewItem == deck.terminal.active || viewItem == deck.terminal.foreign) && deck.tmuxAvailable",
     });
   });
 
