@@ -1,4 +1,3 @@
-import * as path from 'node:path';
 import * as vscode from 'vscode';
 import {
   allocateTermN,
@@ -19,24 +18,10 @@ interface WorktreeNodeLike {
   };
 }
 
-interface PendingTerminalOpenStoreLike {
-  set(worktreePath: string, sessionName: string): Promise<void>;
-}
-
-interface WorktreeSwitcherLike {
-  switchTo(worktreePath: string): Promise<void>;
-}
-
-interface AddTerminalCommandOptions {
-  pendingTerminalOpens?: PendingTerminalOpenStoreLike;
-  switcher?: WorktreeSwitcherLike;
-}
-
 export class AddTerminalCommand {
   constructor(
     private readonly tmux: AddTerminalTmuxCli,
     private readonly refresh: () => void = () => undefined,
-    private readonly options: AddTerminalCommandOptions = {},
     private readonly sessionUriCodec: SessionUriCodec = new SessionUriCodec(),
   ) {}
 
@@ -49,11 +34,6 @@ export class AddTerminalCommand {
     const session = terminalSessionName(node.worktree.path, termN);
     await this.tmux.ensureSession(session, node.worktree.path);
 
-    // Foreign worktree: don't attach a vscode.Terminal in this window — it
-    // would land in the wrong workspace folder. Persist the new session as
-    // a pending-open intent and switch; post-reload activation opens it.
-    if (await this.switchForForeignWorktree(node, session)) return;
-
     await vscode.commands.executeCommand(
       'vscode.openWith',
       this.sessionUriCodec.encode({ worktreePath: node.worktree.path, term: termN }),
@@ -61,19 +41,5 @@ export class AddTerminalCommand {
       { viewColumn: vscode.ViewColumn.Active },
     );
     this.refresh();
-  }
-
-  private async switchForForeignWorktree(
-    node: WorktreeNodeLike,
-    sessionName: string,
-  ): Promise<boolean> {
-    const currentWorktreePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-    if (!currentWorktreePath) return false;
-    if (path.resolve(node.worktree.path) === path.resolve(currentWorktreePath)) return false;
-    if (!this.options.pendingTerminalOpens || !this.options.switcher) return false;
-
-    await this.options.pendingTerminalOpens.set(node.worktree.path, sessionName);
-    await this.options.switcher.switchTo(node.worktree.path);
-    return true;
   }
 }
