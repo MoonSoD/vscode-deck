@@ -73,9 +73,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     () => tree.refresh(),
     (sessionName) => tmux.windowName(sessionName),
   );
-  const openTerminal = new OpenTerminalCommand({
-    terminalPanels: terminalEditorProvider,
-  });
+  const openTerminal = new OpenTerminalCommand(terminalEditorProvider);
   const openTerminalInNewWindow = new OpenTerminalInNewWindowCommand(pendingTerminalOpens);
   const closeTerminal = new CloseTerminalCommand(
     tmux,

@@ -19,20 +19,16 @@ interface TerminalEditorPanelRegistryLike {
   panelFor(sessionName: string): TerminalEditorPanelLike | undefined;
 }
 
-interface OpenTerminalCommandOptions {
-  terminalPanels?: TerminalEditorPanelRegistryLike;
-}
-
 export class OpenTerminalCommand {
   constructor(
-    private readonly options: OpenTerminalCommandOptions = {},
+    private readonly terminalPanels?: TerminalEditorPanelRegistryLike,
     private readonly sessionUriCodec: SessionUriCodec = new SessionUriCodec(),
   ) {}
 
   async run(node: TerminalNodeLike | undefined): Promise<void> {
     if (!node) return;
 
-    const existing = this.options.terminalPanels?.panelFor(node.terminal.sessionName);
+    const existing = this.terminalPanels?.panelFor(node.terminal.sessionName);
     if (existing) {
       existing.reveal();
       return;

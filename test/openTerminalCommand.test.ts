@@ -57,7 +57,7 @@ describe('OpenTerminalCommand', () => {
       panelFor: vi.fn(() => panel),
     };
 
-    await new OpenTerminalCommand({ terminalPanels }).run({
+    await new OpenTerminalCommand(terminalPanels).run({
       terminal: { sessionName: 'wt-_work_alpha-main__term-1', windowName: 'zsh' },
       n: 1,
       worktreePath: '/work/alpha-main',
@@ -70,14 +70,7 @@ describe('OpenTerminalCommand', () => {
   });
 
   it('opens a foreign-worktree terminal row in place without switching', async () => {
-    const pendingTerminalOpens = {
-      set: vi.fn(async () => undefined),
-    };
-    const switcher = {
-      switchTo: vi.fn(async () => undefined),
-    };
-
-    await new OpenTerminalCommand({ pendingTerminalOpens, switcher }).run({
+    await new OpenTerminalCommand().run({
       terminal: { sessionName: 'wt-_work_beta-main__term-1', windowName: 'zsh' },
       n: 1,
       worktreePath: '/work/beta-main',
@@ -92,8 +85,7 @@ describe('OpenTerminalCommand', () => {
       'deck.terminal',
       { viewColumn: -1 },
     );
-    expect(pendingTerminalOpens.set).not.toHaveBeenCalled();
-    expect(switcher.switchTo).not.toHaveBeenCalled();
+    expect(vscodeState.executeCommand).toHaveBeenCalledOnce();
     expect(vscodeState.createTerminal).not.toHaveBeenCalled();
   });
 });

@@ -74,8 +74,6 @@ describe('AddTerminalCommand', () => {
       ensureSession: vi.fn(async () => undefined),
     };
     const refresh = vi.fn();
-    const pendingTerminalOpens = { set: vi.fn(async () => undefined) };
-    const switcher = { switchTo: vi.fn(async () => undefined) };
 
     await new AddTerminalCommand(
       tmux,
@@ -95,8 +93,7 @@ describe('AddTerminalCommand', () => {
       'deck.terminal',
       { viewColumn: -1 },
     );
-    expect(pendingTerminalOpens.set).not.toHaveBeenCalled();
-    expect(switcher.switchTo).not.toHaveBeenCalled();
+    expect(vscodeState.executeCommand).toHaveBeenCalledOnce();
     expect(vscodeState.createTerminal).not.toHaveBeenCalled();
     expect(refresh).toHaveBeenCalledOnce();
   });
