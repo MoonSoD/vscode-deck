@@ -231,16 +231,7 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
     const fitJs = asset('addon-fit.js');
     const webLinksJs = asset('addon-web-links.js');
     const searchJs = asset('addon-search.js');
-    const unicode11Js = webview.asWebviewUri(
-      vscode.Uri.joinPath(
-        this.extensionUri,
-        'node_modules',
-        '@xterm',
-        'addon-unicode11',
-        'lib',
-        'addon-unicode11.js',
-      ),
-    );
+    const unicode11Js = asset('addon-unicode11.js');
     const nonce = String(Date.now());
 
     return `<!doctype html>

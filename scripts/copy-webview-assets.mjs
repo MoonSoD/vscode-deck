@@ -16,6 +16,7 @@ const assets = [
   '@xterm/addon-fit/lib/addon-fit.js',
   '@xterm/addon-web-links/lib/addon-web-links.js',
   '@xterm/addon-search/lib/addon-search.js',
+  '@xterm/addon-unicode11/lib/addon-unicode11.js',
 ];
 
 mkdirSync(dest, { recursive: true });
