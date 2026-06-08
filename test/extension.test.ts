@@ -19,16 +19,23 @@ const vscodeState = vi.hoisted(() => ({
   terminalRemovalRun: vi.fn(),
   terminalRemovalArgs: undefined as unknown[] | undefined,
   lifecycleOrder: [] as string[],
+  activeTab: undefined as { input?: unknown } | undefined,
   onDidCloseTerminal: vi.fn(() => ({ dispose: vi.fn() })),
   onDidChangeActiveTerminal: vi.fn(() => ({ dispose: vi.fn() })),
   onDidChangeConfiguration: vi.fn(() => ({ dispose: vi.fn() })),
+  onDidChangeTabGroups: vi.fn(() => ({ dispose: vi.fn() })),
+  onDidChangeTabs: vi.fn(() => ({ dispose: vi.fn() })),
   onDidChangeWorkspaceFolders: vi.fn(() => ({ dispose: vi.fn() })),
   onDidOpenTerminal: vi.fn(() => ({ dispose: vi.fn() })),
   openTerminalInNewWindowRun: vi.fn(),
   openTerminalRun: vi.fn(),
   openTerminalArgs: undefined as unknown[] | undefined,
   repositoryTreeArgs: undefined as unknown[] | undefined,
-  repositoryTreeInstances: [] as Array<{ refresh: ReturnType<typeof vi.fn>; getChildren: ReturnType<typeof vi.fn> }>,
+  repositoryTreeInstances: [] as Array<{
+    findTerminal: ReturnType<typeof vi.fn>;
+    refresh: ReturnType<typeof vi.fn>;
+    getChildren: ReturnType<typeof vi.fn>;
+  }>,
   registerCommand: vi.fn(() => ({ dispose: vi.fn() })),
   registerCustomEditorProvider: vi.fn(() => ({ dispose: vi.fn() })),
   removeWorktreeArgs: undefined as unknown[] | undefined,
@@ -71,7 +78,12 @@ vi.mock('vscode', () => ({
     onDidChangeActiveTerminal: vscodeState.onDidChangeActiveTerminal,
     onDidOpenTerminal: vscodeState.onDidOpenTerminal,
     get tabGroups() {
-      return { all: vscodeState.tabGroups };
+      return {
+        all: vscodeState.tabGroups,
+        activeTabGroup: { activeTab: vscodeState.activeTab },
+        onDidChangeTabGroups: vscodeState.onDidChangeTabGroups,
+        onDidChangeTabs: vscodeState.onDidChangeTabs,
+      };
     },
   },
   workspace: {
@@ -142,6 +154,7 @@ vi.mock('../src/repository/repositoryRemovalCommand', () => ({
 
 vi.mock('../src/tree/repositoryTree', () => ({
   RepositoryTreeProvider: class {
+    findTerminal = vi.fn();
     refresh = vi.fn();
     getChildren = vi.fn(() => [{ repositoryPath: '/settings/repo' }]);
 
@@ -221,6 +234,7 @@ describe('activate', () => {
     vscodeState.addRepositoryArgs = undefined;
     vscodeState.addTerminalArgs = undefined;
     vscodeState.terminalRemovalArgs = undefined;
+    vscodeState.activeTab = undefined;
     vscodeState.lifecycleOrder = [];
     vscodeState.openTerminalArgs = undefined;
     vscodeState.repositoryTreeArgs = undefined;
@@ -228,6 +242,8 @@ describe('activate', () => {
     vscodeState.removeWorktreeArgs = undefined;
     vscodeState.settingsRepositories = ['/settings/repo'];
     vscodeState.tmuxInstances = [];
+    vscodeState.onDidChangeTabGroups.mockClear();
+    vscodeState.onDidChangeTabs.mockClear();
     vscodeState.tabGroups = [];
     vscodeState.treeViewSelection = [];
     vscodeState.workspaceFolders = [{ uri: { fsPath: '/work/alpha-main' } }];
@@ -369,6 +385,60 @@ describe('activate', () => {
     expect(vscodeState.createTreeView.mock.results[0].value.onDidChangeVisibility).toHaveBeenCalledWith(
       expect.any(Function),
     );
+  });
+
+  it('reveals the active Deck Terminal tab in the tree without taking focus', async () => {
+    const context = createContext();
+    const terminalNode = {
+      terminal: { sessionName: 'wt-_work_alpha-main__term-1', windowName: 'zsh' },
+      worktreePath: '/work/alpha-main',
+    };
+    const activeTab = {
+      input: {
+        viewType: 'deck.terminal',
+        uri: {
+          scheme: 'deck-terminal',
+          path: '/work/alpha-main/term-1',
+        },
+      },
+    };
+
+    await activate(context as never);
+    vscodeState.repositoryTreeInstances[0].findTerminal.mockResolvedValue(terminalNode);
+    vscodeState.activeTab = activeTab;
+    const tabChangeHandler = vscodeState.onDidChangeTabs.mock.calls[0]?.[0];
+    if (!tabChangeHandler) throw new Error('missing tab change listener');
+    await tabChangeHandler({ opened: [], closed: [], changed: [activeTab] });
+
+    expect(vscodeState.repositoryTreeInstances[0].findTerminal).toHaveBeenCalledWith(
+      'wt-_work_alpha-main__term-1',
+      '/work/alpha-main',
+    );
+    expect(vscodeState.createTreeView.mock.results[0].value.reveal).toHaveBeenCalledWith(
+      terminalNode,
+      { select: true, focus: false },
+    );
+  });
+
+  it('does not reveal a tree row when a non-Terminal tab becomes active', async () => {
+    const context = createContext();
+    vscodeState.activeTab = {
+      input: {
+        viewType: 'default',
+        uri: {
+          scheme: 'file',
+          path: '/work/alpha-main/src/index.ts',
+        },
+      },
+    };
+
+    await activate(context as never);
+    const tabChangeHandler = vscodeState.onDidChangeTabs.mock.calls[0]?.[0];
+    if (!tabChangeHandler) throw new Error('missing tab change listener');
+    await tabChangeHandler({ opened: [], closed: [], changed: [vscodeState.activeTab] });
+
+    expect(vscodeState.repositoryTreeInstances[0].findTerminal).not.toHaveBeenCalled();
+    expect(vscodeState.createTreeView.mock.results[0].value.reveal).not.toHaveBeenCalled();
   });
 
   it('registers deck.killTerminal through TerminalRemovalCommand', async () => {

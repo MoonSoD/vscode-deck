@@ -22,7 +22,7 @@ import {
   describeWorktreeTreeItem,
 } from './worktreeTreeItem';
 
-type Node = RepositoryNode | WorktreeNode | TerminalNode | TerminalAddNode | TmuxUnavailableNode;
+export type RepositoryTreeNode = RepositoryNode | WorktreeNode | TerminalNode | TerminalAddNode | TmuxUnavailableNode;
 
 interface TerminalSessionLister {
   listSessions(prefix?: string): Promise<TmuxSession[]>;
@@ -65,7 +65,7 @@ class WorktreeNode extends vscode.TreeItem {
 }
 
 class TerminalAddNode extends vscode.TreeItem {
-  constructor(worktreeNode: WorktreeNode) {
+  constructor(public readonly worktreeNode: WorktreeNode) {
     const item = describeTerminalAddTreeItem();
     super(item.label, vscode.TreeItemCollapsibleState.None);
     this.id = `add-terminal::${worktreeNode.worktree.path}`;
@@ -82,7 +82,7 @@ class TerminalAddNode extends vscode.TreeItem {
 class TerminalNode extends vscode.TreeItem {
   constructor(
     public readonly terminal: TmuxSession,
-    public readonly worktreePath: string,
+    public readonly worktreeNode: WorktreeNode,
     isActiveWorktree: boolean,
   ) {
     const item = describeTerminalTreeItem(terminal.windowName, isActiveWorktree);
@@ -96,21 +96,29 @@ class TerminalNode extends vscode.TreeItem {
       arguments: [this],
     };
   }
+
+  get repositoryPath(): string {
+    return this.worktreeNode.repositoryPath;
+  }
+
+  get worktreePath(): string {
+    return this.worktreeNode.worktree.path;
+  }
 }
 
 class TmuxUnavailableNode extends vscode.TreeItem {
-  constructor(worktreePath: string) {
+  constructor(public readonly worktreeNode: WorktreeNode) {
     const item = describeTmuxUnavailableTreeItem();
     super(item.label, vscode.TreeItemCollapsibleState.None);
-    this.id = `tmux-unavailable::${worktreePath}`;
+    this.id = `tmux-unavailable::${worktreeNode.worktree.path}`;
     this.contextValue = item.contextValue;
     this.tooltip = item.tooltip;
     this.iconPath = new vscode.ThemeIcon(item.iconId);
   }
 }
 
-export class RepositoryTreeProvider implements vscode.TreeDataProvider<Node> {
-  private readonly _onDidChangeTreeData = new vscode.EventEmitter<Node | undefined>();
+export class RepositoryTreeProvider implements vscode.TreeDataProvider<RepositoryTreeNode> {
+  private readonly _onDidChangeTreeData = new vscode.EventEmitter<RepositoryTreeNode | undefined>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
   private activeRepositoryCommonDir: string | null = null;
   private resolvingActiveRepository = false;
@@ -151,18 +159,24 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Node> {
     this._onDidChangeTreeData.fire(undefined);
   }
 
-  getTreeItem(element: Node): vscode.TreeItem {
+  getTreeItem(element: RepositoryTreeNode): vscode.TreeItem {
     return element;
   }
 
-  getParent(_element: Node): Node | undefined {
-    // RepositoryNodes are roots; WorktreeNodes aren't revealed programmatically
-    // today, so undefined is correct for both. TreeView.reveal requires this
-    // method to exist on the provider.
+  getParent(element: RepositoryTreeNode): RepositoryTreeNode | undefined {
+    if (element instanceof WorktreeNode) {
+      return new RepositoryNode(element.repositoryPath, this.isActiveRepository(element.repositoryPath));
+    }
+    if (element instanceof TerminalNode) {
+      return this.toParentWorktreeNode(element.worktreeNode);
+    }
+    if (element instanceof TerminalAddNode || element instanceof TmuxUnavailableNode) {
+      return this.toParentWorktreeNode(element.worktreeNode);
+    }
     return undefined;
   }
 
-  getChildren(element?: Node): vscode.ProviderResult<Node[]> {
+  getChildren(element?: RepositoryTreeNode): vscode.ProviderResult<RepositoryTreeNode[]> {
     if (!element) {
       // Sync return: any `await` here would yield to the event loop and let
       // viewsWelcome ("No repositories yet") flash on every tree.refresh().
@@ -170,27 +184,71 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Node> {
       this.resolveActiveRepository();
       return repositories.map((p) => {
         this.resolveRepositoryCommonDir(p);
-        const repositoryCommonDir = this.repositoryCommonDirs.get(p);
-        return new RepositoryNode(
-          p,
-          repositoryCommonDir !== undefined &&
-            repositoryCommonDir !== null &&
-            repositoryCommonDir === this.activeRepositoryCommonDir,
-        );
+        return new RepositoryNode(p, this.isActiveRepository(p));
       });
     }
     if (element instanceof RepositoryNode) {
       return this.getWorktreeChildren(element);
     }
     if (element instanceof WorktreeNode) {
-      if (!this.tmuxAvailable) return [new TmuxUnavailableNode(element.worktree.path)];
+      if (!this.tmuxAvailable) return [new TmuxUnavailableNode(element)];
       return this.getTerminalChildren(element);
     }
     return [];
   }
 
-  private getWorktreeChildren(element: RepositoryNode): Node[] | Promise<Node[]> {
-    const activeWorktreePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  async findTerminal(
+    sessionName: string,
+    worktreePath: string,
+  ): Promise<RepositoryTreeNode | undefined> {
+    const repositories = await this.resolveChildren();
+    for (const repository of repositories) {
+      if (!(repository instanceof RepositoryNode)) continue;
+      const worktrees = await this.resolveChildren(repository);
+      const worktree = worktrees.find(
+        (node) =>
+          node instanceof WorktreeNode &&
+          path.resolve(node.worktree.path) === path.resolve(worktreePath),
+      );
+      if (!(worktree instanceof WorktreeNode)) continue;
+
+      const terminals = await this.resolveChildren(worktree);
+      const terminal = terminals.find(
+        (node) => node instanceof TerminalNode && node.terminal.sessionName === sessionName,
+      );
+      if (terminal) return terminal;
+    }
+    return undefined;
+  }
+
+  private async resolveChildren(element?: RepositoryTreeNode): Promise<RepositoryTreeNode[]> {
+    return (await Promise.resolve(this.getChildren(element))) ?? [];
+  }
+
+  private currentWorktreePath(): string | undefined {
+    return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  }
+
+  private isActiveRepository(repositoryPath: string): boolean {
+    const repositoryCommonDir = this.repositoryCommonDirs.get(repositoryPath);
+    return (
+      repositoryCommonDir !== undefined &&
+      repositoryCommonDir !== null &&
+      repositoryCommonDir === this.activeRepositoryCommonDir
+    );
+  }
+
+  private toParentWorktreeNode(worktreeNode: WorktreeNode): WorktreeNode {
+    return new WorktreeNode(
+      worktreeNode.repositoryPath,
+      worktreeNode.worktree,
+      this.currentWorktreePath(),
+      worktreeNode.mainWorktreePath,
+    );
+  }
+
+  private getWorktreeChildren(element: RepositoryNode): RepositoryTreeNode[] | Promise<RepositoryTreeNode[]> {
+    const activeWorktreePath = this.currentWorktreePath();
     const commonDir =
       this.repositoryCommonDirCache.get(element.repositoryPath) ??
       this.repositoryCommonDirs.get(element.repositoryPath) ??
@@ -276,7 +334,7 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Node> {
     repositoryPath: string,
     knownCommonDir: string | undefined,
     activeWorktreePath: string | undefined,
-  ): Promise<Node[]> {
+  ): Promise<RepositoryTreeNode[]> {
     const pendingAtListStart = new Set(this.pendingWorktreeRemovals);
     const gitWorktrees = await listWorktrees(repositoryPath);
     const visibleWorktrees = this.visibleWorktrees(gitWorktrees, pendingAtListStart);
@@ -288,7 +346,7 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Node> {
     return this.toWorktreeNodes(repositoryPath, visibleWorktrees, commonDir, activeWorktreePath);
   }
 
-  private async getTerminalChildren(element: WorktreeNode): Promise<Node[]> {
+  private async getTerminalChildren(element: WorktreeNode): Promise<RepositoryTreeNode[]> {
     const terminals = toCachedTerminalSessions(
       element.worktree.path,
       await this.tmux.listSessions(terminalSessionPrefix(element.worktree.path)),
@@ -296,16 +354,16 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Node> {
     return this.toTerminalNodes(element, terminals);
   }
 
-  private toTerminalNodes(element: WorktreeNode, terminals: readonly CachedTerminalSession[]): Node[] {
+  private toTerminalNodes(element: WorktreeNode, terminals: readonly CachedTerminalSession[]): RepositoryTreeNode[] {
     // The Worktree row's inline `+` icon is the always-available add affordance.
     // Show the explicit "Add Terminal" row only as the empty-state hint.
     if (terminals.length === 0) return [new TerminalAddNode(element)];
-    const activeWorktreePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    const activeWorktreePath = this.currentWorktreePath();
     const isActiveWorktree =
       activeWorktreePath !== undefined &&
       path.resolve(element.worktree.path) === path.resolve(activeWorktreePath);
     return terminals.map(
-      (terminal) => new TerminalNode(terminal, element.worktree.path, isActiveWorktree),
+      (terminal) => new TerminalNode(terminal, element, isActiveWorktree),
     );
   }
 

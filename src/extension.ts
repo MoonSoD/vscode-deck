@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 import * as vscode from 'vscode';
-import { RepositoryTreeProvider } from './tree/repositoryTree';
+import { RepositoryTreeProvider, type RepositoryTreeNode } from './tree/repositoryTree';
 import { ActiveWorktreeStore } from './switch/activeWorktreeStore';
 import { DetachedOpener } from './switch/detachedOpener';
 import { WorktreeSwitcher } from './switch/worktreeSwitcher';
@@ -176,6 +176,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       tree.refresh();
     }),
     vscode.workspace.onDidChangeWorkspaceFolders(() => tree.refresh()),
+    vscode.window.tabGroups.onDidChangeTabs(async () => {
+      await revealActiveTerminalInTree(tree, treeView);
+    }),
+    vscode.window.tabGroups.onDidChangeTabGroups(async () => {
+      await revealActiveTerminalInTree(tree, treeView);
+    }),
     treeView.onDidChangeVisibility((event) => {
       if (event.visible) tree.refresh();
     }),
@@ -186,6 +192,31 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 }
 
 export function deactivate(): void {}
+
+async function revealActiveTerminalInTree(
+  tree: RepositoryTreeProvider,
+  treeView: vscode.TreeView<RepositoryTreeNode>,
+): Promise<void> {
+  const activeTab = vscode.window.tabGroups.activeTabGroup.activeTab;
+  const input = activeTab?.input as { viewType?: unknown; uri?: vscode.Uri } | undefined;
+  if (input?.viewType !== terminalEditorViewType || !input.uri) return;
+
+  let decoded;
+  try {
+    decoded = new SessionUriCodec().decode(input.uri);
+  } catch {
+    return;
+  }
+
+  const terminalNode = await tree.findTerminal(decoded.sessionName, decoded.worktreePath);
+  if (!terminalNode) return;
+
+  try {
+    await treeView.reveal(terminalNode, { select: true, focus: false });
+  } catch (error) {
+    console.warn('Deck: TreeView.reveal failed', error);
+  }
+}
 
 interface PendingTerminalOpenConsumer {
   consume(worktreePath: string): Promise<string | undefined>;

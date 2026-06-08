@@ -499,6 +499,70 @@ describe('RepositoryTreeProvider', () => {
     expect(tmux.listSessions).toHaveBeenCalledWith('wt-_work_alpha-main__term-');
   });
 
+  it('returns parent rows for Worktree and Terminal rows', async () => {
+    const tmux = {
+      listSessions: vi.fn(async () => [
+        { sessionName: 'wt-_work_alpha-main__term-1', windowName: 'zsh' },
+      ]),
+    };
+    const provider = new RepositoryTreeProvider(
+      registry(['/work/alpha-main']),
+      { get: vi.fn() } as unknown as ActiveWorktreeStore,
+      { get: vi.fn() } as unknown as WorktreeOrderStore,
+      { get: vi.fn(), set: vi.fn(async () => undefined) } as unknown as WorktreeListCacheStore,
+      { get: vi.fn(() => '/git/alpha'), set: vi.fn(async () => undefined) } as unknown as RepositoryCommonDirCache,
+      tmux,
+      true,
+    );
+    const repositories = provider.getChildren();
+    if (!Array.isArray(repositories)) throw new Error('expected sync repository roots');
+    const worktrees = await provider.getChildren(repositories[0]);
+    if (!Array.isArray(worktrees)) throw new Error('expected worktree children');
+    const terminals = await provider.getChildren(worktrees[0]);
+    if (!Array.isArray(terminals)) throw new Error('expected terminal children');
+
+    expect(provider.getParent(worktrees[0])).toMatchObject({
+      id: 'repository::/work/alpha-main',
+      repositoryPath: '/work/alpha-main',
+    });
+    expect(provider.getParent(terminals[0])).toMatchObject({
+      id: 'worktree::/work/alpha-main',
+      repositoryPath: '/work/alpha-main',
+      worktree: { path: '/work/alpha-main' },
+    });
+  });
+
+  it('finds a Terminal row outside the mounted Worktree', async () => {
+    const tmux = {
+      listSessions: vi.fn(async () => [
+        { sessionName: 'wt-_work_alpha-feature__term-1', windowName: 'claude' },
+      ]),
+    };
+    const provider = new RepositoryTreeProvider(
+      registry(['/work/alpha-main']),
+      { get: vi.fn() } as unknown as ActiveWorktreeStore,
+      { get: vi.fn() } as unknown as WorktreeOrderStore,
+      { get: vi.fn(), set: vi.fn(async () => undefined) } as unknown as WorktreeListCacheStore,
+      { get: vi.fn(() => '/git/alpha'), set: vi.fn(async () => undefined) } as unknown as RepositoryCommonDirCache,
+      tmux,
+      true,
+    );
+
+    const terminal = await provider.findTerminal(
+      'wt-_work_alpha-feature__term-1',
+      '/work/alpha-feature',
+    );
+
+    expect(terminal).toMatchObject({
+      id: 'terminal::wt-_work_alpha-feature__term-1',
+      worktreePath: '/work/alpha-feature',
+      terminal: { windowName: 'claude' },
+    });
+    expect(provider.getParent(terminal!)).toMatchObject({
+      id: 'worktree::/work/alpha-feature',
+    });
+  });
+
   it('marks terminals in the current workspace folder as active', async () => {
     const tmux = {
       listSessions: vi.fn(async () => [
