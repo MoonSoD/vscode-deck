@@ -1,7 +1,7 @@
 # Deck (VS Code)
 
 A VS Code extension that gives each git worktree a persistent workspace from
-the secondary sidebar: a **Projects & Worktrees** tree to switch between
+the secondary sidebar: a **Repositories & Worktrees** tree to switch between
 worktrees one folder at a time, and persistent per-worktree terminals that
 survive switches and reloads.
 
