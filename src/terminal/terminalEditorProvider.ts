@@ -458,16 +458,7 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
         document.documentElement,
         { attributes: true, attributeFilter: ['class', 'data-vscode-theme-kind', 'data-vscode-theme-name'] },
       );
-      // xterm's write() is asynchronous; on reattach the seed + tmux
-      // cursor-restore arrive as a burst and the cursor can stay painted on a
-      // stale cell until a redraw is forced (what a manual resize/keypress does).
-      // Repaint in write()'s completion callback — the documented hook for
-      // "data processed" — until the first keystroke makes rendering live.
-      let needsStartupRepaint = true;
-      terminal.onData((payload) => {
-        needsStartupRepaint = false;
-        vscode.postMessage({ type: 'input', payload });
-      });
+      terminal.onData((payload) => vscode.postMessage({ type: 'input', payload }));
 
       // macOS line/word editing, mirroring VS Code's integrated terminal
       // sendSequence defaults (terminal.sendSequence.contribution.ts): readline
@@ -589,11 +580,7 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
       window.addEventListener('message', async (event) => {
         const message = event.data;
         if (message.type === 'data') {
-          if (needsStartupRepaint) {
-            terminal.write(message.payload, () => terminal.refresh(0, terminal.rows - 1));
-          } else {
-            terminal.write(message.payload);
-          }
+          terminal.write(message.payload);
         }
         if (message.type === 'config') {
           await warmFonts(message.payload.fontFamily, message.payload.fontSize);
