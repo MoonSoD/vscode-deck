@@ -201,7 +201,9 @@ async function confirmTerminalRemoval(label: string): Promise<boolean> {
   if (vscode.workspace.getConfiguration('deck').get<boolean>('confirmTerminalDelete', true) === false) {
     return true;
   }
-  const choice = await vscode.window.showWarningMessage(
+  // Information (not warning) so the dialog has no orange warning icon, matching
+  // the Explorer's plain delete confirmation.
+  const choice = await vscode.window.showInformationMessage(
     `Are you sure you want to delete the terminal '${label}'?`,
     { modal: true, detail: 'The shell and any running process will be terminated.' },
     'Delete',
