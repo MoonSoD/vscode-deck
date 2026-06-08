@@ -49,7 +49,3 @@ export class TerminalRemovalCommand {
     }
   }
 }
-
-export type CloseTerminalTmuxCli = TerminalRemovalTmuxCli;
-export type KillTerminalTmuxCli = TerminalRemovalTmuxCli;
-export { TerminalRemovalCommand as CloseTerminalCommand, TerminalRemovalCommand as KillTerminalCommand };
