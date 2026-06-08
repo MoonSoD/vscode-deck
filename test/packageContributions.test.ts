@@ -13,7 +13,7 @@ describe('package contributions', () => {
     expect(pkg.contributes.viewsContainers.secondarySidebar).toEqual([{
       id: 'deck',
       title: 'Deck',
-      icon: '$(repo)',
+      icon: '$(folder)',
     }]);
     expect(pkg.contributes.keybindings).toContainEqual({
       command: 'workbench.view.extension.deck',

@@ -9,13 +9,13 @@ describe('describeProjectTreeItem', () => {
     expect(describeProjectTreeItem('/work/alpha', true)).toEqual({
       label: 'alpha',
       description: 'active',
-      iconId: 'repo',
+      iconId: 'folder',
     });
 
     expect(describeProjectTreeItem('/work/beta', false)).toEqual({
       label: 'beta',
       description: '',
-      iconId: 'repo',
+      iconId: 'folder',
     });
   });
 });

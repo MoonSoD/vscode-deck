@@ -131,6 +131,10 @@ describe('TerminalEditorProvider', () => {
     await flush();
     expect(windowNames).toHaveBeenCalledWith('wt-_work_alpha-main__term-1');
     expect(terminalPanel.title).toBe('zsh');
+    expect((terminalPanel as { iconPath?: { light: { paths: string[] }; dark: { paths: string[] } } }).iconPath).toEqual({
+      light: { base: { fsPath: '/extension' }, paths: ['resources', 'terminal-light.svg'] },
+      dark: { base: { fsPath: '/extension' }, paths: ['resources', 'terminal-dark.svg'] },
+    });
 
     windowNames.mockResolvedValueOnce('claude');
     renameHandler?.();

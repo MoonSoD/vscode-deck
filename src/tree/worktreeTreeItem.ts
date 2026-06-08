@@ -3,7 +3,7 @@ import { Worktree } from '../git/worktrees';
 export interface ProjectTreeItemDescription {
   label: string;
   description: string;
-  iconId: 'repo';
+  iconId: 'folder';
 }
 
 export interface WorktreeTreeItemDescription {
@@ -39,7 +39,7 @@ export function describeProjectTreeItem(
   return {
     label: projectPath.split('/').pop() ?? projectPath,
     description: isActiveProject ? 'active' : '',
-    iconId: 'repo',
+    iconId: 'folder',
   };
 }
 

@@ -143,6 +143,13 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
     panel.webview.html = this.html(panel.webview, initialConfig);
     void panel.webview.postMessage({ type: 'config', payload: initialConfig });
 
+    // Match the sidebar's terminal codicon — tab icons take an image Uri, not
+    // a ThemeIcon, so we ship the codicon glyph as light/dark SVGs.
+    panel.iconPath = {
+      light: vscode.Uri.joinPath(this.extensionUri, 'resources', 'terminal-light.svg'),
+      dark: vscode.Uri.joinPath(this.extensionUri, 'resources', 'terminal-dark.svg'),
+    };
+
     // Title the tab with tmux's window name so it matches the sidebar row.
     const applyTitle = () => {
       void this.resolveWindowName(document.sessionName).then((name) => {
