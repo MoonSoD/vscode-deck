@@ -455,6 +455,31 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
         { attributes: true, attributeFilter: ['class', 'data-vscode-theme-kind', 'data-vscode-theme-name'] },
       );
       terminal.onData((payload) => vscode.postMessage({ type: 'input', payload }));
+
+      // macOS line/word editing, mirroring VS Code's integrated terminal
+      // sendSequence defaults (terminal.sendSequence.contribution.ts): readline
+      // control sequences for cmd/alt + backspace/delete/arrows. Sent here, gated
+      // by real webview focus, so cmd+backspace never collides with the
+      // tree-focused Delete Terminal keybinding.
+      const isMac = navigator.userAgent.includes('Mac');
+      terminal.attachCustomKeyEventHandler((event) => {
+        if (!isMac || event.type !== 'keydown' || event.ctrlKey || event.shiftKey) return true;
+        let seq;
+        if (event.metaKey && !event.altKey) {
+          if (event.key === 'Backspace') seq = '\\x15';      // ^U  delete to line start
+          else if (event.key === 'ArrowLeft') seq = '\\x01';  // ^A  line start
+          else if (event.key === 'ArrowRight') seq = '\\x05'; // ^E  line end
+        } else if (event.altKey && !event.metaKey) {
+          if (event.key === 'Backspace') seq = '\\x17';       // ^W  delete word left
+          else if (event.key === 'Delete') seq = '\\x1bd';    // ESC d  delete word right
+          else if (event.key === 'ArrowLeft') seq = '\\x1bb'; // ESC b  word left
+          else if (event.key === 'ArrowRight') seq = '\\x1bf';// ESC f  word right
+        }
+        if (!seq) return true;
+        event.preventDefault();
+        vscode.postMessage({ type: 'input', payload: seq });
+        return false;
+      });
       terminal.element.addEventListener('focusin', () => vscode.postMessage({ type: 'focused' }));
 
       const contextMenu = document.getElementById('context-menu');
