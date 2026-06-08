@@ -35,7 +35,6 @@ describe('OpenTerminalCommand', () => {
   it('opens a same-worktree terminal row as a Deck custom editor', async () => {
     await new OpenTerminalCommand().run({
       terminal: { sessionName: 'wt-_work_alpha-main__term-1', windowName: 'zsh' },
-      n: 1,
       worktreePath: '/work/alpha-main',
     });
 
@@ -59,7 +58,6 @@ describe('OpenTerminalCommand', () => {
 
     await new OpenTerminalCommand({ terminalPanels }).run({
       terminal: { sessionName: 'wt-_work_alpha-main__term-1', windowName: 'zsh' },
-      n: 1,
       worktreePath: '/work/alpha-main',
     });
 
@@ -72,7 +70,6 @@ describe('OpenTerminalCommand', () => {
   it('opens a foreign-worktree terminal row in place without switching', async () => {
     await new OpenTerminalCommand().run({
       terminal: { sessionName: 'wt-_work_beta-main__term-1', windowName: 'zsh' },
-      n: 1,
       worktreePath: '/work/beta-main',
     });
 
@@ -87,5 +84,22 @@ describe('OpenTerminalCommand', () => {
     );
     expect(vscodeState.executeCommand).toHaveBeenCalledOnce();
     expect(vscodeState.createTerminal).not.toHaveBeenCalled();
+  });
+
+  it('derives the term number from the session name (real rows carry no n)', async () => {
+    await new OpenTerminalCommand().run({
+      terminal: { sessionName: 'wt-_work_alpha-main__term-7', windowName: 'zsh' },
+      worktreePath: '/work/alpha-main',
+    });
+
+    expect(vscodeState.executeCommand).toHaveBeenCalledWith(
+      'vscode.openWith',
+      {
+        scheme: 'deck-terminal',
+        path: '/work/alpha-main/term-7',
+      },
+      'deck.terminal',
+      { viewColumn: -1 },
+    );
   });
 });

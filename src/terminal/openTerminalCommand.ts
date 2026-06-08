@@ -1,13 +1,13 @@
 import * as vscode from 'vscode';
 import { SessionUriCodec } from './sessionUriCodec';
 import { terminalEditorViewType } from './terminalEditorProvider';
+import { terminalSessionNumber } from './tmuxSafe';
 
 interface TerminalNodeLike {
   terminal: {
     sessionName: string;
     windowName: string;
   };
-  n: number;
   worktreePath?: string;
 }
 
@@ -41,9 +41,12 @@ export class OpenTerminalCommand {
     const cwd = node.worktreePath ?? vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
     if (!cwd) return;
 
+    const term = terminalSessionNumber(cwd, node.terminal.sessionName);
+    if (!term) return;
+
     await vscode.commands.executeCommand(
       'vscode.openWith',
-      this.sessionUriCodec.encode({ worktreePath: cwd, term: node.n }),
+      this.sessionUriCodec.encode({ worktreePath: cwd, term }),
       terminalEditorViewType,
       { viewColumn: vscode.ViewColumn.Active },
     );
