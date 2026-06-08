@@ -131,7 +131,7 @@ describe('package contributions', () => {
     });
   });
 
-  it('contributes delete worktree via the right-click context menu and a cmd+backspace keybinding', () => {
+  it('contributes delete worktree only via the right-click context menu', () => {
     expect(pkg.contributes.commands).toContainEqual({
       command: 'deck.removeWorktree',
       title: 'Deck: Delete Worktree…',
@@ -139,7 +139,7 @@ describe('package contributions', () => {
     });
 
     // Worktree row's inline slot is reserved for the Add Terminal `+` icon;
-    // delete-worktree lives in the right-click context menu and the keybinding.
+    // delete-worktree lives only in the right-click context menu.
     expect(
       pkg.contributes.menus['view/item/context'].filter(
         (item: { command: string }) => item.command === 'deck.removeWorktree',
@@ -152,14 +152,6 @@ describe('package contributions', () => {
     expect(pkg.contributes.menus.commandPalette).toContainEqual({
       command: 'deck.removeWorktree',
       when: 'false',
-    });
-    // Mirrors Delete Terminal's cmd+backspace; scoped to a focused Worktree
-    // row so it can't collide with the kill-terminal binding on the same key.
-    expect(pkg.contributes.keybindings).toContainEqual({
-      command: 'deck.removeWorktree',
-      key: 'ctrl+backspace',
-      mac: 'cmd+backspace',
-      when: "focusedView == 'deck.repositories' && viewItem == deck.worktree",
     });
   });
 
@@ -252,7 +244,7 @@ describe('package contributions', () => {
       command: 'deck.killTerminal',
       key: 'ctrl+backspace',
       mac: 'cmd+backspace',
-      when: "focusedView == 'deck.repositories' && (viewItem == deck.terminal.active || viewItem == deck.terminal.foreign) && deck.tmuxAvailable",
+      when: "focusedView == 'deck.repositories' && deck.tmuxAvailable",
     });
   });
 
