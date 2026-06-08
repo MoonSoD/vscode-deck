@@ -56,6 +56,20 @@ describe('TerminalRemovalCommand', () => {
     expect(refresh).toHaveBeenCalledOnce();
   });
 
+  it('no-ops on a non-Terminal selection (Worktree/Repository row)', async () => {
+    const tmux = {
+      killSession: vi.fn(async () => undefined),
+    };
+    const refresh = vi.fn();
+
+    await new TerminalRemovalCommand(tmux, refresh).run(
+      { worktree: { path: '/work/repo' } } as never,
+    );
+
+    expect(tmux.killSession).not.toHaveBeenCalled();
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
   it('is idempotent when closing the same stale row twice', async () => {
     const tmux = {
       killSession: vi.fn(async () => undefined),

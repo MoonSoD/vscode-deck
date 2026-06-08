@@ -245,8 +245,7 @@ describe('package contributions', () => {
       command: 'deck.killTerminal',
       key: 'ctrl+backspace',
       mac: 'cmd+backspace',
-      when:
-        "focusedView == 'deck.repositories' && (viewItem == deck.terminal.active || viewItem == deck.terminal.foreign) && deck.tmuxAvailable",
+      when: "focusedView == 'deck.repositories' && deck.tmuxAvailable",
     });
   });
 

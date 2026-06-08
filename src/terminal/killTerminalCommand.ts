@@ -7,8 +7,8 @@ export interface TerminalRemovalTmuxCli {
 }
 
 interface TerminalNodeLike {
-  terminal: {
-    sessionName: string;
+  terminal?: {
+    sessionName?: string;
   };
 }
 
@@ -20,9 +20,11 @@ export class TerminalRemovalCommand {
   ) {}
 
   async run(node: TerminalNodeLike | undefined): Promise<void> {
-    if (!node) return;
+    // The cmd+backspace keybinding fires for any focused Deck tree row, so a
+    // non-Terminal selection (Worktree/Repository) reaches here — no-op it.
+    const session = node?.terminal?.sessionName;
+    if (!session) return;
 
-    const session = node.terminal.sessionName;
     await this.tmux.killSession(session);
     await this.closeMatchingEditorTab(session);
     this.refresh();
