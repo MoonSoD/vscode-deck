@@ -208,6 +208,22 @@
       ],
       "commandPalette": [
         {
+          "command": "deck.switchWorktree",
+          "when": "false"
+        },
+        {
+          "command": "deck.addWorktree",
+          "when": "false"
+        },
+        {
+          "command": "deck.removeWorktree",
+          "when": "false"
+        },
+        {
+          "command": "deck.removeRepository",
+          "when": "false"
+        },
+        {
           "command": "deck.openWorktreeInNewWindow",
           "when": "false"
         },

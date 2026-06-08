@@ -119,6 +119,10 @@ describe('package contributions', () => {
       when: 'view == deck.repositories && viewItem == deck.repository',
       group: 'inline',
     });
+    expect(pkg.contributes.menus.commandPalette).toContainEqual({
+      command: 'deck.addWorktree',
+      when: 'false',
+    });
   });
 
   it('contributes delete worktree only via the right-click context menu', () => {
@@ -139,6 +143,10 @@ describe('package contributions', () => {
       when: 'view == deck.repositories && viewItem == deck.worktree',
       group: 'navigation',
     }]);
+    expect(pkg.contributes.menus.commandPalette).toContainEqual({
+      command: 'deck.removeWorktree',
+      when: 'false',
+    });
   });
 
   it('contributes add terminal as the inline `+` action on Worktree rows', () => {
@@ -174,6 +182,10 @@ describe('package contributions', () => {
       command: 'deck.removeRepository',
       when: 'view == deck.repositories && viewItem == deck.repository',
       group: 'navigation',
+    });
+    expect(pkg.contributes.menus.commandPalette).toContainEqual({
+      command: 'deck.removeRepository',
+      when: 'false',
     });
   });
 
@@ -242,6 +254,13 @@ describe('package contributions', () => {
     }]);
     expect(pkg.contributes.menus.commandPalette).toContainEqual({
       command: 'deck.openTerminalInNewWindow',
+      when: 'false',
+    });
+  });
+
+  it('hides switch to Worktree from the command palette (needs a worktree-path argument)', () => {
+    expect(pkg.contributes.menus.commandPalette).toContainEqual({
+      command: 'deck.switchWorktree',
       when: 'false',
     });
   });
