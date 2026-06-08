@@ -43,7 +43,7 @@ Opening a Worktree in a new window without changing the current one or the Activ
 _Avoid_: new tab, fork
 
 **WorktreeRemoval**:
-Removing a Worktree from git, with optional, opt-in deletion of its branch.
+Removing a Worktree from git, with optional, opt-in deletion of its branch. Surfaced as "Delete Worktree…" (right-click or `cmd+backspace` on a focused Worktree row), always behind a confirmation modal that flags uncommitted changes and unpushed commits.
 _Avoid_: delete (ambiguous between Worktree and branch)
 
 **RepositoryRemoval**:
