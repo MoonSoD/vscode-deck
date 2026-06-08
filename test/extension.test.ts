@@ -28,6 +28,7 @@ const vscodeState = vi.hoisted(() => ({
   projectTreeInstances: [] as Array<{ refresh: ReturnType<typeof vi.fn>; getChildren: ReturnType<typeof vi.fn> }>,
   registerCommand: vi.fn(() => ({ dispose: vi.fn() })),
   registerCustomEditorProvider: vi.fn(() => ({ dispose: vi.fn() })),
+  removeWorktreeArgs: undefined as unknown[] | undefined,
   settingsProjects: ['/settings/repo'],
   tmuxInstances: [] as Array<{
     killSession: ReturnType<typeof vi.fn>;
@@ -124,7 +125,11 @@ vi.mock('../src/worktree/addWorktreeCommand', () => ({
 }));
 
 vi.mock('../src/worktree/worktreeRemovalCommand', () => ({
-  WorktreeRemovalCommand: class {},
+  WorktreeRemovalCommand: class {
+    constructor(...args: unknown[]) {
+      vscodeState.removeWorktreeArgs = args;
+    }
+  },
 }));
 
 vi.mock('../src/project/projectRemovalCommand', () => ({
@@ -216,6 +221,7 @@ describe('activate', () => {
     vscodeState.openTerminalArgs = undefined;
     vscodeState.projectTreeArgs = undefined;
     vscodeState.projectTreeInstances = [];
+    vscodeState.removeWorktreeArgs = undefined;
     vscodeState.settingsProjects = ['/settings/repo'];
     vscodeState.tmuxInstances = [];
     vscodeState.tabGroups = [];
@@ -299,7 +305,16 @@ describe('activate', () => {
       'deck.tmuxAvailable',
       false,
     );
-    expect(vscodeState.projectTreeArgs?.at(-1)).toBe(false);
+    expect(vscodeState.projectTreeArgs?.[6]).toBe(false);
+  });
+
+  it('shares pending WorktreeRemoval state between the command and tree', async () => {
+    const context = createContext();
+
+    await activate(context as never);
+
+    expect(vscodeState.projectTreeArgs?.[7]).toBeInstanceOf(Set);
+    expect(vscodeState.removeWorktreeArgs?.[6]).toBe(vscodeState.projectTreeArgs?.[7]);
   });
 
   it('consumes pending intents and registers no VS Code terminal listeners', async () => {

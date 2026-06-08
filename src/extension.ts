@@ -42,6 +42,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const worktreeOrders = new WorktreeOrderStore(context.globalState);
   const worktreeListCache = new WorktreeListCacheStore(context.globalState);
   const pendingTerminalOpens = new PendingTerminalOpenStore(context.globalState);
+  const pendingWorktreeRemovals = new Set<string>();
   const projectCommonDirCache = new ProjectCommonDirCache(context.globalState);
   const branchDeletionPreferences = new BranchDeletionPreferenceStore(context.globalState);
   const switcher = new WorktreeSwitcher(activeWorktrees);
@@ -54,6 +55,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     projectCommonDirCache,
     tmux,
     tmuxAvailability.available,
+    pendingWorktreeRemovals,
   );
   const addTerminal = new AddTerminalCommand(
     tmux,
@@ -105,6 +107,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     worktreeListCache,
     projectCommonDirCache,
     terminalCascade,
+    pendingWorktreeRemovals,
   );
   const removeProject = new ProjectRemovalCommand(
     projectRegistry,
