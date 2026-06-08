@@ -207,6 +207,11 @@
           "group": "inline"
         },
         {
+          "command": "deck.killTerminal",
+          "when": "view == deck.repositories && (viewItem == deck.terminal.active || viewItem == deck.terminal.foreign) && deck.tmuxAvailable",
+          "group": "navigation"
+        },
+        {
           "command": "deck.openTerminalInNewWindow",
           "when": "view == deck.repositories && viewItem == deck.terminal.foreign && deck.tmuxAvailable",
           "group": "navigation"

@@ -228,15 +228,16 @@ describe('package contributions', () => {
       icon: '$(trash)',
     });
 
+    const killWhen =
+      'view == deck.repositories && (viewItem == deck.terminal.active || viewItem == deck.terminal.foreign) && deck.tmuxAvailable';
     expect(
       pkg.contributes.menus['view/item/context'].filter(
         (item: { command: string }) => item.command === 'deck.killTerminal',
       ),
-    ).toEqual([{
-      command: 'deck.killTerminal',
-      when: 'view == deck.repositories && (viewItem == deck.terminal.active || viewItem == deck.terminal.foreign) && deck.tmuxAvailable',
-      group: 'inline',
-    }]);
+    ).toEqual([
+      { command: 'deck.killTerminal', when: killWhen, group: 'inline' },
+      { command: 'deck.killTerminal', when: killWhen, group: 'navigation' },
+    ]);
     expect(pkg.contributes.menus.commandPalette).toContainEqual({
       command: 'deck.killTerminal',
       when: 'false',
