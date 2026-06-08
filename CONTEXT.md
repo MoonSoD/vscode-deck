@@ -11,7 +11,7 @@ are planned.)
 
 **Repository**:
 A git repository registered with Deck, identified by its git common dir (the directory all its worktrees share).
-_Avoid_: project, folder
+_Avoid_: project (a VS Code user reads the open folder as their "project" — that folder is a Worktree), folder
 
 **Worktree**:
 A `git worktree` entry within a Repository, identified by its filesystem path.
@@ -29,7 +29,7 @@ _Avoid_: current branch, checked-out worktree
 
 **ActiveRepository**:
 The Repository whose ActiveWorktree is the mounted workspace folder.
-_Avoid_: current repo
+_Avoid_: current repo, current project
 
 ### Operations
 
@@ -50,6 +50,10 @@ _Avoid_: delete (ambiguous between Worktree and branch)
 Delisting a Repository from Deck without touching its git repository or files.
 _Avoid_: delete repository, uninstall
 
+**TerminalRemoval**:
+Destroying a Terminal — killing its tmux session and removing its row. Surfaced as "Delete Terminal" (sidebar trash icon, right-click, or `cmd+backspace`). Also happens when the shell `exit`s or when the Terminal's Worktree or Repository is removed. Closing the editor tab does **not** trigger it.
+_Avoid_: close (closing a tab is non-destructive), kill
+
 ### Ordering
 
 **RepositoryRegistry**:
@@ -67,8 +71,8 @@ Deck's own isolated tmux server, separate from the user's personal tmux.
 _Avoid_: tmux (the user's own tmux is a distinct thing)
 
 **Terminal**:
-A persistent shell owned by Deck — one tmux session on the DeckSocket — shown as a row under a Worktree and opened as an xterm.js editor tab addressed by `deck-terminal:/<worktree>/term-N`.
-_Avoid_: tmux session, tmux window, pane
+A persistent shell owned by Deck — one tmux session on the DeckSocket — shown as a row under a Worktree and opened as an xterm.js editor tab addressed by `deck-terminal:/<worktree>/term-N`. Like a file, the Terminal is the durable thing and its tab is just a view onto it: closing the tab leaves the Terminal running, and any Terminal can be opened from any mounted Worktree without a Switch.
+_Avoid_: tmux session, tmux window, pane (the backing mechanism); tab (a disposable view, not the Terminal itself)
 
 ## Relationships
 
@@ -87,7 +91,13 @@ _Avoid_: tmux session, tmux window, pane
 > **Domain expert:** "No. A **Repository** is its git common dir, so both resolve to one. The path you registered is just a **discovery seed**."
 >
 > **Dev:** "Do my **Terminals** die when I **Switch** away?"
-> **Domain expert:** "No — they live on the **DeckSocket** and reattach when you return. They die only on Kill, `exit`, or when their **Worktree** or **Repository** is removed."
+> **Domain expert:** "No — they live on the **DeckSocket** and reattach when you return. They die only on **TerminalRemoval** (Delete), shell `exit`, or when their **Worktree** or **Repository** is removed."
+>
+> **Dev:** "So if I close a **Terminal**'s editor tab, is it gone?"
+> **Domain expert:** "No — the tab is just a view, like an editor over a file. The **Terminal** keeps running; reopen its row anytime. Destroying it is **TerminalRemoval**."
+>
+> **Dev:** "What happens when I click a **Terminal** that belongs to a **Worktree** I'm not in?"
+> **Domain expert:** "Its tab opens right here in the current window — no **Switch**. Any **Terminal** opens from anywhere, the way you'd open a file."
 
 ## Flagged ambiguities
 
@@ -95,3 +105,5 @@ _Avoid_: tmux session, tmux window, pane
 - "active" meant both **ActiveRepository** and **ActiveWorktree** — resolved: distinct concepts (the Repository vs the specific Worktree).
 - A Repository's registered path was treated as its identity — resolved: it is a **discovery seed**; the git common dir is the identity.
 - "tmux session" was used for **Terminal** — resolved: the session is the backing mechanism; **Terminal** is the domain concept.
+- "close" conflated closing a **Terminal**'s editor tab with destroying the **Terminal** — resolved: closing the tab is a non-destructive view operation; destroying is **TerminalRemoval** ("Delete"). Reverses ADR-0011 §6's kill-on-tab-close.
+- "Project" was the canonical term for a registered repo — resolved: renamed to **Repository** for precision (it is literally a git repo, keyed by common dir). "project" is now avoided because a VS Code user reads the open *folder* as their "project," and that folder is a **Worktree** in Deck.
