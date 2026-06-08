@@ -74,12 +74,11 @@ export function describeTerminalAddTreeItem(): TerminalAddTreeItemDescription {
 }
 
 export function describeTerminalTreeItem(
-  n: number,
   windowName: string,
   isActive: boolean,
 ): TerminalTreeItemDescription {
   return {
-    label: `${n} ${windowName}`,
+    label: windowName,
     iconId: 'terminal',
     contextValue: isActive ? 'deck.terminal.active' : 'deck.terminal.foreign',
   };

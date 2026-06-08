@@ -93,16 +93,14 @@ export class TmuxCli {
   }
 
   async listSessions(prefix?: string): Promise<TmuxSession[]> {
-    // Use `#{pane_current_command}` rather than `#{window_name}` — tmux reads
-    // the former fresh from the OS (tcgetpgrp + process table) on every query,
-    // so it always reflects the actual foreground process. window_name relies
-    // on automatic-rename being enabled, which a stray shell-emitted OSC
-    // sequence (or other quirk) can silently disable for a window.
+    // Read `#{window_name}` so the sidebar row and the editor tab share tmux's
+    // canonical name. deck.conf keeps `automatic-rename on`, so it tracks the
+    // foreground command (zsh -> claude); a manual `rename-window` then sticks.
     const result = await this.runner.run('tmux', [
       ...this.baseArgs(),
       'list-sessions',
       '-F',
-      '#{session_name}\t#{pane_current_command}',
+      '#{session_name}\t#{window_name}',
     ]);
     if (result.code !== 0 && isMissingSession(result)) return [];
     if (result.code !== 0) {
@@ -118,6 +116,22 @@ export class TmuxCli {
         return { sessionName, windowName };
       })
       .filter((session) => prefix === undefined || session.sessionName.startsWith(prefix));
+  }
+
+  async windowName(session: string): Promise<string | undefined> {
+    // No `=` exact-target prefix here: display-message resolves `-t` as a
+    // target-pane, where `=name` yields an empty result. The session name is
+    // complete and unique, so a bare target matches it exactly.
+    const result = await this.runner.run('tmux', [
+      ...this.baseArgs(),
+      'display-message',
+      '-p',
+      '-t',
+      session,
+      '#{window_name}',
+    ]);
+    if (result.code !== 0) return undefined;
+    return result.stdout.trim() || undefined;
   }
 
   attachShellArgs(session: string): string[] {

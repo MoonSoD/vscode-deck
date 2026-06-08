@@ -106,8 +106,33 @@ describe('TmuxCli', () => {
       '/ext/resources/deck.conf',
       'list-sessions',
       '-F',
-      '#{session_name}\t#{pane_current_command}',
+      '#{session_name}\t#{window_name}',
     ]);
+  });
+
+  it('reads a single session window name via display-message', async () => {
+    const runner = new MockRunner([{ code: 0, stdout: 'claude\n', stderr: '' }]);
+    const tmux = new TmuxCli('/ext/resources/deck.conf', runner);
+
+    await expect(tmux.windowName('wt-_work_repo__term-1')).resolves.toBe('claude');
+    expect(runner.calls[0].args).toEqual([
+      '-L',
+      'deck',
+      '-f',
+      '/ext/resources/deck.conf',
+      'display-message',
+      '-p',
+      '-t',
+      'wt-_work_repo__term-1',
+      '#{window_name}',
+    ]);
+  });
+
+  it('returns undefined when the window name query fails', async () => {
+    const runner = new MockRunner([{ code: 1, stdout: '', stderr: 'no such session' }]);
+    const tmux = new TmuxCli('/ext/resources/deck.conf', runner);
+
+    await expect(tmux.windowName('gone')).resolves.toBeUndefined();
   });
 
   it('filters listed sessions by prefix and treats a missing server as empty', async () => {

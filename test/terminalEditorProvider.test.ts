@@ -20,9 +20,12 @@ vi.mock('vscode', () => ({
 import * as vscode from 'vscode';
 import { TerminalEditorProvider } from '../src/terminal/terminalEditorProvider';
 
+const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+
 function panel() {
   return {
     dispose: vi.fn(),
+    title: '',
     webview: {
       options: {},
       html: '',
@@ -98,6 +101,41 @@ describe('TerminalEditorProvider', () => {
 
     expect(provider.panelFor('wt-_work_alpha-main__term-1')).toBeUndefined();
     expect(closeSession).toHaveBeenCalledWith('wt-_work_alpha-main__term-1');
+  });
+
+  it('titles the tab with the tmux window name and updates it on rename', async () => {
+    let renameHandler: (() => void) | undefined;
+    const terminalBridge = bridge();
+    terminalBridge.onRename.mockImplementation((handler: () => void) => {
+      renameHandler = handler;
+      return { dispose: vi.fn() };
+    });
+    const windowNames = vi.fn(async () => 'zsh');
+    const terminalPanel = panel();
+    const provider = new TerminalEditorProvider(
+      { fsPath: '/extension' } as never,
+      '/extension/resources/deck.conf',
+      undefined,
+      () => terminalBridge,
+      undefined,
+      undefined,
+      windowNames,
+    );
+    const document = provider.openCustomDocument({
+      scheme: 'deck-terminal',
+      path: '/wt-_work_alpha-main__term-1',
+      query: 'cwd=%2Fwork%2Falpha-main',
+    } as never);
+
+    provider.resolveCustomEditor(document, terminalPanel as never);
+    await flush();
+    expect(windowNames).toHaveBeenCalledWith('wt-_work_alpha-main__term-1');
+    expect(terminalPanel.title).toBe('zsh');
+
+    windowNames.mockResolvedValueOnce('claude');
+    renameHandler?.();
+    await flush();
+    expect(terminalPanel.title).toBe('claude');
   });
 
   it('disposes the panel when the webview acknowledges terminal exit', () => {
@@ -336,6 +374,7 @@ function panelStub() {
   return {
     dispose: vi.fn(),
     reveal: vi.fn(),
+    title: '',
     webview: {
       options: {},
       html: '',

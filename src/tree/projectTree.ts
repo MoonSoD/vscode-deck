@@ -81,11 +81,10 @@ class TerminalAddNode extends vscode.TreeItem {
 class TerminalNode extends vscode.TreeItem {
   constructor(
     public readonly terminal: TmuxSession,
-    public readonly n: number,
     public readonly worktreePath: string,
     isActiveWorktree: boolean,
   ) {
-    const item = describeTerminalTreeItem(n, terminal.windowName, isActiveWorktree);
+    const item = describeTerminalTreeItem(terminal.windowName, isActiveWorktree);
     super(item.label, vscode.TreeItemCollapsibleState.None);
     this.id = `terminal::${terminal.sessionName}`;
     this.contextValue = item.contextValue;
@@ -301,7 +300,7 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
       activeWorktreePath !== undefined &&
       path.resolve(element.worktree.path) === path.resolve(activeWorktreePath);
     return terminals.map(
-      (terminal) => new TerminalNode(terminal, terminal.n, element.worktree.path, isActiveWorktree),
+      (terminal) => new TerminalNode(terminal, element.worktree.path, isActiveWorktree),
     );
   }
 

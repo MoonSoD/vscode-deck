@@ -72,6 +72,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // %window-renamed from any open terminal's control client → relabel the row
     // live (automatic-rename tracks the foreground command); event-driven, no poll.
     () => tree.refresh(),
+    (sessionName) => tmux.windowName(sessionName),
   );
   const openTerminal = new OpenTerminalCommand({
     pendingTerminalOpens,

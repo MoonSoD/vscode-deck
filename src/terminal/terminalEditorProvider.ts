@@ -84,6 +84,8 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
       new TerminalTransport(this.configPath),
     private readonly onPanelDispose: TerminalEditorDisposeHandler = () => undefined,
     private readonly onTitleChange: () => void = () => undefined,
+    private readonly resolveWindowName: (sessionName: string) => Promise<string | undefined> = async () =>
+      undefined,
   ) {
     this.configChangeSubscription = vscode.workspace.onDidChangeConfiguration((event) => {
       const fontKeys = [
@@ -141,6 +143,14 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
     panel.webview.html = this.html(panel.webview, initialConfig);
     void panel.webview.postMessage({ type: 'config', payload: initialConfig });
 
+    // Title the tab with tmux's window name so it matches the sidebar row.
+    const applyTitle = () => {
+      void this.resolveWindowName(document.sessionName).then((name) => {
+        if (name) panel.title = name;
+      });
+    };
+    applyTitle();
+
     transportDisposables.push(
       transport.onData((data) => {
         void panel.webview.postMessage({ type: 'data', payload: data });
@@ -148,7 +158,10 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
       transport.onExit((code) => {
         void panel.webview.postMessage({ type: 'exit', code });
       }),
-      transport.onRename(() => this.onTitleChange()),
+      transport.onRename(() => {
+        applyTitle();
+        this.onTitleChange();
+      }),
       panel.webview.onDidReceiveMessage((message: TerminalWebviewMessage) => {
         if (message.type === 'ready') {
           transport.start(

@@ -310,13 +310,13 @@ describe('ProjectTreeProvider', () => {
     expect(Array.isArray(terminalRows)).toBe(true);
     expect((terminalRows as Array<{ label: string; command?: { command: string } }>)).toEqual([
       expect.objectContaining({
-        label: '1 zsh',
+        label: 'zsh',
         command: expect.objectContaining({ command: 'deck.openTerminal' }),
         worktreePath: '/work/alpha-main',
         contextValue: 'deck.terminal.foreign',
       }),
       expect.objectContaining({
-        label: '2 claude',
+        label: 'claude',
         command: expect.objectContaining({ command: 'deck.openTerminal' }),
         worktreePath: '/work/alpha-main',
         contextValue: 'deck.terminal.foreign',
@@ -403,8 +403,8 @@ describe('ProjectTreeProvider', () => {
     const secondRows = await provider.getChildren(worktrees[0]);
 
     expect(tmux.listSessions).toHaveBeenCalledTimes(2);
-    expect((firstRows as Array<{ label: string }>).map((row) => row.label)).toEqual(['1 zsh']);
-    expect((secondRows as Array<{ label: string }>).map((row) => row.label)).toEqual(['1 claude']);
+    expect((firstRows as Array<{ label: string }>).map((row) => row.label)).toEqual(['zsh']);
+    expect((secondRows as Array<{ label: string }>).map((row) => row.label)).toEqual(['claude']);
   });
 
   it('renders tmux install placeholder when tmux is unavailable', async () => {
