@@ -137,7 +137,7 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
 
     panel.webview.options = {
       enableScripts: true,
-      localResourceRoots: [vscode.Uri.joinPath(this.extensionUri, 'node_modules')],
+      localResourceRoots: [vscode.Uri.joinPath(this.extensionUri, 'dist', 'media')],
     };
     const initialConfig = this.terminalConfig();
     panel.webview.html = this.html(panel.webview, initialConfig);
@@ -224,42 +224,13 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
   }
 
   private html(webview: vscode.Webview, initialConfig: TerminalConfig): string {
-    const xtermJs = webview.asWebviewUri(
-      vscode.Uri.joinPath(this.extensionUri, 'node_modules', '@xterm', 'xterm', 'lib', 'xterm.js'),
-    );
-    const xtermCss = webview.asWebviewUri(
-      vscode.Uri.joinPath(this.extensionUri, 'node_modules', '@xterm', 'xterm', 'css', 'xterm.css'),
-    );
-    const fitJs = webview.asWebviewUri(
-      vscode.Uri.joinPath(
-        this.extensionUri,
-        'node_modules',
-        '@xterm',
-        'addon-fit',
-        'lib',
-        'addon-fit.js',
-      ),
-    );
-    const webLinksJs = webview.asWebviewUri(
-      vscode.Uri.joinPath(
-        this.extensionUri,
-        'node_modules',
-        '@xterm',
-        'addon-web-links',
-        'lib',
-        'addon-web-links.js',
-      ),
-    );
-    const searchJs = webview.asWebviewUri(
-      vscode.Uri.joinPath(
-        this.extensionUri,
-        'node_modules',
-        '@xterm',
-        'addon-search',
-        'lib',
-        'addon-search.js',
-      ),
-    );
+    const asset = (file: string) =>
+      webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'dist', 'media', file));
+    const xtermJs = asset('xterm.js');
+    const xtermCss = asset('xterm.css');
+    const fitJs = asset('addon-fit.js');
+    const webLinksJs = asset('addon-web-links.js');
+    const searchJs = asset('addon-search.js');
     const unicode11Js = webview.asWebviewUri(
       vscode.Uri.joinPath(
         this.extensionUri,

@@ -232,7 +232,8 @@
   },
   "scripts": {
     "vscode:prepublish": "npm run build",
-    "build": "tsc -p .",
+    "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
+    "build": "npm run clean && tsc -p . && node scripts/copy-webview-assets.mjs",
     "test": "vitest run",
     "watch": "tsc -w -p .",
     "typecheck": "tsc --noEmit"
