@@ -119,4 +119,4 @@ state that nothing needs.
 
 ## Status
 
-Proposed.
+Accepted.
