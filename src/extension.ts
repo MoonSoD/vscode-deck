@@ -24,7 +24,6 @@ import { TerminalCascade } from './terminal/terminalCascade';
 import {
   TerminalEditorProvider,
   terminalEditorViewType,
-  type TerminalEditorDisposeHandler,
 } from './terminal/terminalEditorProvider';
 import { TmuxCli, type TmuxSession } from './terminal/tmuxCli';
 import { terminalSessionNumber, terminalSessionPrefix } from './terminal/tmuxSafe';
@@ -68,7 +67,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     tmuxConfigPath,
     undefined,
     undefined,
-    refreshTerminalTreeOnEditorDispose(() => tree.refresh()),
+    () => tree.refresh(),
     // %window-renamed from any open terminal's control client → relabel the row
     // live (automatic-rename tracks the foreground command); event-driven, no poll.
     () => tree.refresh(),
@@ -78,7 +77,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     terminalPanels: terminalEditorProvider,
   });
   const openTerminalInNewWindow = new OpenTerminalInNewWindowCommand(pendingTerminalOpens);
-  const closeTerminal = new TerminalRemovalCommand(
+  const terminalRemoval = new TerminalRemovalCommand(
     tmux,
     () => tree.refresh(),
   );
@@ -164,7 +163,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       openTerminalInNewWindow.run(node),
     ),
     vscode.commands.registerCommand('deck.killTerminal', (node) =>
-      closeTerminal.run(node ?? treeView.selection[0]),
+      terminalRemoval.run(node ?? treeView.selection[0]),
     ),
     vscode.commands.registerCommand('deck.terminal.find', () => terminalEditorProvider.showFind()),
     vscode.commands.registerCommand('deck.removeRepository', (node) => removeRepository.run(node)),
@@ -187,12 +186,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 }
 
 export function deactivate(): void {}
-
-export function refreshTerminalTreeOnEditorDispose(refresh: () => void): TerminalEditorDisposeHandler {
-  return () => {
-    refresh();
-  };
-}
 
 interface PendingTerminalOpenConsumer {
   consume(worktreePath: string): Promise<string | undefined>;

@@ -16,8 +16,8 @@ const vscodeState = vi.hoisted(() => ({
     },
   })),
   executeCommand: vi.fn(),
-  closeTerminalRun: vi.fn(),
-  closeTerminalArgs: undefined as unknown[] | undefined,
+  terminalRemovalRun: vi.fn(),
+  terminalRemovalArgs: undefined as unknown[] | undefined,
   lifecycleOrder: [] as string[],
   onDidCloseTerminal: vi.fn(() => ({ dispose: vi.fn() })),
   onDidChangeActiveTerminal: vi.fn(() => ({ dispose: vi.fn() })),
@@ -204,10 +204,10 @@ vi.mock('../src/terminal/openTerminalInNewWindowCommand', () => ({
 vi.mock('../src/terminal/killTerminalCommand', () => ({
   TerminalRemovalCommand: class {
     constructor(...args: unknown[]) {
-      vscodeState.closeTerminalArgs = args;
+      vscodeState.terminalRemovalArgs = args;
     }
 
-    run = vscodeState.closeTerminalRun;
+    run = vscodeState.terminalRemovalRun;
   },
 }));
 
@@ -220,7 +220,7 @@ describe('activate', () => {
     vi.clearAllMocks();
     vscodeState.addRepositoryArgs = undefined;
     vscodeState.addTerminalArgs = undefined;
-    vscodeState.closeTerminalArgs = undefined;
+    vscodeState.terminalRemovalArgs = undefined;
     vscodeState.lifecycleOrder = [];
     vscodeState.openTerminalArgs = undefined;
     vscodeState.repositoryTreeArgs = undefined;
@@ -375,13 +375,13 @@ describe('activate', () => {
     const context = createContext();
 
     await activate(context as never);
-    const closeTerminalRegistration = vscodeState.registerCommand.mock.calls.find(
+    const terminalRemovalRegistration = vscodeState.registerCommand.mock.calls.find(
       ([command]) => command === 'deck.killTerminal',
     );
-    if (!closeTerminalRegistration) throw new Error('missing deck.killTerminal registration');
-    await closeTerminalRegistration[1]({ terminal: { sessionName: 's', windowName: 'zsh' } });
+    if (!terminalRemovalRegistration) throw new Error('missing deck.killTerminal registration');
+    await terminalRemovalRegistration[1]({ terminal: { sessionName: 's', windowName: 'zsh' } });
 
-    expect(vscodeState.closeTerminalRun).toHaveBeenCalledWith({
+    expect(vscodeState.terminalRemovalRun).toHaveBeenCalledWith({
       terminal: { sessionName: 's', windowName: 'zsh' },
     });
   });
@@ -392,13 +392,13 @@ describe('activate', () => {
 
     await activate(context as never);
     vscodeState.treeViewSelection = [selectedTerminal];
-    const closeTerminalRegistration = vscodeState.registerCommand.mock.calls.find(
+    const terminalRemovalRegistration = vscodeState.registerCommand.mock.calls.find(
       ([command]) => command === 'deck.killTerminal',
     );
-    if (!closeTerminalRegistration) throw new Error('missing deck.killTerminal registration');
-    await closeTerminalRegistration[1]();
+    if (!terminalRemovalRegistration) throw new Error('missing deck.killTerminal registration');
+    await terminalRemovalRegistration[1]();
 
-    expect(vscodeState.closeTerminalRun).toHaveBeenCalledWith(selectedTerminal);
+    expect(vscodeState.terminalRemovalRun).toHaveBeenCalledWith(selectedTerminal);
   });
 
   it('registers deck.terminal.find', async () => {
