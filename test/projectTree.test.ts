@@ -90,12 +90,29 @@ import { WorktreeListCacheStore } from '../src/worktree/worktreeListCacheStore';
 import { WorktreeOrderStore } from '../src/worktree/worktreeOrderStore';
 import { ProjectCommonDirCache } from '../src/project/projectCommonDirCache';
 import { ProjectRegistryStore } from '../src/project/projectRegistryStore';
+import { listWorktrees, type Worktree } from '../src/git/worktrees';
 
 function registry(projects = ['/work/alpha-main', '/work/beta-main']) {
   return {
     list: vi.fn(() => projects),
   } as unknown as ProjectRegistryStore;
 }
+
+const alphaMainWorktree: Worktree = {
+  path: '/work/alpha-main',
+  head: 'a',
+  bare: false,
+  detached: false,
+  branch: 'main',
+};
+
+const alphaFeatureWorktree: Worktree = {
+  path: '/work/alpha-feature',
+  head: 'aa',
+  bare: false,
+  detached: false,
+  branch: 'feature',
+};
 
 describe('ProjectTreeProvider', () => {
   it('marks only the currently mounted worktree as active', async () => {
@@ -355,6 +372,68 @@ describe('ProjectTreeProvider', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(worktreeListCache.set).not.toHaveBeenCalled();
+  });
+
+  it('keeps a stale refresh from re-adding a removal that settled while it was in flight', async () => {
+    const pendingRemovals = new Set(['/work/alpha-feature']);
+    const worktreeListCache = {
+      get: vi.fn(() => [alphaMainWorktree]),
+      set: vi.fn(async () => undefined),
+    } as unknown as WorktreeListCacheStore;
+    const provider = new ProjectTreeProvider(
+      registry(['/work/alpha-main']),
+      { get: vi.fn() } as unknown as ActiveWorktreeStore,
+      { get: vi.fn() } as unknown as WorktreeOrderStore,
+      worktreeListCache,
+      { get: vi.fn(() => '/git/alpha'), set: vi.fn(async () => undefined) } as unknown as ProjectCommonDirCache,
+      true,
+      undefined,
+      pendingRemovals,
+    );
+    vi.mocked(listWorktrees).mockResolvedValueOnce([
+      alphaMainWorktree,
+      alphaFeatureWorktree,
+    ]);
+
+    const projectNode = provider.getChildren();
+    if (!Array.isArray(projectNode)) throw new Error('expected sync project roots');
+    provider.getChildren(projectNode[0]);
+    pendingRemovals.delete('/work/alpha-feature');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(worktreeListCache.set).not.toHaveBeenCalled();
+  });
+
+  it('filters a removal that becomes pending while background refresh is in flight', async () => {
+    const pendingRemovals = new Set<string>();
+    const worktreeListCache = {
+      get: vi.fn(() => [alphaMainWorktree, alphaFeatureWorktree]),
+      set: vi.fn(async () => undefined),
+    } as unknown as WorktreeListCacheStore;
+    const provider = new ProjectTreeProvider(
+      registry(['/work/alpha-main']),
+      { get: vi.fn() } as unknown as ActiveWorktreeStore,
+      { get: vi.fn() } as unknown as WorktreeOrderStore,
+      worktreeListCache,
+      { get: vi.fn(() => '/git/alpha'), set: vi.fn(async () => undefined) } as unknown as ProjectCommonDirCache,
+      true,
+      undefined,
+      pendingRemovals,
+    );
+    vi.mocked(listWorktrees).mockResolvedValueOnce([
+      alphaMainWorktree,
+      alphaFeatureWorktree,
+    ]);
+
+    const projectNode = provider.getChildren();
+    if (!Array.isArray(projectNode)) throw new Error('expected sync project roots');
+    provider.getChildren(projectNode[0]);
+    pendingRemovals.add('/work/alpha-feature');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(worktreeListCache.set).toHaveBeenCalledWith('/git/alpha', [
+      alphaMainWorktree,
+    ]);
   });
 
   it('reads root Projects from ProjectRegistryStore without reading deck.projects settings', () => {
