@@ -1,81 +1,98 @@
 # Deck Context
 
-A VS Code extension that surfaces multiple git repositories' worktrees in
-one secondary sidebar view and switches between them by opening one folder
-at a time. VS Code handles tab/dirty-buffer/layout persistence per opened
-folder.
+A VS Code extension that surfaces multiple git repositories' worktrees in one
+secondary sidebar view, switches between them by opening one folder at a time,
+and gives each Worktree persistent Terminals. (Per-worktree agent chat sessions
+are planned.)
 
-## Vocabulary
+## Language
 
-| Term | Meaning |
-|---|---|
-| **Project** | A git repository the user has registered with Deck, identified by its **git common dir** (`git rev-parse --git-common-dir`) — the one directory all of a repo's worktrees share. Each Project owns N Worktrees. The registered absolute path is a **discovery seed**, not the identity: it's whichever worktree was checked out at registration, used to rediscover the repo across reloads. |
-| **ProjectRegistry** | The user-visible list and order of registered Project discovery seeds. Persisted in `globalState` by `ProjectRegistryStore`; `deck.projects` no longer lives in user settings except as an upgrade migration source. |
-| **Worktree** | A `git worktree` entry inside a Project. Discovered by `git worktree list --porcelain`. Identified by its filesystem path. |
-| **ActiveWorktree** | The Worktree last opened for a Project. Persisted per Project (`{ commonDir → worktreePath }` in `globalState`), so clicking a Project node opens that worktree again. Only one workspace folder is ever mounted at a time. The old FocusIntent API is gone; Deck activates when its view is shown. |
-| **ActiveProject** | The Project whose ActiveWorktree is the current workspace folder. Derived from `workspace.workspaceFolders[0]` by resolving its common dir against the registry. Not persisted — VS Code is the source of truth. |
-| **SwitchOperation** | A switch is one call: persist `ActiveWorktree[commonDir] = targetPath`, then `vscode.openFolder(Uri.file(targetPath))`. The window reloads; VS Code restores that folder's own session (tabs, dirty buffers, splits, breakpoints) from its per-folder workspace storage. See [ADR-0003](./docs/adr/0003-single-folder-switching-via-openfolder.md). |
-| **DetachedOpen** | The opt-in sibling of SwitchOperation: open a Worktree in a new VS Code window via `vscode.openFolder(uri, { forceNewWindow: true })` without touching the current window. Does **not** mutate `ActiveWorktree` (no single "active" slot when multiple windows are alive). The escape hatch users reach for when ADR-0003's reload is too costly to pay for the current switch. See [ADR-0004](./docs/adr/0004-open-worktree-in-new-window.md). |
-| **WorktreeRemoval** | Runs `git worktree remove <path>` (optionally `--force` when the worktree has uncommitted changes), and — only when the user opts in via a checkbox in the confirm dialog — also runs `git branch -d <branch>` afterwards. The branch-deletion checkbox's last value is remembered per-user. Mirrors superset's pattern; deliberately keeps branch and worktree as separate ref-counted things by default. |
-| **ProjectRemoval** | Delists a Project from ProjectRegistry and clears its per-Project Deck state (ActiveWorktree entry and remembered worktree root). Does **not** touch the git repository, its worktrees, or their files. The inverse of "Add Project." |
-| **WorktreeOrder** | The user-curated display order of Worktrees within a Project. Persisted per Project (`{ commonDir → orderedWorktreePaths[] }` in `globalState`). Reconciled lazily against `git worktree list`: unknown paths appended to the bottom, stale paths dropped. Projects without an entry render in git's order until the user drags. Project order is stored by ProjectRegistry. |
-| **DeckSocket** | The dedicated tmux server Deck owns: `tmux -L deck -f resources/deck.conf`. Isolated from the user's default tmux server and `~/.tmux.conf`. All Deck-managed Terminals live here; the user's existing tmux workflow on the default socket is untouched. |
-| **Terminal** | A persistent shell instance owned by Deck, rendered as a row under a Worktree node. Backed by a single-window tmux session on the DeckSocket, named `wt-<sanitized(worktree.path)>__term-N` (N allocated as max-existing-N + 1 per worktree, after sanctel's `allocate_window_name`). The row label is the tmux `#{window_name}`, which auto-renames to the foreground command (`zsh`, `claude`, …). Clicking the row opens a Deck custom-editor tab (`viewType: deck.terminal`, URI `deck-terminal://<workspace>/<sessionName>`) rendering xterm.js attached to that session through a tmux control-mode client. Reattach seeds xterm from `capture-pane -p -e -q -J -N -S -5000` before live output. The `+` row creates a new Terminal. Terminals survive VS Code reloads and worktree switches — VS Code natively re-resolves each custom-editor URI (restoring tab placement, splits, pin/active state) and the URI reattaches to the surviving tmux session — and window closes; they only die on explicit Kill, on `exit` inside the shell, or on WorktreeRemoval/ProjectRemoval cascade. See [ADR-0011](./docs/adr/0011-terminals-as-custom-editor-webviews.md), [ADR-0012](./docs/adr/0012-terminal-transport-tmux-control-mode.md), and [ADR-0013](./docs/adr/0013-vscode-native-custom-editor-restore.md). |
+### Repositories & worktrees
 
-## Components
+**Project**:
+A git repository registered with Deck, identified by its git common dir (the directory all its worktrees share).
+_Avoid_: repo, folder
 
-```
-┌──────────────────────────────────────────────────────────┐
-│  Secondary Sidebar: "Deck"                               │
-│  ┌────────────────────────────────────────────────────┐  │
-│  │  Projects & Worktrees (TreeView)                   │  │
-│  │  ├── ProjectA  ●  ← marker = ActiveProject         │  │
-│  │  │   ├─▾ main  ✓  ← marker = ActiveWorktree        │  │
-│  │  │   │   ├─ zsh      ← Terminal (xterm editor)     │  │
-│  │  │   │   ├─ claude                                 │  │
-│  │  │   │   └─ + Add Terminal                         │  │
-│  │  │   ├─▸ feature/x   ← click label = SwitchOp      │  │
-│  │  │   └─▸ bugfix/y                                  │  │
-│  │  └── ProjectB                                      │  │
-│  │      ├── main                                      │  │
-│  │      └── refactor                                  │  │
-│  └────────────────────────────────────────────────────┘  │
-└──────────────────────────────────────────────────────────┘
-```
+**Worktree**:
+A `git worktree` entry within a Project, identified by its filesystem path.
+_Avoid_: branch (a Worktree has a branch but is not one)
 
-Code layout:
+**Discovery seed**:
+The path recorded when a Project is registered — whichever Worktree was checked out then — used to rediscover the repo, not the Project's identity.
+_Avoid_: project path
 
-- `src/extension.ts` — activation, command registration
-- `src/project/addProjectCommand.ts` — Project registration + post-add action toast
-- `src/project/projectRegistryStore.ts` — registered Project seeds in `globalState`
-- `src/tree/projectTree.ts` — TreeDataProvider for Projects & Worktrees
-- `src/tree/worktreeTreeItem.ts` — pure label/icon derivation
-- `src/git/worktrees.ts` — `git worktree list --porcelain` parsing, common-dir resolution
-- `src/switch/activeWorktreeStore.ts` — `{ commonDir → worktreePath }` map in `globalState`
-- `src/switch/worktreeSwitcher.ts` — persist + `vscode.openFolder`
+### Selection
+
+**ActiveWorktree**:
+The Worktree a Project currently points at — the one reopened when its Project node is clicked.
+_Avoid_: current branch, checked-out worktree
+
+**ActiveProject**:
+The Project whose ActiveWorktree is the mounted workspace folder.
+_Avoid_: current repo
+
+### Operations
+
+**Switch**:
+Replacing the mounted folder with a Worktree's and reloading the window.
+_Avoid_: navigate, jump
+(implemented as **SwitchOperation**)
+
+**DetachedOpen**:
+Opening a Worktree in a new window without changing the current one or the ActiveWorktree.
+_Avoid_: new tab, fork
+
+**WorktreeRemoval**:
+Removing a Worktree from git, with optional, opt-in deletion of its branch.
+_Avoid_: delete (ambiguous between Worktree and branch)
+
+**ProjectRemoval**:
+Delisting a Project from Deck without touching its git repository or files.
+_Avoid_: delete project, uninstall
+
+### Ordering
+
+**ProjectRegistry**:
+The user-curated set and order of registered Projects.
+_Avoid_: project list, config
+
+**WorktreeOrder**:
+The user-curated display order of Worktrees within a Project.
+_Avoid_: sort order
+
+### Terminals
+
+**DeckSocket**:
+Deck's own isolated tmux server, separate from the user's personal tmux.
+_Avoid_: tmux (the user's own tmux is a distinct thing)
+
+**Terminal**:
+A persistent shell owned by Deck — one tmux session on the DeckSocket — shown as a row under a Worktree and opened as an xterm.js editor tab.
+_Avoid_: tmux session, tmux window, pane
 
 ## Relationships
 
-- **Project → Worktree.** One-to-many. Discovered fresh each time the tree expands.
-- **Project → ActiveWorktree.** One-to-one persistent. Keyed by Project's git common dir.
-- **Workspace folder → ActiveProject.** Derived at read time. There is at most one mounted folder (or none, on a brand-new window).
-- **SwitchOperation persists the new ActiveWorktree before reload**, so the persisted state is correct after the extension host restarts.
+- A **Project** has many **Worktrees**.
+- A **Project** has one **ActiveWorktree**; the mounted folder has one **ActiveProject** (or none).
+- A **Worktree** hosts zero or more **Terminals**.
+- A **Terminal** belongs to exactly one **Worktree** and lives on the one **DeckSocket**.
+- A **Switch** changes which **Worktree** is mounted; a **DetachedOpen** does not.
 
-## State ownership
+## Example dialogue
 
-Deck is a frontend over systems that already own state: **tmux** owns terminal/session existence, **VS Code** owns editor tabs and per-folder layout, **git** owns worktrees. Read from them live rather than mirroring their state. Persist Deck-side only what is genuinely Deck's — the Project registry, WorktreeOrder, per-Project ActiveWorktree, the branch-deletion preference — never a second copy of state a host already tracks. A persisted mirror only adds a sync seam where bugs live; mirrors since removed include the terminal PID store, `TabSnapshotStore` (ADR-0013), and the terminal session-list cache (ADR-0014). Caching host state for paint speed is the rare exception — taken on measured need and documented, e.g. the git worktree-list / common-dir caches (git is comparatively slow; ADR-0007), not the local, fast `tmux list-sessions`.
+> **Dev:** "When I click a different **Worktree**, does it open in a new window?"
+> **Domain expert:** "No — that's a **Switch**: it replaces the mounted folder and reloads. Opening in a new window is a **DetachedOpen**, and that one doesn't change the **ActiveWorktree**."
+>
+> **Dev:** "If I register the same repo from two different worktree paths, is that two **Projects**?"
+> **Domain expert:** "No. A **Project** is its git common dir, so both resolve to one. The path you registered is just a **discovery seed**."
+>
+> **Dev:** "Do my **Terminals** die when I **Switch** away?"
+> **Domain expert:** "No — they live on the **DeckSocket** and reattach when you return. They die only on Kill, `exit`, or when their **Worktree** or **Project** is removed."
 
-## Out of scope (deliberately, for now)
+## Flagged ambiguities
 
-- ~~**Per-worktree terminals (tmux-backed).**~~ Now in scope: custom-editor xterm.js webviews over a tmux control-mode client (Terminal vocab above; ADR-0008, refined by 0011–0014).
-- **Per-worktree agent chat session.** TBD.
-- ~~**Multi-root mounting.**~~ Rejected by ADR-0003: one folder is mounted at a time. Multi-root + a per-Project `MountReconciliation` were explored in ADR-0002 (now superseded).
-- ~~**Per-worktree tab snapshot/restore.**~~ Provided by VS Code: each folder URI has its own workspace storage, so tabs, dirty buffers, layout, cursor positions all restore per Worktree automatically.
-- ~~**No-window-reload switch.**~~ Rejected by ADR-0003 (supersedes ADR-0001): reload is the switch mechanism. Acceptable because the original motivation (preserving in-memory extension state) is handled out-of-band by the workflow.
+- "delete" conflated removing a **Worktree** with deleting its branch — resolved: **WorktreeRemoval** keeps them separate; branch deletion is opt-in.
+- "active" meant both **ActiveProject** and **ActiveWorktree** — resolved: distinct concepts (the Project vs the specific Worktree).
+- A Project's registered path was treated as its identity — resolved: it is a **discovery seed**; the git common dir is the identity.
+- "tmux session" was used for **Terminal** — resolved: the session is the backing mechanism; **Terminal** is the domain concept.
 
-## Reference repos
-
-See [docs/references.md](./docs/references.md). The two most load-bearing under ADR-0003:
-
-- `references/vscode-project-manager` — the `vscode.openFolder` registry-and-launcher pattern.
-- `references/git-worktree-manager` — tree UX over `git worktree list`.
