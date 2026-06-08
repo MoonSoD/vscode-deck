@@ -35,10 +35,9 @@ Two current behaviours contradict the file-model:
    row reattaches.
 
 2. **`TerminalRemoval` is the explicit destroy**, surfaced as **"Delete
-   Terminal"** — a **trash** icon (replacing the `$(close)` X and the "Close
-   Terminal" title), plus right-click and a `cmd+backspace` keybinding scoped
-   to a focused terminal row in the tree. Mirrors "Delete Worktree…". The
-   sidebar affordance no longer reads as "close".
+   Terminal"** in the Terminal row right-click menu plus a `cmd+backspace`
+   keybinding scoped to a focused terminal row in the tree. Mirrors "Delete
+   Worktree…". The sidebar affordance no longer reads as "close".
 
 3. **Shell `exit` still destroys.** When the shell exits, the pane's process
    dies, its window closes, and the single-window session ends *in tmux*

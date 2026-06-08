@@ -51,7 +51,7 @@ Delisting a Repository from Deck without touching its git repository or files.
 _Avoid_: delete repository, uninstall
 
 **TerminalRemoval**:
-Destroying a Terminal — killing its tmux session and removing its row. Surfaced as "Delete Terminal" (sidebar trash icon, right-click, or `cmd+backspace`). Also happens when the shell `exit`s or when the Terminal's Worktree or Repository is removed. Closing the editor tab does **not** trigger it.
+Destroying a Terminal — killing its tmux session and removing its row. Surfaced as "Delete Terminal" (right-click or `cmd+backspace`). Also happens when the shell `exit`s or when the Terminal's Worktree or Repository is removed. Closing the editor tab does **not** trigger it.
 _Avoid_: close (closing a tab is non-destructive), kill
 
 ### Ordering
