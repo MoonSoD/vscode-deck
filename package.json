@@ -196,6 +196,11 @@
           "group": "inline"
         },
         {
+          "command": "deck.switchWorktree",
+          "when": "view == deck.repositories && (viewItem == deck.worktree || viewItem == deck.worktree.main)",
+          "group": "navigation"
+        },
+        {
           "command": "deck.removeWorktree",
           "when": "view == deck.repositories && viewItem == deck.worktree",
           "group": "navigation"

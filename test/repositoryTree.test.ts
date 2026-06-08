@@ -173,7 +173,7 @@ describe('RepositoryTreeProvider', () => {
     ]);
   });
 
-  it('renders warm cached worktrees and refreshes in the background only on diff', async () => {
+  it('renders warm cached worktrees synchronously and refreshes in the background only on diff', async () => {
     const activeWorktrees = {
       get: vi.fn(),
     } as unknown as ActiveWorktreeStore;
@@ -207,7 +207,7 @@ describe('RepositoryTreeProvider', () => {
     const repositoryNode = provider.getChildren();
     if (!Array.isArray(repositoryNode)) throw new Error('expected sync repository roots');
 
-    const worktreeNodes = await provider.getChildren(repositoryNode[0]);
+    const worktreeNodes = provider.getChildren(repositoryNode[0]);
 
     expect(Array.isArray(worktreeNodes)).toBe(true);
     expect((worktreeNodes as Array<{ worktree: { path: string } }>).map((node) => node.worktree.path)).toEqual([
@@ -279,7 +279,7 @@ describe('RepositoryTreeProvider', () => {
     expect(worktreeListCache.set).not.toHaveBeenCalled();
   });
 
-  it('hides pending worktree removals from warm cached rows', async () => {
+  it('hides pending worktree removals from warm cached rows', () => {
     const activeWorktrees = {
       get: vi.fn(),
     } as unknown as ActiveWorktreeStore;
@@ -323,7 +323,7 @@ describe('RepositoryTreeProvider', () => {
     const repositoryNode = provider.getChildren();
     if (!Array.isArray(repositoryNode)) throw new Error('expected sync repository roots');
 
-    const worktreeNodes = await provider.getChildren(repositoryNode[0]);
+    const worktreeNodes = provider.getChildren(repositoryNode[0]);
 
     expect(Array.isArray(worktreeNodes)).toBe(true);
     expect((worktreeNodes as Array<{ worktree: { path: string } }>).map((node) => node.worktree.path)).toEqual([
@@ -477,8 +477,8 @@ describe('RepositoryTreeProvider', () => {
     const worktrees = await provider.getChildren(repositories[0]);
     if (!Array.isArray(worktrees)) throw new Error('expected worktree children');
 
-    expect(worktrees.map((worktree) => worktree.collapsibleState)).toEqual([2, 0]);
-    expect(worktrees[0].command).toMatchObject({ command: 'deck.switchWorktree' });
+    expect(worktrees.map((worktree) => worktree.collapsibleState)).toEqual([2, 2]);
+    expect(worktrees[0].command).toBeUndefined();
     const terminalRows = await provider.getChildren(worktrees[0]);
     const emptyRows = await provider.getChildren(worktrees[1]);
 
@@ -498,8 +498,7 @@ describe('RepositoryTreeProvider', () => {
         contextValue: 'deck.terminal.foreign',
       }),
     ]);
-    expect(tmux.listSessions).toHaveBeenCalledWith();
-    expect(tmux.listSessions).toHaveBeenCalledTimes(1);
+    expect(tmux.listSessions).toHaveBeenCalledWith('wt-_work_alpha-main__term-');
   });
 
   it('returns parent rows for Worktree and Terminal rows', async () => {
@@ -592,7 +591,7 @@ describe('RepositoryTreeProvider', () => {
     ]);
   });
 
-  it('renders an empty Worktree as a leaf with no children when no terminals exist', async () => {
+  it('renders an empty Worktree as an expanded empty folder with no rows when no terminals exist', async () => {
     const tmux = { listSessions: vi.fn(async () => []) };
     const provider = new RepositoryTreeProvider(
       registry(['/work/alpha-main']),
@@ -608,7 +607,7 @@ describe('RepositoryTreeProvider', () => {
     const worktrees = await provider.getChildren(repositories[0]);
     if (!Array.isArray(worktrees)) throw new Error('expected worktree children');
 
-    expect(worktrees[0].collapsibleState).toBe(0);
+    expect(worktrees[0].collapsibleState).toBe(2);
     const terminalRows = await provider.getChildren(worktrees[0]);
     expect(terminalRows).toEqual([]);
   });

@@ -172,8 +172,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand('deck.openWorktreeInNewWindow', (node: { worktree: { path: string } }) =>
       detachedOpener.open(node.worktree.path),
     ),
-    vscode.commands.registerCommand('deck.switchWorktree', async (worktreePath: string) => {
-      await switcher.switchTo(worktreePath);
+    vscode.commands.registerCommand('deck.switchWorktree', async (node: { worktree: { path: string } }) => {
+      await switcher.switchTo(node.worktree.path);
       tree.refresh();
     }),
     vscode.workspace.onDidChangeWorkspaceFolders(() => tree.refresh()),

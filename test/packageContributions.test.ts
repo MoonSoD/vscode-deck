@@ -269,6 +269,24 @@ describe('package contributions', () => {
     });
   });
 
+  it('contributes switch to Worktree as a Worktree context-only action, not a row click', () => {
+    expect(
+      pkg.contributes.menus['view/item/context'].filter(
+        (item: { command: string }) => item.command === 'deck.switchWorktree',
+      ),
+    ).toEqual([{
+      command: 'deck.switchWorktree',
+      when: 'view == deck.repositories && (viewItem == deck.worktree || viewItem == deck.worktree.main)',
+      group: 'navigation',
+    }]);
+    expect(
+      pkg.contributes.menus['view/item/context'].some(
+        (item: { command: string; group?: string }) =>
+          item.command === 'deck.switchWorktree' && item.group === 'inline',
+      ),
+    ).toBe(false);
+  });
+
   it('hides switch to Worktree from the command palette (needs a worktree-path argument)', () => {
     expect(pkg.contributes.menus.commandPalette).toContainEqual({
       command: 'deck.switchWorktree',

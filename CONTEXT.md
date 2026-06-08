@@ -84,8 +84,8 @@ _Avoid_: tmux session, tmux window, pane (the backing mechanism); tab (a disposa
 
 ## Example dialogue
 
-> **Dev:** "When I click a different **Worktree**, does it open in a new window?"
-> **Domain expert:** "No — that's a **Switch**: it replaces the mounted folder and reloads. Opening in a new window is a **DetachedOpen**, and that one doesn't change the **ActiveWorktree**."
+> **Dev:** "I clicked a **Worktree** row and nothing happened — shouldn't it switch?"
+> **Domain expert:** "No — a **Worktree** row is folder-like: a click just expands or collapses its **Terminals**. **Switch** is an explicit action in the row's right-click menu — it replaces the mounted folder and reloads. Opening in a new window is a **DetachedOpen**, which doesn't change the **ActiveWorktree**."
 >
 > **Dev:** "If I register the same repo from two different worktree paths, is that two **Repositories**?"
 > **Domain expert:** "No. A **Repository** is its git common dir, so both resolve to one. The path you registered is just a **discovery seed**."
