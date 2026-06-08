@@ -1,6 +1,6 @@
 import { Worktree } from '../git/worktrees';
 
-export interface ProjectTreeItemDescription {
+export interface RepositoryTreeItemDescription {
   label: string;
   description: string;
   iconId: 'folder';
@@ -32,13 +32,13 @@ export interface TmuxUnavailableTreeItemDescription {
   tooltip: 'Install tmux 3.1 or newer to use Deck-managed Terminals.';
 }
 
-export function describeProjectTreeItem(
-  projectPath: string,
-  isActiveProject: boolean,
-): ProjectTreeItemDescription {
+export function describeRepositoryTreeItem(
+  repositoryPath: string,
+  isActiveRepository: boolean,
+): RepositoryTreeItemDescription {
   return {
-    label: projectPath.split('/').pop() ?? projectPath,
-    description: isActiveProject ? 'active' : '',
+    label: repositoryPath.split('/').pop() ?? repositoryPath,
+    description: isActiveRepository ? 'active' : '',
     iconId: 'folder',
   };
 }

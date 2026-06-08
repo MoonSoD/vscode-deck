@@ -4,18 +4,18 @@ import {
   CommonDirCacheLike,
   PASS_THROUGH_COMMON_DIR_CACHE,
   resolveCommonDirSafe,
-} from './projectCommonDirCache';
+} from './repositoryCommonDirCache';
 
 const SWITCH_LABEL = 'Switch';
 const OPEN_IN_NEW_WINDOW_LABEL = 'Open in New Window';
 
-export interface ProjectFolderPicker {
+export interface RepositoryFolderPicker {
   pick(): Promise<string | undefined>;
 }
 
-interface ProjectRegistryLike {
+interface RepositoryRegistryLike {
   list(): readonly string[];
-  append(projectPath: string): Promise<void>;
+  append(repositoryPath: string): Promise<void>;
 }
 
 interface ActiveWorktreeStoreLike {
@@ -30,35 +30,35 @@ interface DetachedOpenerLike {
   open(targetPath: string): Promise<void>;
 }
 
-export class VsCodeProjectFolderPicker implements ProjectFolderPicker {
+export class VsCodeRepositoryFolderPicker implements RepositoryFolderPicker {
   async pick(): Promise<string | undefined> {
     const picked = await vscode.window.showOpenDialog({
       canSelectFolders: true,
       canSelectFiles: false,
       canSelectMany: false,
-      openLabel: 'Add as Deck project',
+      openLabel: 'Add as Deck repository',
     });
     return picked?.[0]?.fsPath;
   }
 }
 
-export class AddProjectCommand {
+export class AddRepositoryCommand {
   constructor(
-    private readonly picker: ProjectFolderPicker,
-    private readonly registry: ProjectRegistryLike,
+    private readonly picker: RepositoryFolderPicker,
+    private readonly registry: RepositoryRegistryLike,
     private readonly activeWorktrees: ActiveWorktreeStoreLike,
     private readonly switcher: SwitcherLike,
     private readonly detachedOpener: DetachedOpenerLike,
     private readonly refresh: () => void,
-    private readonly reveal: (projectPath: string) => Promise<void>,
-    private readonly projectCommonDirCache: CommonDirCacheLike = PASS_THROUGH_COMMON_DIR_CACHE,
+    private readonly reveal: (repositoryPath: string) => Promise<void>,
+    private readonly repositoryCommonDirCache: CommonDirCacheLike = PASS_THROUGH_COMMON_DIR_CACHE,
   ) {}
 
   async run(): Promise<void> {
     const seedPath = await this.picker.pick();
     if (!seedPath) return;
 
-    const commonDir = await resolveCommonDirSafe(this.projectCommonDirCache, seedPath);
+    const commonDir = await resolveCommonDirSafe(this.repositoryCommonDirCache, seedPath);
     if (commonDir === null) {
       vscode.window.showErrorMessage(`Cannot add ${seedPath}: not a git repository.`);
       return;
@@ -72,7 +72,7 @@ export class AddProjectCommand {
     await this.reveal(seedPath);
 
     const postAddAction = await vscode.window.showInformationMessage(
-      `Added project ${path.basename(seedPath)}.`,
+      `Added repository ${path.basename(seedPath)}.`,
       SWITCH_LABEL,
       OPEN_IN_NEW_WINDOW_LABEL,
     );
@@ -84,8 +84,8 @@ export class AddProjectCommand {
   }
 
   private async hasRegisteredCommonDir(commonDir: string): Promise<boolean> {
-    for (const projectPath of this.registry.list()) {
-      const registered = await resolveCommonDirSafe(this.projectCommonDirCache, projectPath);
+    for (const repositoryPath of this.registry.list()) {
+      const registered = await resolveCommonDirSafe(this.repositoryCommonDirCache, repositoryPath);
       if (registered !== null && registered === commonDir) return true;
     }
     return false;

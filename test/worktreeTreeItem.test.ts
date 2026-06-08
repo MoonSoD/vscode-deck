@@ -1,18 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import {
-  describeProjectTreeItem,
+  describeRepositoryTreeItem,
   describeWorktreeTreeItem,
 } from '../src/tree/worktreeTreeItem';
 
-describe('describeProjectTreeItem', () => {
-  it('marks the project matching the open workspace folder common dir as active', () => {
-    expect(describeProjectTreeItem('/work/alpha', true)).toEqual({
+describe('describeRepositoryTreeItem', () => {
+  it('marks the repository matching the open workspace folder common dir as active', () => {
+    expect(describeRepositoryTreeItem('/work/alpha', true)).toEqual({
       label: 'alpha',
       description: 'active',
       iconId: 'folder',
     });
 
-    expect(describeProjectTreeItem('/work/beta', false)).toEqual({
+    expect(describeRepositoryTreeItem('/work/beta', false)).toEqual({
       label: 'beta',
       description: '',
       iconId: 'folder',

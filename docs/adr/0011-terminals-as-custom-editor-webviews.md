@@ -226,7 +226,7 @@ the editor tab and how reload is handled.
    terminal command.
 
 10. **Cascade closes tabs in addition to sessions.** `TerminalCascade`
-    on WorktreeRemoval / ProjectRemoval continues to kill matching tmux
+    on WorktreeRemoval / RepositoryRemoval continues to kill matching tmux
     sessions; after this ADR it also closes matching Deck custom-editor
     tabs via `vscode.window.tabGroups.close(tab)`. Order: kill first,
     close tabs second. Redundant disposes are safe — `kill-session`

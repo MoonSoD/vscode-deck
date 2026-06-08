@@ -18,7 +18,7 @@
     "git",
     "worktree",
     "worktrees",
-    "projects",
+    "repositories",
     "monorepo"
   ],
   "engines": {
@@ -29,7 +29,7 @@
     "Other"
   ],
   "activationEvents": [
-    "onView:deck.projects"
+    "onView:deck.repositories"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -45,15 +45,15 @@
     "views": {
       "deck": [
         {
-          "id": "deck.projects",
-          "name": "Projects & Worktrees"
+          "id": "deck.repositories",
+          "name": "Repositories & Worktrees"
         }
       ]
     },
     "viewsWelcome": [
       {
-        "view": "deck.projects",
-        "contents": "No projects yet.\n[Add Project](command:deck.addProject)"
+        "view": "deck.repositories",
+        "contents": "No repositories yet.\n[Add Repository](command:deck.addRepository)"
       }
     ],
     "walkthroughs": [
@@ -90,8 +90,8 @@
     ],
     "commands": [
       {
-        "command": "deck.addProject",
-        "title": "Deck: Add Project",
+        "command": "deck.addRepository",
+        "title": "Deck: Add Repository",
         "icon": "$(add)"
       },
       {
@@ -105,7 +105,7 @@
         "icon": "$(trash)"
       },
       {
-        "command": "deck.removeProject",
+        "command": "deck.removeRepository",
         "title": "Deck: Remove from Deck…"
       },
       {
@@ -159,50 +159,50 @@
     "menus": {
       "view/title": [
         {
-          "command": "deck.addProject",
-          "when": "view == deck.projects",
+          "command": "deck.addRepository",
+          "when": "view == deck.repositories",
           "group": "navigation"
         },
         {
           "command": "deck.refresh",
-          "when": "view == deck.projects",
+          "when": "view == deck.repositories",
           "group": "navigation"
         }
       ],
       "view/item/context": [
         {
           "command": "deck.addWorktree",
-          "when": "view == deck.projects && viewItem == deck.project",
+          "when": "view == deck.repositories && viewItem == deck.repository",
           "group": "inline"
         },
         {
           "command": "deck.addTerminal",
-          "when": "view == deck.projects && (viewItem == deck.worktree || viewItem == deck.worktree.active || viewItem == deck.worktree.main) && deck.tmuxAvailable",
+          "when": "view == deck.repositories && (viewItem == deck.worktree || viewItem == deck.worktree.active || viewItem == deck.worktree.main) && deck.tmuxAvailable",
           "group": "inline"
         },
         {
           "command": "deck.removeWorktree",
-          "when": "view == deck.projects && viewItem == deck.worktree",
+          "when": "view == deck.repositories && viewItem == deck.worktree",
           "group": "navigation"
         },
         {
           "command": "deck.openWorktreeInNewWindow",
-          "when": "view == deck.projects && (viewItem == deck.worktree || viewItem == deck.worktree.main)",
+          "when": "view == deck.repositories && (viewItem == deck.worktree || viewItem == deck.worktree.main)",
           "group": "navigation"
         },
         {
-          "command": "deck.removeProject",
-          "when": "view == deck.projects && viewItem == deck.project",
+          "command": "deck.removeRepository",
+          "when": "view == deck.repositories && viewItem == deck.repository",
           "group": "navigation"
         },
         {
           "command": "deck.killTerminal",
-          "when": "view == deck.projects && (viewItem == deck.terminal.active || viewItem == deck.terminal.foreign) && deck.tmuxAvailable",
+          "when": "view == deck.repositories && (viewItem == deck.terminal.active || viewItem == deck.terminal.foreign) && deck.tmuxAvailable",
           "group": "inline"
         },
         {
           "command": "deck.openTerminalInNewWindow",
-          "when": "view == deck.projects && viewItem == deck.terminal.foreign && deck.tmuxAvailable",
+          "when": "view == deck.repositories && viewItem == deck.terminal.foreign && deck.tmuxAvailable",
           "group": "navigation"
         }
       ],

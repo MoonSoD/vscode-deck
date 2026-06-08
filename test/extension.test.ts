@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const vscodeState = vi.hoisted(() => ({
-  addProjectArgs: undefined as unknown[] | undefined,
+  addRepositoryArgs: undefined as unknown[] | undefined,
   addTerminalArgs: undefined as unknown[] | undefined,
-  addProjectRun: vi.fn(),
+  addRepositoryRun: vi.fn(),
   addTerminalRun: vi.fn(),
   configUpdate: vi.fn(),
   tabGroups: [] as Array<{ viewColumn: number; tabs: Array<{ input?: unknown }> }>,
@@ -24,12 +24,12 @@ const vscodeState = vi.hoisted(() => ({
   openTerminalInNewWindowRun: vi.fn(),
   openTerminalRun: vi.fn(),
   openTerminalArgs: undefined as unknown[] | undefined,
-  projectTreeArgs: undefined as unknown[] | undefined,
-  projectTreeInstances: [] as Array<{ refresh: ReturnType<typeof vi.fn>; getChildren: ReturnType<typeof vi.fn> }>,
+  repositoryTreeArgs: undefined as unknown[] | undefined,
+  repositoryTreeInstances: [] as Array<{ refresh: ReturnType<typeof vi.fn>; getChildren: ReturnType<typeof vi.fn> }>,
   registerCommand: vi.fn(() => ({ dispose: vi.fn() })),
   registerCustomEditorProvider: vi.fn(() => ({ dispose: vi.fn() })),
   removeWorktreeArgs: undefined as unknown[] | undefined,
-  settingsProjects: ['/settings/repo'],
+  settingsRepositories: ['/settings/repo'],
   tmuxInstances: [] as Array<{
     killSession: ReturnType<typeof vi.fn>;
     listSessions: ReturnType<typeof vi.fn>;
@@ -73,7 +73,7 @@ vi.mock('vscode', () => ({
   workspace: {
     getConfiguration: () => ({
       get: <T>(key: string, defaultValue: T) =>
-        key === 'projects' ? ((vscodeState.settingsProjects as T | undefined) ?? defaultValue) : defaultValue,
+        key === 'repositories' ? ((vscodeState.settingsRepositories as T | undefined) ?? defaultValue) : defaultValue,
       update: vscodeState.configUpdate,
     }),
     onDidChangeConfiguration: vscodeState.onDidChangeConfiguration,
@@ -100,19 +100,19 @@ vi.mock('../src/worktree/worktreeListCacheStore', () => ({
   WorktreeListCacheStore: class {},
 }));
 
-vi.mock('../src/project/projectCommonDirCache', () => ({
-  ProjectCommonDirCache: class {},
+vi.mock('../src/repository/repositoryCommonDirCache', () => ({
+  RepositoryCommonDirCache: class {},
 }));
 
-vi.mock('../src/project/addProjectCommand', () => ({
-  AddProjectCommand: class {
+vi.mock('../src/repository/addRepositoryCommand', () => ({
+  AddRepositoryCommand: class {
     constructor(...args: unknown[]) {
-      vscodeState.addProjectArgs = args;
+      vscodeState.addRepositoryArgs = args;
     }
 
-    run = vscodeState.addProjectRun;
+    run = vscodeState.addRepositoryRun;
   },
-  VsCodeProjectFolderPicker: class {},
+  VsCodeRepositoryFolderPicker: class {},
 }));
 
 vi.mock('../src/switch/worktreeSwitcher', () => ({
@@ -132,18 +132,18 @@ vi.mock('../src/worktree/worktreeRemovalCommand', () => ({
   },
 }));
 
-vi.mock('../src/project/projectRemovalCommand', () => ({
-  ProjectRemovalCommand: class {},
+vi.mock('../src/repository/repositoryRemovalCommand', () => ({
+  RepositoryRemovalCommand: class {},
 }));
 
-vi.mock('../src/tree/projectTree', () => ({
-  ProjectTreeProvider: class {
+vi.mock('../src/tree/repositoryTree', () => ({
+  RepositoryTreeProvider: class {
     refresh = vi.fn();
-    getChildren = vi.fn(() => [{ projectPath: '/settings/repo' }]);
+    getChildren = vi.fn(() => [{ repositoryPath: '/settings/repo' }]);
 
     constructor(...args: unknown[]) {
-      vscodeState.projectTreeArgs = args;
-      vscodeState.projectTreeInstances.push(this);
+      vscodeState.repositoryTreeArgs = args;
+      vscodeState.repositoryTreeInstances.push(this);
     }
   },
 }));
@@ -214,15 +214,15 @@ import { PendingTerminalOpenStore } from '../src/terminal/pendingTerminalOpenSto
 describe('activate', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vscodeState.addProjectArgs = undefined;
+    vscodeState.addRepositoryArgs = undefined;
     vscodeState.addTerminalArgs = undefined;
     vscodeState.closeTerminalArgs = undefined;
     vscodeState.lifecycleOrder = [];
     vscodeState.openTerminalArgs = undefined;
-    vscodeState.projectTreeArgs = undefined;
-    vscodeState.projectTreeInstances = [];
+    vscodeState.repositoryTreeArgs = undefined;
+    vscodeState.repositoryTreeInstances = [];
     vscodeState.removeWorktreeArgs = undefined;
-    vscodeState.settingsProjects = ['/settings/repo'];
+    vscodeState.settingsRepositories = ['/settings/repo'];
     vscodeState.tmuxInstances = [];
     vscodeState.tabGroups = [];
     vscodeState.workspaceFolders = [{ uri: { fsPath: '/work/alpha-main' } }];
@@ -230,8 +230,8 @@ describe('activate', () => {
     vscodeState.tmuxPreflight.mockResolvedValue({ available: true });
   });
 
-  function createContext(globalProjects: string[] = []) {
-    const values: Record<string, unknown> = { 'deck.projectRegistry': globalProjects };
+  function createContext(globalRepositories: string[] = []) {
+    const values: Record<string, unknown> = { 'deck.repositoryRegistry': globalRepositories };
     return {
       globalState: {
         get: <T>(key: string, defaultValue: T) => (values[key] as T | undefined) ?? defaultValue,
@@ -252,13 +252,13 @@ describe('activate', () => {
     };
   }
 
-  it('creates the Projects tree view with drag-and-drop enabled', async () => {
+  it('creates the Repositories tree view with drag-and-drop enabled', async () => {
     const context = createContext();
 
     await activate(context as never);
 
     expect(vscode.window.createTreeView).toHaveBeenCalledWith(
-      'deck.projects',
+      'deck.repositories',
       expect.objectContaining({
         canSelectMany: false,
         dragAndDropController: expect.any(Object),
@@ -268,30 +268,26 @@ describe('activate', () => {
     expect(context.subscriptions[0]).toBe(vscodeState.createTreeView.mock.results[0].value);
   });
 
-  it('migrates deck.projects settings to ProjectRegistryStore and clears settings', async () => {
+  it('uses RepositoryRegistryStore without migrating legacy settings', async () => {
     const context = createContext(['/global/repo']);
 
     await activate(context as never);
 
-    expect(context.values['deck.projectRegistry']).toEqual(['/global/repo', '/settings/repo']);
-    expect(vscodeState.configUpdate).toHaveBeenCalledWith(
-      'projects',
-      undefined,
-      vscode.ConfigurationTarget.Global,
-    );
+    expect(context.values['deck.repositoryRegistry']).toEqual(['/global/repo']);
+    expect(vscodeState.configUpdate).not.toHaveBeenCalled();
   });
 
-  it('registers deck.addProject through AddProjectCommand', async () => {
+  it('registers deck.addRepository through AddRepositoryCommand', async () => {
     const context = createContext();
 
     await activate(context as never);
-    const addProjectRegistration = vscodeState.registerCommand.mock.calls.find(
-      ([command]) => command === 'deck.addProject',
+    const addRepositoryRegistration = vscodeState.registerCommand.mock.calls.find(
+      ([command]) => command === 'deck.addRepository',
     );
-    if (!addProjectRegistration) throw new Error('missing deck.addProject registration');
-    await addProjectRegistration[1]();
+    if (!addRepositoryRegistration) throw new Error('missing deck.addRepository registration');
+    await addRepositoryRegistration[1]();
 
-    expect(vscodeState.addProjectRun).toHaveBeenCalledOnce();
+    expect(vscodeState.addRepositoryRun).toHaveBeenCalledOnce();
   });
 
   it('sets tmux availability context and passes it to the tree', async () => {
@@ -305,7 +301,7 @@ describe('activate', () => {
       'deck.tmuxAvailable',
       false,
     );
-    expect(vscodeState.projectTreeArgs?.[6]).toBe(false);
+    expect(vscodeState.repositoryTreeArgs?.[6]).toBe(false);
   });
 
   it('shares pending WorktreeRemoval state between the command and tree', async () => {
@@ -313,8 +309,8 @@ describe('activate', () => {
 
     await activate(context as never);
 
-    expect(vscodeState.projectTreeArgs?.[7]).toBeInstanceOf(Set);
-    expect(vscodeState.removeWorktreeArgs?.[6]).toBe(vscodeState.projectTreeArgs?.[7]);
+    expect(vscodeState.repositoryTreeArgs?.[7]).toBeInstanceOf(Set);
+    expect(vscodeState.removeWorktreeArgs?.[6]).toBe(vscodeState.repositoryTreeArgs?.[7]);
   });
 
   it('consumes pending intents and registers no VS Code terminal listeners', async () => {
@@ -429,7 +425,7 @@ describe('activate', () => {
     await Promise.resolve();
 
     expect(vscodeState.tmuxInstances[0].killSession).toHaveBeenCalledWith('wt-_work_repo__term-1');
-    expect(vscodeState.projectTreeInstances[0].refresh).toHaveBeenCalledOnce();
+    expect(vscodeState.repositoryTreeInstances[0].refresh).toHaveBeenCalledOnce();
   });
 
   it('registers deck.openTerminalInNewWindow through OpenTerminalInNewWindowCommand', async () => {

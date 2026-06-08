@@ -1,18 +1,18 @@
-# ADR-0003: Single-folder Project switching via `vscode.openFolder`
+# ADR-0003: Single-folder Repository switching via `vscode.openFolder`
 
 ## Context
 
 ADR-0001 banned `vscode.openFolder` from the switch path because reloading the
 window destroys in-memory extension state — Claude Code chat panels, terminal
 sessions, language-server caches — which is exactly what we wanted to preserve.
-ADR-0002 then built a multi-root architecture (N Projects mounted as N workspace
+ADR-0002 then built a multi-root architecture (N Repositories mounted as N workspace
 roots, swap one slot in place) to keep switches reload-free.
 
 Two things shifted that motivation:
 
-1. **Live UX feedback.** Mounting every registered Project as a workspace root
+1. **Live UX feedback.** Mounting every registered Repository as a workspace root
    makes the explorer (and search, SCM, file-picker) noisy — the user reports
-   wanting "only one Project active at a time."
+   wanting "only one Repository active at a time."
 2. **Workflow-specific reload cost.** The motivating losses ADR-0001 enumerated
    are handled out-of-band for this user's workflow: Claude Code runs in tmux
    (survives reload), and we have no other extension whose in-memory state we
@@ -37,13 +37,13 @@ vscode.commands.executeCommand('vscode.openFolder', Uri.file(worktreePath), { fo
 - The window reloads. The new folder becomes the sole workspace root.
 - VS Code restores that folder's own session (tabs, dirty buffers, layout) from
   its workspace storage automatically.
-- Deck's only persisted state is `deck.projects` (registry) and
-  `activeWorktrees` (the last worktree opened per Project's common dir, so
-  clicking a Project node opens its last-active worktree).
+- Deck's only persisted state is `deck.repositories` (registry) and
+  `activeWorktrees` (the last worktree opened per Repository's common dir, so
+  clicking a Repository node opens its last-active worktree).
 
 There is no MountReconciliation, no WorkspaceRootPlanner, no resolveWorkspaceRoots,
 no append-only invariant, no index-0 problem. Deck is now a **registry plus
-launcher** with per-Project worktree memory.
+launcher** with per-Repository worktree memory.
 
 ## Consequences
 

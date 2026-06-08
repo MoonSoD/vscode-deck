@@ -1,16 +1,16 @@
 import * as vscode from 'vscode';
 import { getCommonDirSafe, listWorktrees } from '../git/worktrees';
 
-interface ProjectNodeLike {
-  projectPath: string;
+interface RepositoryNodeLike {
+  repositoryPath: string;
 }
 
-interface PerProjectStoreLike {
+interface PerRepositoryStoreLike {
   clear(commonDir: string): Promise<void>;
 }
 
-interface ProjectRegistryLike {
-  remove(projectPath: string): Promise<void>;
+interface RepositoryRegistryLike {
+  remove(repositoryPath: string): Promise<void>;
 }
 
 interface TerminalCascadeLike {
@@ -22,16 +22,16 @@ interface WorktreeListCacheLike {
 }
 
 const REMOVE_LABEL = 'Remove from Deck';
-const BASE_DETAIL = 'This only removes the Project from Deck. Files and git history are untouched.';
-const ACTIVE_PROJECT_DETAIL =
-  "You're currently in this Project's worktree. The folder will stay open, but Deck will no longer show this Project.";
+const BASE_DETAIL = 'This only removes the Repository from Deck. Files and git history are untouched.';
+const ACTIVE_REPOSITORY_DETAIL =
+  "You're currently in this Repository's worktree. The folder will stay open, but Deck will no longer show this Repository.";
 
-export class ProjectRemovalCommand {
+export class RepositoryRemovalCommand {
   constructor(
-    private readonly projectRegistry: ProjectRegistryLike,
-    private readonly activeWorktrees: PerProjectStoreLike,
-    private readonly worktreeRoots: PerProjectStoreLike,
-    private readonly worktreeOrders: PerProjectStoreLike,
+    private readonly repositoryRegistry: RepositoryRegistryLike,
+    private readonly activeWorktrees: PerRepositoryStoreLike,
+    private readonly worktreeRoots: PerRepositoryStoreLike,
+    private readonly worktreeOrders: PerRepositoryStoreLike,
     private readonly refresh: () => void,
     private readonly terminalCascade: TerminalCascadeLike = {
       killWorktree: async () => undefined,
@@ -39,29 +39,29 @@ export class ProjectRemovalCommand {
     private readonly worktreeListCache: WorktreeListCacheLike | undefined = undefined,
   ) {}
 
-  async run(node: ProjectNodeLike | undefined): Promise<void> {
+  async run(node: RepositoryNodeLike | undefined): Promise<void> {
     if (!node) return;
 
-    const commonDir = await getCommonDirSafe(node.projectPath);
+    const commonDir = await getCommonDirSafe(node.repositoryPath);
     const activeFolderPath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
     const activeCommonDir = activeFolderPath
       ? await getCommonDirSafe(activeFolderPath)
       : null;
     const detail =
       commonDir !== null && commonDir === activeCommonDir
-        ? `${BASE_DETAIL}\n\n${ACTIVE_PROJECT_DETAIL}`
+        ? `${BASE_DETAIL}\n\n${ACTIVE_REPOSITORY_DETAIL}`
         : BASE_DETAIL;
 
     // VS Code's modal supplies its own Cancel — don't add an explicit one.
     const picked = await vscode.window.showInformationMessage(
-      `Remove \`${node.projectPath}\` from Deck?`,
+      `Remove \`${node.repositoryPath}\` from Deck?`,
       { modal: true, detail },
       REMOVE_LABEL,
     );
     if (picked !== REMOVE_LABEL) return;
 
-    await this.killProjectTerminals(node.projectPath, commonDir);
-    await this.projectRegistry.remove(node.projectPath);
+    await this.killRepositoryTerminals(node.repositoryPath, commonDir);
+    await this.repositoryRegistry.remove(node.repositoryPath);
 
     if (commonDir !== null) {
       await this.activeWorktrees.clear(commonDir);
@@ -71,8 +71,8 @@ export class ProjectRemovalCommand {
     this.refresh();
   }
 
-  private async killProjectTerminals(
-    projectPath: string,
+  private async killRepositoryTerminals(
+    repositoryPath: string,
     commonDir: string | null,
   ): Promise<void> {
     // Fall back to the cached worktree list when `git worktree list` fails
@@ -80,7 +80,7 @@ export class ProjectRemovalCommand {
     // globalState on activation, so previous successful enumerations survive.
     let worktreePaths: readonly string[];
     try {
-      const worktrees = await listWorktrees(projectPath);
+      const worktrees = await listWorktrees(repositoryPath);
       worktreePaths = worktrees.map((w) => w.path);
     } catch {
       const cached = commonDir !== null ? this.worktreeListCache?.get(commonDir) : undefined;
@@ -92,7 +92,7 @@ export class ProjectRemovalCommand {
       try {
         await this.terminalCascade.killWorktree(worktreePath);
       } catch {
-        // Tmux cleanup must not block ProjectRemoval.
+        // Tmux cleanup must not block RepositoryRemoval.
       }
     }
   }

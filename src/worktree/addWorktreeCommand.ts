@@ -4,7 +4,7 @@ import {
   CommonDirCacheLike,
   PASS_THROUGH_COMMON_DIR_CACHE,
   resolveCommonDir,
-} from '../project/projectCommonDirCache';
+} from '../repository/repositoryCommonDirCache';
 import {
   addWorktree,
   listBranches,
@@ -17,8 +17,8 @@ const CREATE_BRANCH_LABEL = 'Create new branch...';
 const SWITCH_LABEL = 'Switch';
 const OPEN_IN_NEW_WINDOW_LABEL = 'Open in New Window';
 
-interface ProjectNodeLike {
-  projectPath: string;
+interface RepositoryNodeLike {
+  repositoryPath: string;
 }
 
 interface SwitcherLike {
@@ -67,30 +67,30 @@ export class AddWorktreeCommand {
     private readonly worktreeListCache: WorktreeListCacheLike = {
       add: async () => undefined,
     },
-    private readonly projectCommonDirCache: CommonDirCacheLike = PASS_THROUGH_COMMON_DIR_CACHE,
+    private readonly repositoryCommonDirCache: CommonDirCacheLike = PASS_THROUGH_COMMON_DIR_CACHE,
   ) {}
 
-  async run(node: ProjectNodeLike | undefined): Promise<void> {
+  async run(node: RepositoryNodeLike | undefined): Promise<void> {
     if (!node) return;
 
-    const branches = await listBranches(node.projectPath);
+    const branches = await listBranches(node.repositoryPath);
     const picked = await vscode.window.showQuickPick(this.branchPicks(branches), {
       placeHolder: 'Select branch',
     });
     if (!picked) return;
 
-    const commonDir = await resolveCommonDir(this.projectCommonDirCache, node.projectPath);
+    const commonDir = await resolveCommonDir(this.repositoryCommonDirCache, node.repositoryPath);
     const rememberedRoot = this.worktreeRoots.get(commonDir);
     let request: WorktreeRequest | undefined;
     if (picked.action === 'create') {
-      request = await this.newBranchRequest(node.projectPath, rememberedRoot, branches);
+      request = await this.newBranchRequest(node.repositoryPath, rememberedRoot, branches);
     } else {
-      request = await this.existingBranchRequest(node.projectPath, rememberedRoot, picked.branch);
+      request = await this.existingBranchRequest(node.repositoryPath, rememberedRoot, picked.branch);
     }
     if (!request) return;
 
     try {
-      await addWorktree(node.projectPath, request.add);
+      await addWorktree(node.repositoryPath, request.add);
     } catch (error) {
       vscode.window.showErrorMessage(`Cannot create worktree: ${errorMessage(error)}`);
       return;
@@ -135,11 +135,11 @@ export class AddWorktreeCommand {
   }
 
   private async existingBranchRequest(
-    projectPath: string,
+    repositoryPath: string,
     rememberedRoot: string | undefined,
     branch: string,
   ): Promise<WorktreeRequest | undefined> {
-    const targetPath = await this.promptForPath(projectPath, branch, rememberedRoot);
+    const targetPath = await this.promptForPath(repositoryPath, branch, rememberedRoot);
     if (!targetPath) return undefined;
     return {
       path: targetPath,
@@ -152,7 +152,7 @@ export class AddWorktreeCommand {
   }
 
   private async newBranchRequest(
-    projectPath: string,
+    repositoryPath: string,
     rememberedRoot: string | undefined,
     branches: string[],
   ): Promise<WorktreeRequest | undefined> {
@@ -167,7 +167,7 @@ export class AddWorktreeCommand {
     )?.trim();
     if (!baseRef) return undefined;
 
-    const targetPath = await this.promptForPath(projectPath, newBranch, rememberedRoot);
+    const targetPath = await this.promptForPath(repositoryPath, newBranch, rememberedRoot);
     if (!targetPath) return undefined;
 
     return {
@@ -182,7 +182,7 @@ export class AddWorktreeCommand {
   }
 
   private async promptForPath(
-    projectPath: string,
+    repositoryPath: string,
     branch: string,
     rememberedRoot: string | undefined,
   ): Promise<string | undefined> {
@@ -194,7 +194,7 @@ export class AddWorktreeCommand {
     };
 
     input.prompt = 'Worktree path';
-    input.value = defaultWorktreePath(projectPath, branch, rememberedRoot);
+    input.value = defaultWorktreePath(repositoryPath, branch, rememberedRoot);
     input.buttons = [rootPickerButton];
 
     return new Promise((resolve) => {
@@ -224,7 +224,7 @@ export class AddWorktreeCommand {
             canSelectFiles: false,
             canSelectMany: false,
             defaultUri: vscode.Uri.file(
-              rememberedRoot ?? path.dirname(path.normalize(projectPath)),
+              rememberedRoot ?? path.dirname(path.normalize(repositoryPath)),
             ),
           });
           if (!picked || picked.length === 0) return;

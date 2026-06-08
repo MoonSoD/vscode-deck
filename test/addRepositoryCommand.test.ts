@@ -19,14 +19,14 @@ vi.mock('../src/git/worktrees', () => ({
 }));
 
 import * as vscode from 'vscode';
-import { AddProjectCommand } from '../src/project/addProjectCommand';
+import { AddRepositoryCommand } from '../src/repository/addRepositoryCommand';
 
-function createCommand(projects: string[] = []) {
+function createCommand(repositories: string[] = []) {
   const picker = { pick: vi.fn(async () => '/repo/main') };
   const registry = {
-    list: vi.fn(() => projects),
-    append: vi.fn(async (projectPath: string) => {
-      projects.push(projectPath);
+    list: vi.fn(() => repositories),
+    append: vi.fn(async (repositoryPath: string) => {
+      repositories.push(repositoryPath);
     }),
   };
   const activeWorktrees = { set: vi.fn(async () => undefined) };
@@ -37,7 +37,7 @@ function createCommand(projects: string[] = []) {
 
   return {
     activeWorktrees,
-    command: new AddProjectCommand(
+    command: new AddRepositoryCommand(
       picker,
       registry,
       activeWorktrees,
@@ -55,7 +55,7 @@ function createCommand(projects: string[] = []) {
   };
 }
 
-describe('AddProjectCommand', () => {
+describe('AddRepositoryCommand', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(vscode.window.showInformationMessage).mockResolvedValue(undefined);
@@ -71,14 +71,14 @@ describe('AddProjectCommand', () => {
     expect(refresh).toHaveBeenCalledOnce();
     expect(reveal).toHaveBeenCalledWith('/repo/main');
     expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
-      'Added project main.',
+      'Added repository main.',
       'Switch',
       'Open in New Window',
     );
     expect(vscode.commands.executeCommand).not.toHaveBeenCalled();
   });
 
-  it('switches to the Project when the post-add Switch action is picked', async () => {
+  it('switches to the Repository when the post-add Switch action is picked', async () => {
     const { command, detachedOpener, switcher } = createCommand();
     vi.mocked(vscode.window.showInformationMessage).mockResolvedValue('Switch');
 
@@ -88,7 +88,7 @@ describe('AddProjectCommand', () => {
     expect(detachedOpener.open).not.toHaveBeenCalled();
   });
 
-  it('opens the Project in a new window when that post-add action is picked', async () => {
+  it('opens the Repository in a new window when that post-add action is picked', async () => {
     const { command, detachedOpener, switcher } = createCommand();
     vi.mocked(vscode.window.showInformationMessage).mockResolvedValue('Open in New Window');
 
@@ -135,7 +135,7 @@ describe('AddProjectCommand', () => {
     expect(refresh).toHaveBeenCalledOnce();
     expect(reveal).toHaveBeenCalledWith('/repo/main');
     expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
-      'Added project main.',
+      'Added repository main.',
       'Switch',
       'Open in New Window',
     );

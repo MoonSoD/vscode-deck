@@ -1,37 +1,37 @@
 import * as vscode from 'vscode';
 import { getCommonDirSafe, listWorktrees } from '../git/worktrees';
-import { ProjectRegistryStore } from '../project/projectRegistryStore';
+import { RepositoryRegistryStore } from '../repository/repositoryRegistryStore';
 import { WorktreeOrderStore } from '../worktree/worktreeOrderStore';
 import { reconcileWorktreeOrder } from './reconcileWorktreeOrder';
 import { DropPosition, reorderArray } from './reorderArray';
 
-const DECK_TREE_MIME = 'application/vnd.code.tree.deck.projects';
+const DECK_TREE_MIME = 'application/vnd.code.tree.deck.repositories';
 
 type DragPayload =
   | {
-      kind: 'project';
+      kind: 'repository';
       sourcePath: string;
     }
   | {
       kind: 'worktree';
       sourcePath: string;
-      projectPath: string;
+      repositoryPath: string;
     };
 
-interface ProjectNodeLike {
-  contextValue: 'deck.project';
-  projectPath: string;
+interface RepositoryNodeLike {
+  contextValue: 'deck.repository';
+  repositoryPath: string;
 }
 
 interface WorktreeNodeLike {
   contextValue: string;
-  projectPath: string;
+  repositoryPath: string;
   worktree: {
     path: string;
   };
 }
 
-type DeckNodeLike = ProjectNodeLike | WorktreeNodeLike;
+type DeckNodeLike = RepositoryNodeLike | WorktreeNodeLike;
 
 export class DeckTreeDragAndDropController
   implements vscode.TreeDragAndDropController<DeckNodeLike>
@@ -41,7 +41,7 @@ export class DeckTreeDragAndDropController
 
   constructor(
     private readonly refresh: () => void,
-    private readonly projectRegistry: Pick<ProjectRegistryStore, 'list' | 'replace'>,
+    private readonly repositoryRegistry: Pick<RepositoryRegistryStore, 'list' | 'replace'>,
     private readonly worktreeOrders: WorktreeOrderStore,
   ) {}
 
@@ -71,28 +71,28 @@ export class DeckTreeDragAndDropController
       return;
     }
 
-    const projects = this.projectRegistry.list();
+    const repositories = this.repositoryRegistry.list();
     let reordered: string[];
     if (target) {
-      if (!isProjectNode(target)) return;
-      const position = dropPosition(projects, payload.sourcePath, target.projectPath);
+      if (!isRepositoryNode(target)) return;
+      const position = dropPosition(repositories, payload.sourcePath, target.repositoryPath);
       reordered = reorderArray(
-        projects,
+        repositories,
         payload.sourcePath,
-        target.projectPath,
+        target.repositoryPath,
         position,
       );
     } else {
-      if (!projects.includes(payload.sourcePath)) return;
+      if (!repositories.includes(payload.sourcePath)) return;
       reordered = [
-        ...projects.filter((projectPath) => projectPath !== payload.sourcePath),
+        ...repositories.filter((repositoryPath) => repositoryPath !== payload.sourcePath),
         payload.sourcePath,
       ];
     }
 
-    if (sameOrder(projects, reordered)) return;
+    if (sameOrder(repositories, reordered)) return;
 
-    await this.projectRegistry.replace(reordered);
+    await this.repositoryRegistry.replace(reordered);
     this.refresh();
   }
 
@@ -100,12 +100,12 @@ export class DeckTreeDragAndDropController
     payload: Extract<DragPayload, { kind: 'worktree' }>,
     target: DeckNodeLike,
   ): Promise<void> {
-    if (!isWorktreeNode(target) || payload.projectPath !== target.projectPath) return;
+    if (!isWorktreeNode(target) || payload.repositoryPath !== target.repositoryPath) return;
 
-    const commonDir = await getCommonDirSafe(target.projectPath);
+    const commonDir = await getCommonDirSafe(target.repositoryPath);
     if (commonDir === null) return;
 
-    const gitWorktrees = await listWorktrees(target.projectPath);
+    const gitWorktrees = await listWorktrees(target.repositoryPath);
     const worktrees = reconcileWorktreeOrder(
       this.worktreeOrders.get(commonDir),
       gitWorktrees,
@@ -122,21 +122,21 @@ export class DeckTreeDragAndDropController
 }
 
 function toPayload(node: DeckNodeLike): DragPayload | undefined {
-  if (isProjectNode(node)) {
-    return { kind: 'project', sourcePath: node.projectPath };
+  if (isRepositoryNode(node)) {
+    return { kind: 'repository', sourcePath: node.repositoryPath };
   }
   if (isWorktreeNode(node)) {
     return {
       kind: 'worktree',
       sourcePath: node.worktree.path,
-      projectPath: node.projectPath,
+      repositoryPath: node.repositoryPath,
     };
   }
   return undefined;
 }
 
-function isProjectNode(node: DeckNodeLike): node is ProjectNodeLike {
-  return node.contextValue === 'deck.project';
+function isRepositoryNode(node: DeckNodeLike): node is RepositoryNodeLike {
+  return node.contextValue === 'deck.repository';
 }
 
 function isWorktreeNode(node: DeckNodeLike): node is WorktreeNodeLike {

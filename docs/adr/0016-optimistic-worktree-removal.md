@@ -18,11 +18,11 @@ The fix is optimistic UI: drop the row immediately, run the slow delete
 detached. The tree is already built for this. `getWorktreeChildren` paints
 synchronously from `worktreeListCache` (ADR-0007) and the cache *is* what the
 user sees; `git worktree list` is only the eventual reconciler
-(`projectTree.ts:197-210`).
+(`repositoryTree.ts:197-210`).
 
 But that same reconciler is a trap. Every render also kicks
 `refreshWorktreesInBackground`, which runs real `git worktree list` and
-overwrites the cache whenever it differs (`projectTree.ts:307-324`). So the
+overwrites the cache whenever it differs (`repositoryTree.ts:307-324`). So the
 naive "remove from cache + refresh" races itself:
 
 ```
@@ -45,14 +45,14 @@ stale-while-revalidate loop that makes the rest of the tree feel fast.
 2. **Guard the optimism with a shared in-memory `pendingWorktreeRemovals:
    Set<string>` of Worktree paths.** It is injected into both
    `WorktreeRemovalCommand` (which adds on confirm, deletes on settle) and
-   `ProjectTreeProvider` (which reads it). This mirrors the provider's existing
-   `refreshingWorktrees` / `resolvingProjectPaths` guard sets — same shape, same
+   `RepositoryTreeProvider` (which reads it). This mirrors the provider's existing
+   `refreshingWorktrees` / `resolvingRepositoryPaths` guard sets — same shape, same
    lifetime, no new persistence concept.
 
 3. **The provider filters pending paths in two places.** `toWorktreeNodes`
    excludes them so a cache that still lists W won't render it, and
    `refreshWorktreesInBackground` excludes them so the reconciler won't re-add W
-   while its delete is in flight (`projectTree.ts:316`). This closes the race in
+   while its delete is in flight (`repositoryTree.ts:316`). This closes the race in
    the Decision-context diagram above: git can keep reporting W for as long as
    the `rm -rf` runs; the tree ignores it until the path leaves the set.
 

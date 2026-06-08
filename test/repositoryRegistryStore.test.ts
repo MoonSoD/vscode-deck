@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
-  PROJECT_REGISTRY_KEY,
-  ProjectRegistryStore,
-} from '../src/project/projectRegistryStore';
+  REPOSITORY_REGISTRY_KEY,
+  RepositoryRegistryStore,
+} from '../src/repository/repositoryRegistryStore';
 
 function createStore() {
   const values: Record<string, unknown> = {};
-  const store = new ProjectRegistryStore({
+  const store = new RepositoryRegistryStore({
     get: <T>(key: string, defaultValue: T) => (values[key] as T | undefined) ?? defaultValue,
     update: async (key: string, value: unknown) => {
       values[key] = value;
@@ -16,21 +16,21 @@ function createStore() {
   return { store, values };
 }
 
-describe('ProjectRegistryStore', () => {
+describe('RepositoryRegistryStore', () => {
   it('lists an empty registry', () => {
     const { store } = createStore();
 
     expect(store.list()).toEqual([]);
   });
 
-  it('appends Projects in insertion order and ignores duplicate appends', async () => {
+  it('appends Repositories in insertion order and ignores duplicate appends', async () => {
     const { store, values } = createStore();
 
     await store.append('/repo/b');
     await store.append('/repo/a');
     await store.append('/repo/b');
 
-    expect(values[PROJECT_REGISTRY_KEY]).toEqual(['/repo/b', '/repo/a']);
+    expect(values[REPOSITORY_REGISTRY_KEY]).toEqual(['/repo/b', '/repo/a']);
     expect(store.list()).toEqual(['/repo/b', '/repo/a']);
   });
 
@@ -44,7 +44,7 @@ describe('ProjectRegistryStore', () => {
     expect(store.list()).toEqual(['/repo/a']);
   });
 
-  it('contains and removes Projects from the registry', async () => {
+  it('contains and removes Repositories from the registry', async () => {
     const { store } = createStore();
     await store.append('/repo/a');
     await store.append('/repo/b');

@@ -45,9 +45,9 @@ vi.mock('../src/git/worktrees', () => ({
 
 import * as vscode from 'vscode';
 import { listWorktrees } from '../src/git/worktrees';
-import { ProjectRemovalCommand } from '../src/project/projectRemovalCommand';
+import { RepositoryRemovalCommand } from '../src/repository/repositoryRemovalCommand';
 
-describe('ProjectRemovalCommand', () => {
+describe('RepositoryRemovalCommand', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vscodeState.workspaceFolders = [{ uri: { fsPath: '/repo/feature' } }];
@@ -70,46 +70,46 @@ describe('ProjectRemovalCommand', () => {
     ]);
   });
 
-  it('removes a Project from Deck and clears its per-Project state after confirmation', async () => {
+  it('removes a Repository from Deck and clears its per-Repository state after confirmation', async () => {
     const activeWorktrees = { clear: vi.fn(async () => undefined) };
-    const projectRegistry = { remove: vi.fn(async () => undefined) };
+    const repositoryRegistry = { remove: vi.fn(async () => undefined) };
     const worktreeRoots = { clear: vi.fn(async () => undefined) };
     const worktreeOrders = { clear: vi.fn(async () => undefined) };
     const refresh = vi.fn();
-    const command = new ProjectRemovalCommand(
-      projectRegistry,
+    const command = new RepositoryRemovalCommand(
+      repositoryRegistry,
       activeWorktrees,
       worktreeRoots,
       worktreeOrders,
       refresh,
     );
 
-    await command.run({ projectPath: '/repo/main' });
+    await command.run({ repositoryPath: '/repo/main' });
 
     expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
       'Remove `/repo/main` from Deck?',
       {
         modal: true,
         detail:
-          "This only removes the Project from Deck. Files and git history are untouched.\n\nYou're currently in this Project's worktree. The folder will stay open, but Deck will no longer show this Project.",
+          "This only removes the Repository from Deck. Files and git history are untouched.\n\nYou're currently in this Repository's worktree. The folder will stay open, but Deck will no longer show this Repository.",
       },
       'Remove from Deck',
     );
-    expect(projectRegistry.remove).toHaveBeenCalledWith('/repo/main');
+    expect(repositoryRegistry.remove).toHaveBeenCalledWith('/repo/main');
     expect(activeWorktrees.clear).toHaveBeenCalledWith('/git/repo');
     expect(worktreeRoots.clear).toHaveBeenCalledWith('/git/repo');
     expect(worktreeOrders.clear).toHaveBeenCalledWith('/git/repo');
     expect(refresh).toHaveBeenCalledOnce();
   });
 
-  it('kills Deck terminal sessions for every known Worktree before removing the Project', async () => {
+  it('kills Deck terminal sessions for every known Worktree before removing the Repository', async () => {
     const activeWorktrees = { clear: vi.fn(async () => undefined) };
-    const projectRegistry = { remove: vi.fn(async () => undefined) };
+    const repositoryRegistry = { remove: vi.fn(async () => undefined) };
     const worktreeRoots = { clear: vi.fn(async () => undefined) };
     const worktreeOrders = { clear: vi.fn(async () => undefined) };
     const terminalCascade = { killWorktree: vi.fn(async () => undefined) };
-    const command = new ProjectRemovalCommand(
-      projectRegistry,
+    const command = new RepositoryRemovalCommand(
+      repositoryRegistry,
       activeWorktrees,
       worktreeRoots,
       worktreeOrders,
@@ -117,19 +117,19 @@ describe('ProjectRemovalCommand', () => {
       terminalCascade,
     );
 
-    await command.run({ projectPath: '/repo/main' });
+    await command.run({ repositoryPath: '/repo/main' });
 
     expect(listWorktrees).toHaveBeenCalledWith('/repo/main');
     expect(terminalCascade.killWorktree).toHaveBeenCalledWith('/repo/main');
     expect(terminalCascade.killWorktree).toHaveBeenCalledWith('/repo/feature');
     expect(terminalCascade.killWorktree.mock.invocationCallOrder.at(-1)).toBeLessThan(
-      projectRegistry.remove.mock.invocationCallOrder[0],
+      repositoryRegistry.remove.mock.invocationCallOrder[0],
     );
   });
 
   it('falls back to the worktree-list cache when git enumeration fails', async () => {
     const activeWorktrees = { clear: vi.fn(async () => undefined) };
-    const projectRegistry = { remove: vi.fn(async () => undefined) };
+    const repositoryRegistry = { remove: vi.fn(async () => undefined) };
     const worktreeRoots = { clear: vi.fn(async () => undefined) };
     const worktreeOrders = { clear: vi.fn(async () => undefined) };
     const terminalCascade = { killWorktree: vi.fn(async () => undefined) };
@@ -142,8 +142,8 @@ describe('ProjectRemovalCommand', () => {
     };
     vi.mocked(listWorktrees).mockRejectedValueOnce(new Error('corrupt git dir'));
 
-    const command = new ProjectRemovalCommand(
-      projectRegistry,
+    const command = new RepositoryRemovalCommand(
+      repositoryRegistry,
       activeWorktrees,
       worktreeRoots,
       worktreeOrders,
@@ -152,17 +152,17 @@ describe('ProjectRemovalCommand', () => {
       worktreeListCache,
     );
 
-    await command.run({ projectPath: '/repo/main' });
+    await command.run({ repositoryPath: '/repo/main' });
 
     expect(worktreeListCache.get).toHaveBeenCalledWith('/git/repo');
     expect(terminalCascade.killWorktree).toHaveBeenCalledWith('/repo/main');
     expect(terminalCascade.killWorktree).toHaveBeenCalledWith('/repo/feature');
-    expect(projectRegistry.remove).toHaveBeenCalledWith('/repo/main');
+    expect(repositoryRegistry.remove).toHaveBeenCalledWith('/repo/main');
   });
 
-  it('continues removing the Project when terminal cascade fails', async () => {
+  it('continues removing the Repository when terminal cascade fails', async () => {
     const activeWorktrees = { clear: vi.fn(async () => undefined) };
-    const projectRegistry = { remove: vi.fn(async () => undefined) };
+    const repositoryRegistry = { remove: vi.fn(async () => undefined) };
     const worktreeRoots = { clear: vi.fn(async () => undefined) };
     const worktreeOrders = { clear: vi.fn(async () => undefined) };
     const terminalCascade = {
@@ -170,8 +170,8 @@ describe('ProjectRemovalCommand', () => {
         throw new Error('tmux socket busy');
       }),
     };
-    const command = new ProjectRemovalCommand(
-      projectRegistry,
+    const command = new RepositoryRemovalCommand(
+      repositoryRegistry,
       activeWorktrees,
       worktreeRoots,
       worktreeOrders,
@@ -179,19 +179,19 @@ describe('ProjectRemovalCommand', () => {
       terminalCascade,
     );
 
-    await command.run({ projectPath: '/repo/main' });
+    await command.run({ repositoryPath: '/repo/main' });
 
-    expect(projectRegistry.remove).toHaveBeenCalledWith('/repo/main');
+    expect(repositoryRegistry.remove).toHaveBeenCalledWith('/repo/main');
   });
 
   it('does nothing when confirmation is cancelled', async () => {
     const activeWorktrees = { clear: vi.fn(async () => undefined) };
-    const projectRegistry = { remove: vi.fn(async () => undefined) };
+    const repositoryRegistry = { remove: vi.fn(async () => undefined) };
     const worktreeRoots = { clear: vi.fn(async () => undefined) };
     const worktreeOrders = { clear: vi.fn(async () => undefined) };
     const refresh = vi.fn();
-    const command = new ProjectRemovalCommand(
-      projectRegistry,
+    const command = new RepositoryRemovalCommand(
+      repositoryRegistry,
       activeWorktrees,
       worktreeRoots,
       worktreeOrders,
@@ -200,9 +200,9 @@ describe('ProjectRemovalCommand', () => {
 
     vscodeState.showInformationMessage.mockResolvedValue(undefined);
 
-    await command.run({ projectPath: '/repo/main' });
+    await command.run({ repositoryPath: '/repo/main' });
 
-    expect(projectRegistry.remove).not.toHaveBeenCalled();
+    expect(repositoryRegistry.remove).not.toHaveBeenCalled();
     expect(activeWorktrees.clear).not.toHaveBeenCalled();
     expect(worktreeRoots.clear).not.toHaveBeenCalled();
     expect(worktreeOrders.clear).not.toHaveBeenCalled();

@@ -133,7 +133,7 @@ describe('AddWorktreeCommand', () => {
     pickExistingBranch();
     vi.mocked(vscode.window.createInputBox).mockReturnValue(input as vscode.InputBox);
 
-    await command.run({ projectPath: '/work/myrepo' });
+    await command.run({ repositoryPath: '/work/myrepo' });
 
     expect(refresh).toHaveBeenCalledOnce();
     expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
@@ -151,7 +151,7 @@ describe('AddWorktreeCommand', () => {
     vi.mocked(vscode.window.createInputBox).mockReturnValue(input as vscode.InputBox);
     vi.mocked(vscode.window.showInformationMessage).mockResolvedValue('Switch');
 
-    await command.run({ projectPath: '/work/myrepo' });
+    await command.run({ repositoryPath: '/work/myrepo' });
 
     expect(switcher.switchTo).toHaveBeenCalledWith('/custom/worktrees/feature-foo');
     expect(detachedOpener.open).not.toHaveBeenCalled();
@@ -165,7 +165,7 @@ describe('AddWorktreeCommand', () => {
     vi.mocked(vscode.window.createInputBox).mockReturnValue(input as vscode.InputBox);
     vi.mocked(vscode.window.showInformationMessage).mockResolvedValue('Open in New Window');
 
-    await command.run({ projectPath: '/work/myrepo' });
+    await command.run({ repositoryPath: '/work/myrepo' });
 
     expect(detachedOpener.open).toHaveBeenCalledWith('/custom/worktrees/feature-foo');
     expect(switcher.switchTo).not.toHaveBeenCalled();
@@ -191,7 +191,7 @@ describe('AddWorktreeCommand', () => {
     vi.mocked(vscode.window.createInputBox).mockReturnValue(input as vscode.InputBox);
     vi.mocked(vscode.window.showInformationMessage).mockResolvedValue(undefined);
 
-    await command.run({ projectPath: '/work/myrepo' });
+    await command.run({ repositoryPath: '/work/myrepo' });
 
     expect(switcher.switchTo).not.toHaveBeenCalled();
     expect(detachedOpener.open).not.toHaveBeenCalled();
@@ -211,7 +211,7 @@ describe('AddWorktreeCommand', () => {
         return postCreateAction;
       });
 
-      await command.run({ projectPath: '/work/myrepo' });
+      await command.run({ repositoryPath: '/work/myrepo' });
 
       expect(refresh).toHaveBeenCalledOnce();
     },
@@ -225,7 +225,7 @@ describe('AddWorktreeCommand', () => {
     vi.mocked(vscode.window.createInputBox).mockReturnValue(input as vscode.InputBox);
     vi.mocked(vscode.window.showInformationMessage).mockResolvedValue('Switch');
 
-    await command.run({ projectPath: '/work/myrepo' });
+    await command.run({ repositoryPath: '/work/myrepo' });
 
     expect(listBranches).toHaveBeenCalledWith('/work/myrepo');
     expect(input.prompt).toBe('Worktree path');
@@ -245,7 +245,7 @@ describe('AddWorktreeCommand', () => {
     pickExistingBranch();
     vi.mocked(vscode.window.createInputBox).mockReturnValue(input as vscode.InputBox);
 
-    await command.run({ projectPath: '/work/myrepo' });
+    await command.run({ repositoryPath: '/work/myrepo' });
 
     expect(worktreeListCache.add).toHaveBeenCalledWith('/git/myrepo', {
       path: '/custom/worktrees/feature-foo',
@@ -268,7 +268,7 @@ describe('AddWorktreeCommand', () => {
       { fsPath: '/picked/root' } as vscode.Uri,
     ]);
 
-    await command.run({ projectPath: '/work/myrepo' });
+    await command.run({ repositoryPath: '/work/myrepo' });
 
     expect(input.buttons).toEqual([
       expect.objectContaining({
@@ -299,7 +299,7 @@ describe('AddWorktreeCommand', () => {
     vi.mocked(vscode.window.createInputBox).mockReturnValue(input as vscode.InputBox);
     vi.mocked(vscode.window.showOpenDialog).mockResolvedValue(undefined);
 
-    await command.run({ projectPath: '/work/myrepo' });
+    await command.run({ repositoryPath: '/work/myrepo' });
 
     expect(vscode.window.showOpenDialog).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -321,7 +321,7 @@ describe('AddWorktreeCommand', () => {
     pickExistingBranch();
     vi.mocked(vscode.window.createInputBox).mockReturnValue(input as vscode.InputBox);
 
-    await command.run({ projectPath: '/work/myrepo' });
+    await command.run({ repositoryPath: '/work/myrepo' });
 
     expect(addWorktree).not.toHaveBeenCalled();
     expect(worktreeRoots.set).not.toHaveBeenCalled();
@@ -342,7 +342,7 @@ describe('AddWorktreeCommand', () => {
     vi.mocked(vscode.window.createInputBox).mockReturnValue(input as vscode.InputBox);
     vi.mocked(vscode.window.showInformationMessage).mockResolvedValue('Switch');
 
-    await command.run({ projectPath: '/work/myrepo' });
+    await command.run({ repositoryPath: '/work/myrepo' });
 
     expect(addWorktree).toHaveBeenCalledWith('/work/myrepo', {
       path: '/work/myrepo.worktrees/feature-bar',
@@ -357,7 +357,7 @@ describe('AddWorktreeCommand', () => {
 
     vi.mocked(vscode.window.showQuickPick).mockResolvedValue(undefined);
 
-    await command.run({ projectPath: '/work/myrepo' });
+    await command.run({ repositoryPath: '/work/myrepo' });
 
     expect(addWorktree).not.toHaveBeenCalled();
     expect(switcher.switchTo).not.toHaveBeenCalled();
@@ -371,7 +371,7 @@ describe('AddWorktreeCommand', () => {
     vi.mocked(vscode.window.createInputBox).mockReturnValue(input as vscode.InputBox);
     vi.mocked(addWorktree).mockRejectedValueOnce({ stderr: 'path already exists' });
 
-    await command.run({ projectPath: '/work/myrepo' });
+    await command.run({ repositoryPath: '/work/myrepo' });
 
     expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
       'Cannot create worktree: path already exists',

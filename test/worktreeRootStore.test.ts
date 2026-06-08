@@ -21,7 +21,7 @@ describe('WorktreeRootStore', () => {
     expect(store.get('/git/alpha')).toBe('/worktrees/alpha');
   });
 
-  it('clears one remembered root without touching other projects', async () => {
+  it('clears one remembered root without touching other repositories', async () => {
     const values: Record<string, unknown> = {
       [WORKTREE_ROOTS_KEY]: {
         '/git/alpha': '/worktrees/alpha',

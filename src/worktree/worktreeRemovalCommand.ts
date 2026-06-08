@@ -4,7 +4,7 @@ import {
   CommonDirCacheLike,
   PASS_THROUGH_COMMON_DIR_CACHE,
   resolveCommonDir,
-} from '../project/projectCommonDirCache';
+} from '../repository/repositoryCommonDirCache';
 import {
   deleteBranch,
   getWorktreeStatus,
@@ -14,7 +14,7 @@ import {
 import { canRemoveWorktree } from './worktreeRemoval';
 
 interface WorktreeNodeLike {
-  projectPath: string;
+  repositoryPath: string;
   mainWorktreePath?: string;
   worktree: Worktree;
 }
@@ -59,7 +59,7 @@ export class WorktreeRemovalCommand {
       add: async () => undefined,
       remove: async () => undefined,
     },
-    private readonly projectCommonDirCache: CommonDirCacheLike = PASS_THROUGH_COMMON_DIR_CACHE,
+    private readonly repositoryCommonDirCache: CommonDirCacheLike = PASS_THROUGH_COMMON_DIR_CACHE,
     private readonly terminalCascade: TerminalCascadeLike = {
       killWorktree: async () => undefined,
     },
@@ -114,7 +114,7 @@ export class WorktreeRemovalCommand {
       await this.branchDeletionPreferences.set(deleteLocalBranch);
     }
 
-    const commonDir = await this.resolveCommonDirForRemoval(node.projectPath);
+    const commonDir = await this.resolveCommonDirForRemoval(node.repositoryPath);
     if (commonDir === undefined) return;
 
     if (this.activeWorktrees.get(commonDir) === node.worktree.path) {
@@ -133,9 +133,9 @@ export class WorktreeRemovalCommand {
     );
   }
 
-  private async resolveCommonDirForRemoval(projectPath: string): Promise<string | undefined> {
+  private async resolveCommonDirForRemoval(repositoryPath: string): Promise<string | undefined> {
     try {
-      return await resolveCommonDir(this.projectCommonDirCache, projectPath);
+      return await resolveCommonDir(this.repositoryCommonDirCache, repositoryPath);
     } catch (error) {
       vscode.window.showErrorMessage(`Cannot remove worktree: ${errorMessage(error)}`);
       return undefined;
@@ -151,7 +151,7 @@ export class WorktreeRemovalCommand {
   ): Promise<void> {
     try {
       await bestEffort(() => this.terminalCascade.killWorktree(node.worktree.path));
-      await removeWorktree(node.projectPath, node.worktree.path, { force });
+      await removeWorktree(node.repositoryPath, node.worktree.path, { force });
     } catch (error) {
       this.pendingWorktreeRemovals.delete(node.worktree.path);
       await this.worktreeListCache.add(commonDir, node.worktree);
@@ -162,7 +162,7 @@ export class WorktreeRemovalCommand {
 
     if (deleteLocalBranch && branchName) {
       try {
-        await deleteBranch(node.projectPath, branchName);
+        await deleteBranch(node.repositoryPath, branchName);
       } catch (error) {
         vscode.window.showErrorMessage(`Cannot delete branch: ${errorMessage(error)}`);
       }

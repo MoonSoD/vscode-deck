@@ -24,7 +24,7 @@ describe('ActiveWorktreeStore', () => {
     expect(store.get('/git/alpha')).toBe('/work/alpha-feature');
   });
 
-  it('clears one project active worktree without touching others', async () => {
+  it('clears one repository active worktree without touching others', async () => {
     const values: Record<string, unknown> = {};
     const store = new ActiveWorktreeStore({
       get: <T>(key: string, defaultValue: T) => (values[key] as T | undefined) ?? defaultValue,

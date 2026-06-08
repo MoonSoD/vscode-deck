@@ -141,8 +141,8 @@ state, not the user's whole tmux. Sanctel solved this with `-L sanctel -f
     - WorktreeRemoval → before `git worktree remove`, enumerate sessions
       matching the Worktree's prefix and kill each. Idempotent —
       "session not found" is swallowed.
-    - ProjectRemoval → same prefix-kill for every known Worktree of the
-      Project.
+    - RepositoryRemoval → same prefix-kill for every known Worktree of the
+      Repository.
 
 11. **`deck.conf`** ships at `resources/deck.conf`, three lines plus a
     disarm block:

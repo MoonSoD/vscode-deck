@@ -27,7 +27,7 @@ import { deleteBranch, getCommonDir, getWorktreeStatus, removeWorktree } from '.
 import { WorktreeRemovalCommand } from '../src/worktree/worktreeRemovalCommand';
 
 const node = {
-  projectPath: '/repo/main',
+  repositoryPath: '/repo/main',
   mainWorktreePath: '/repo/main',
   worktree: {
     path: '/repo/feature',

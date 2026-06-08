@@ -51,10 +51,10 @@ It instead:
 - The tree refresh happens **before** the toast is shown, regardless of
   what the user picks. On the Switch branch the refresh is immediately
   overwritten by the window reload — accepted, the symmetry with
-  WorktreeRemovalCommand / ProjectRemovalCommand (both inject a refresh
+  WorktreeRemovalCommand / RepositoryRemovalCommand (both inject a refresh
   hook) is worth more than the duplicated work.
 - Dismiss does **not** mutate `ActiveWorktree[commonDir]`. CONTEXT.md
-  defines ActiveWorktree as "the Worktree last *opened* for a Project";
+  defines ActiveWorktree as "the Worktree last *opened* for a Repository";
   a dismissed toast means never opened. Only the Switch branch writes
   the store, via the existing `switcher.switchTo` path.
 - `AddWorktreeCommand` gains a `DetachedOpener` constructor dependency
@@ -68,7 +68,7 @@ It instead:
 ## Consequences
 
 - Add Worktree is no longer destructive-in-place. Users can rapid-fire
-  create multiple worktrees from one Project node without paying N
+  create multiple worktrees from one Repository node without paying N
   reloads.
 - One extra click on the common-case "create then go there" flow. The
   Enter-default on `Open in New Window` makes the zero-reload version a

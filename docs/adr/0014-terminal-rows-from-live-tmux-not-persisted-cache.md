@@ -90,7 +90,7 @@ state that nothing needs.
 - On a cold window reload, terminal rows appear shortly after the Worktree
   expands rather than from persisted state. No correctness change — VS Code
   restores the *tabs* (ADR-0013) regardless of when the *sidebar rows* paint.
-- `migrateProjects`-style cleanup is unnecessary: an orphaned
+- `migrateRepositories`-style cleanup is unnecessary: an orphaned
   `deck.terminalSessionListCache` key left in `globalState` is inert and
   ignored once nothing reads it.
 

@@ -30,15 +30,15 @@ describe('SessionUriCodec', () => {
   it('round-trips a terminal URI with a worktree path containing spaces and special characters', () => {
     const codec = new SessionUriCodec();
     const encoded = codec.encode({
-      worktreePath: '/Users/me/Project With Spaces+[x]',
+      worktreePath: '/Users/me/Repository With Spaces+[x]',
       term: 12,
     });
 
     expect(codec.decode(encoded)).toEqual({
-      worktreePath: '/Users/me/Project With Spaces+[x]',
+      worktreePath: '/Users/me/Repository With Spaces+[x]',
       term: 12,
-      sessionName: terminalSessionName('/Users/me/Project With Spaces+[x]', 12),
-      cwd: '/Users/me/Project With Spaces+[x]',
+      sessionName: terminalSessionName('/Users/me/Repository With Spaces+[x]', 12),
+      cwd: '/Users/me/Repository With Spaces+[x]',
     });
   });
 

@@ -24,24 +24,24 @@ export type AddWorktreeOptions =
       baseRef: string;
     };
 
-export async function listWorktrees(projectPath: string): Promise<Worktree[]> {
+export async function listWorktrees(repositoryPath: string): Promise<Worktree[]> {
   const { stdout } = await exec('git', ['worktree', 'list', '--porcelain'], {
-    cwd: projectPath,
+    cwd: repositoryPath,
   });
   return parsePorcelain(stdout);
 }
 
-export async function listBranches(projectPath: string): Promise<string[]> {
+export async function listBranches(repositoryPath: string): Promise<string[]> {
   const { stdout } = await exec(
     'git',
     ['for-each-ref', '--format=%(refname:short)', 'refs/heads', 'refs/remotes'],
-    { cwd: projectPath },
+    { cwd: repositoryPath },
   );
   return parseBranchRefs(stdout);
 }
 
 export async function addWorktree(
-  projectPath: string,
+  repositoryPath: string,
   options: AddWorktreeOptions,
 ): Promise<void> {
   let args: string[];
@@ -51,27 +51,27 @@ export async function addWorktree(
     args = ['worktree', 'add', options.path, options.branch];
   }
 
-  await exec('git', args, { cwd: projectPath });
+  await exec('git', args, { cwd: repositoryPath });
 }
 
 export async function removeWorktree(
-  projectPath: string,
+  repositoryPath: string,
   worktreePath: string,
   options: { force?: boolean } = {},
 ): Promise<void> {
   const args = ['worktree', 'remove'];
   if (options.force) args.push('--force');
   args.push(worktreePath);
-  await exec('git', args, { cwd: projectPath });
+  await exec('git', args, { cwd: repositoryPath });
 }
 
 export async function deleteBranch(
-  projectPath: string,
+  repositoryPath: string,
   branchName: string,
   options: { force?: boolean } = {},
 ): Promise<void> {
   await exec('git', ['branch', options.force ? '-D' : '-d', branchName], {
-    cwd: projectPath,
+    cwd: repositoryPath,
   });
 }
 

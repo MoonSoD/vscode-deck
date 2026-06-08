@@ -29,7 +29,7 @@ describe('WorktreeOrderStore', () => {
     expect(store.get('/git/alpha')).toEqual(['/work/alpha-main', '/work/alpha-feature']);
   });
 
-  it('overwrites and clears one Project order without touching others', async () => {
+  it('overwrites and clears one Repository order without touching others', async () => {
     const { store, values } = createStore();
 
     await store.set('/git/alpha', ['/work/alpha-main']);

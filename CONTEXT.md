@@ -9,26 +9,26 @@ are planned.)
 
 ### Repositories & worktrees
 
-**Project**:
+**Repository**:
 A git repository registered with Deck, identified by its git common dir (the directory all its worktrees share).
-_Avoid_: repo, folder
+_Avoid_: project, folder
 
 **Worktree**:
-A `git worktree` entry within a Project, identified by its filesystem path.
+A `git worktree` entry within a Repository, identified by its filesystem path.
 _Avoid_: branch (a Worktree has a branch but is not one)
 
 **Discovery seed**:
-The path recorded when a Project is registered — whichever Worktree was checked out then — used to rediscover the repo, not the Project's identity.
-_Avoid_: project path
+The path recorded when a Repository is registered — whichever Worktree was checked out then — used to rediscover the repo, not the Repository's identity.
+_Avoid_: repository path
 
 ### Selection
 
 **ActiveWorktree**:
-The Worktree a Project currently points at — the one reopened when its Project node is clicked.
+The Worktree a Repository currently points at — the one reopened when its Repository node is clicked.
 _Avoid_: current branch, checked-out worktree
 
-**ActiveProject**:
-The Project whose ActiveWorktree is the mounted workspace folder.
+**ActiveRepository**:
+The Repository whose ActiveWorktree is the mounted workspace folder.
 _Avoid_: current repo
 
 ### Operations
@@ -46,18 +46,18 @@ _Avoid_: new tab, fork
 Removing a Worktree from git, with optional, opt-in deletion of its branch.
 _Avoid_: delete (ambiguous between Worktree and branch)
 
-**ProjectRemoval**:
-Delisting a Project from Deck without touching its git repository or files.
-_Avoid_: delete project, uninstall
+**RepositoryRemoval**:
+Delisting a Repository from Deck without touching its git repository or files.
+_Avoid_: delete repository, uninstall
 
 ### Ordering
 
-**ProjectRegistry**:
-The user-curated set and order of registered Projects.
-_Avoid_: project list, config
+**RepositoryRegistry**:
+The user-curated set and order of registered Repositories.
+_Avoid_: repository list, config
 
 **WorktreeOrder**:
-The user-curated display order of Worktrees within a Project.
+The user-curated display order of Worktrees within a Repository.
 _Avoid_: sort order
 
 ### Terminals
@@ -72,8 +72,8 @@ _Avoid_: tmux session, tmux window, pane
 
 ## Relationships
 
-- A **Project** has many **Worktrees**.
-- A **Project** has one **ActiveWorktree**; the mounted folder has one **ActiveProject** (or none).
+- A **Repository** has many **Worktrees**.
+- A **Repository** has one **ActiveWorktree**; the mounted folder has one **ActiveRepository** (or none).
 - A **Worktree** hosts zero or more **Terminals**.
 - A **Terminal** belongs to exactly one **Worktree** and lives on the one **DeckSocket**.
 - A **Switch** changes which **Worktree** is mounted; a **DetachedOpen** does not.
@@ -83,15 +83,15 @@ _Avoid_: tmux session, tmux window, pane
 > **Dev:** "When I click a different **Worktree**, does it open in a new window?"
 > **Domain expert:** "No — that's a **Switch**: it replaces the mounted folder and reloads. Opening in a new window is a **DetachedOpen**, and that one doesn't change the **ActiveWorktree**."
 >
-> **Dev:** "If I register the same repo from two different worktree paths, is that two **Projects**?"
-> **Domain expert:** "No. A **Project** is its git common dir, so both resolve to one. The path you registered is just a **discovery seed**."
+> **Dev:** "If I register the same repo from two different worktree paths, is that two **Repositories**?"
+> **Domain expert:** "No. A **Repository** is its git common dir, so both resolve to one. The path you registered is just a **discovery seed**."
 >
 > **Dev:** "Do my **Terminals** die when I **Switch** away?"
-> **Domain expert:** "No — they live on the **DeckSocket** and reattach when you return. They die only on Kill, `exit`, or when their **Worktree** or **Project** is removed."
+> **Domain expert:** "No — they live on the **DeckSocket** and reattach when you return. They die only on Kill, `exit`, or when their **Worktree** or **Repository** is removed."
 
 ## Flagged ambiguities
 
 - "delete" conflated removing a **Worktree** with deleting its branch — resolved: **WorktreeRemoval** keeps them separate; branch deletion is opt-in.
-- "active" meant both **ActiveProject** and **ActiveWorktree** — resolved: distinct concepts (the Project vs the specific Worktree).
-- A Project's registered path was treated as its identity — resolved: it is a **discovery seed**; the git common dir is the identity.
+- "active" meant both **ActiveRepository** and **ActiveWorktree** — resolved: distinct concepts (the Repository vs the specific Worktree).
+- A Repository's registered path was treated as its identity — resolved: it is a **discovery seed**; the git common dir is the identity.
 - "tmux session" was used for **Terminal** — resolved: the session is the backing mechanism; **Terminal** is the domain concept.

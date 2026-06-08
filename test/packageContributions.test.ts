@@ -6,8 +6,38 @@ const pkg = JSON.parse(readFileSync(join(process.cwd(), 'package.json'), 'utf8')
 const lock = JSON.parse(readFileSync(join(process.cwd(), 'package-lock.json'), 'utf8'));
 
 describe('package contributions', () => {
+  it('does not retain legacy registry public contracts in package or source', () => {
+    const files = [
+      'package.json',
+      ...[
+        'src/extension.ts',
+        'src/tree/repositoryTree.ts',
+        'src/tree/deckTreeDragAndDropController.ts',
+        'src/repository/repositoryRegistryStore.ts',
+        'src/repository/repositoryCommonDirCache.ts',
+      ],
+    ];
+    const oldTerm = ['pro', 'ject'].join('');
+    const oldTermPlural = `${oldTerm}s`;
+    const legacyContracts = [
+      ['deck', oldTerm].join('.'),
+      ['deck', oldTermPlural].join('.'),
+      `deck.add${capitalize(oldTerm)}`,
+      `deck.remove${capitalize(oldTerm)}`,
+      `deck.${oldTerm}Registry`,
+      `deck.${oldTerm}CommonDirCache`,
+      `application/vnd.code.tree.deck.${oldTermPlural}`,
+    ];
+
+    const text = files.map((file) => readFileSync(join(process.cwd(), file), 'utf8')).join('\n');
+
+    for (const contract of legacyContracts) {
+      expect(text).not.toContain(contract);
+    }
+  });
+
   it('contributes Deck to the secondary sidebar with first-install walkthrough', () => {
-    expect(pkg.activationEvents).toEqual(['onView:deck.projects']);
+    expect(pkg.activationEvents).toEqual(['onView:deck.repositories']);
     expect(pkg.engines.vscode).toBe('^1.106.0');
     expect(pkg.contributes.viewsContainers.activitybar).toBeUndefined();
     expect(pkg.contributes.viewsContainers.secondarySidebar).toEqual([{
@@ -15,6 +45,10 @@ describe('package contributions', () => {
       title: 'Deck',
       icon: '$(folder)',
     }]);
+    expect(pkg.contributes.views.deck).toContainEqual({
+      id: 'deck.repositories',
+      name: 'Repositories & Worktrees',
+    });
     expect(pkg.contributes.keybindings).toContainEqual({
       command: 'workbench.view.extension.deck',
       key: 'ctrl+alt+d',
@@ -40,8 +74,8 @@ describe('package contributions', () => {
     expect(markdown).toContain('command:workbench.action.toggleAuxiliaryBar');
   });
 
-  it('does not expose ProjectRegistry as a user setting', () => {
-    expect(pkg.contributes.configuration?.properties?.['deck.projects']).toBeUndefined();
+  it('does not expose RepositoryRegistry as a user setting', () => {
+    expect(pkg.contributes.configuration?.properties?.['deck.repositories']).toBeUndefined();
   });
 
   it('does not ship node-pty or its postinstall workaround', () => {
@@ -73,7 +107,7 @@ describe('package contributions', () => {
     });
   });
 
-  it('contributes add worktree as a project-only inline tree action', () => {
+  it('contributes add worktree as a repository-only inline tree action', () => {
     expect(pkg.contributes.commands).toContainEqual({
       command: 'deck.addWorktree',
       title: 'Deck: Add Worktree',
@@ -82,7 +116,7 @@ describe('package contributions', () => {
 
     expect(pkg.contributes.menus['view/item/context']).toContainEqual({
       command: 'deck.addWorktree',
-      when: 'view == deck.projects && viewItem == deck.project',
+      when: 'view == deck.repositories && viewItem == deck.repository',
       group: 'inline',
     });
   });
@@ -102,7 +136,7 @@ describe('package contributions', () => {
       ),
     ).toEqual([{
       command: 'deck.removeWorktree',
-      when: 'view == deck.projects && viewItem == deck.worktree',
+      when: 'view == deck.repositories && viewItem == deck.worktree',
       group: 'navigation',
     }]);
   });
@@ -121,7 +155,7 @@ describe('package contributions', () => {
     ).toEqual([{
       command: 'deck.addTerminal',
       when:
-        'view == deck.projects && (viewItem == deck.worktree || viewItem == deck.worktree.active || viewItem == deck.worktree.main) && deck.tmuxAvailable',
+        'view == deck.repositories && (viewItem == deck.worktree || viewItem == deck.worktree.active || viewItem == deck.worktree.main) && deck.tmuxAvailable',
       group: 'inline',
     }]);
     expect(pkg.contributes.menus.commandPalette).toContainEqual({
@@ -130,15 +164,15 @@ describe('package contributions', () => {
     });
   });
 
-  it('contributes remove project only as a Project context action', () => {
+  it('contributes remove repository only as a Repository context action', () => {
     expect(pkg.contributes.commands).toContainEqual({
-      command: 'deck.removeProject',
+      command: 'deck.removeRepository',
       title: 'Deck: Remove from Deck…',
     });
 
     expect(pkg.contributes.menus['view/item/context']).toContainEqual({
-      command: 'deck.removeProject',
-      when: 'view == deck.projects && viewItem == deck.project',
+      command: 'deck.removeRepository',
+      when: 'view == deck.repositories && viewItem == deck.repository',
       group: 'navigation',
     });
   });
@@ -155,7 +189,7 @@ describe('package contributions', () => {
       ),
     ).toEqual([{
       command: 'deck.openWorktreeInNewWindow',
-      when: 'view == deck.projects && (viewItem == deck.worktree || viewItem == deck.worktree.main)',
+      when: 'view == deck.repositories && (viewItem == deck.worktree || viewItem == deck.worktree.main)',
       group: 'navigation',
     }]);
     expect(pkg.contributes.menus.commandPalette).toContainEqual({
@@ -182,7 +216,7 @@ describe('package contributions', () => {
       ),
     ).toEqual([{
       command: 'deck.killTerminal',
-      when: 'view == deck.projects && (viewItem == deck.terminal.active || viewItem == deck.terminal.foreign) && deck.tmuxAvailable',
+      when: 'view == deck.repositories && (viewItem == deck.terminal.active || viewItem == deck.terminal.foreign) && deck.tmuxAvailable',
       group: 'inline',
     }]);
     expect(pkg.contributes.menus.commandPalette).toContainEqual({
@@ -203,7 +237,7 @@ describe('package contributions', () => {
       ),
     ).toEqual([{
       command: 'deck.openTerminalInNewWindow',
-      when: 'view == deck.projects && viewItem == deck.terminal.foreign && deck.tmuxAvailable',
+      when: 'view == deck.repositories && viewItem == deck.terminal.foreign && deck.tmuxAvailable',
       group: 'navigation',
     }]);
     expect(pkg.contributes.menus.commandPalette).toContainEqual({
@@ -212,3 +246,7 @@ describe('package contributions', () => {
     });
   });
 });
+
+function capitalize(value: string): string {
+  return `${value[0].toUpperCase()}${value.slice(1)}`;
+}

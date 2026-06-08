@@ -15,22 +15,22 @@ layout for free per Worktree.
 In practice the reload is more disruptive than ADR-0003 weighed: TS server
 cold re-index, broken debug sessions, dead webview state, and a respawn of
 every other extension's activation events all stack on top of the workbench
-reload itself — and the pain crosses Project boundaries, not just intra-Project
+reload itself — and the pain crosses Repository boundaries, not just intra-Repository
 Worktree swaps.
 
 Alternatives considered:
 
 - **Restore ADR-0002 multi-root mounting.** Rejected (again) — the explorer /
-  search / SCM noise of N mounted Projects is exactly what ADR-0003 walked away
-  from. Index-0 Project still reloads anyway.
+  search / SCM noise of N mounted Repositories is exactly what ADR-0003 walked away
+  from. Index-0 Repository still reloads anyway.
 - **Sentinel folder pinned at index 0 + active Worktree at index 1.** Would
   eliminate reloads entirely. Rejected — forces Deck to re-implement the
   TabSnapshot feature ADR-0003 retired (all Worktrees would share one workspace
   identity, losing VS Code's free per-folder restore). Too much work for the
   payoff.
-- **Hybrid intra-Project-free, cross-Project-reload.** Rejected — the user's
-  pain is cross-Project too, so this fixes only half the problem while still
-  paying the TabSnapshot rebuild cost within a Project.
+- **Hybrid intra-Repository-free, cross-Repository-reload.** Rejected — the user's
+  pain is cross-Repository too, so this fixes only half the problem while still
+  paying the TabSnapshot rebuild cost within a Repository.
 - **Make `vscode.openFolder` default to a new window.** Rejected — every click
   on the tree would spawn a window, accumulating noise fast. The default click
   should stay destructive-in-place (the user's mental model from ADR-0003).
@@ -65,7 +65,7 @@ another Worktree, at the cost of accumulating windows.
   window reactivating concurrently steals the intent) is accepted as
   vanishingly rare.
 - No pre-check that the Worktree path still exists on disk. Matches
-  SwitchOperation and AddProject — fix all three together if validation
+  SwitchOperation and AddRepository — fix all three together if validation
   ever becomes worth the cost.
 
 ## Consequences

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const vscodeState = vi.hoisted(() => ({
-  projects: ['/repo/a', '/repo/b', '/repo/c', '/repo/d'],
+  repositories: ['/repo/a', '/repo/b', '/repo/c', '/repo/d'],
   listWorktrees: vi.fn(),
   getCommonDirSafe: vi.fn(),
 }));
@@ -18,7 +18,7 @@ vi.mock('../src/git/worktrees', () => ({
 }));
 
 import * as vscode from 'vscode';
-import { ProjectRegistryStore } from '../src/project/projectRegistryStore';
+import { RepositoryRegistryStore } from '../src/repository/repositoryRegistryStore';
 import { DeckTreeDragAndDropController } from '../src/tree/deckTreeDragAndDropController';
 import { WorktreeOrderStore } from '../src/worktree/worktreeOrderStore';
 
@@ -34,32 +34,32 @@ class DataTransferMock {
   }
 }
 
-function project(projectPath: string) {
-  return { contextValue: 'deck.project', projectPath };
+function repository(repositoryPath: string) {
+  return { contextValue: 'deck.repository', repositoryPath };
 }
 
-function worktree(projectPath: string, worktreePath: string) {
+function worktree(repositoryPath: string, worktreePath: string) {
   return {
     contextValue: 'deck.worktree',
-    projectPath,
+    repositoryPath,
     worktree: { path: worktreePath },
   };
 }
 
 function createController(refresh = vi.fn()) {
-  const projectRegistry = {
-    list: vi.fn(() => vscodeState.projects),
-    replace: vi.fn(async (projects: readonly string[]) => {
-      vscodeState.projects = [...projects];
+  const repositoryRegistry = {
+    list: vi.fn(() => vscodeState.repositories),
+    replace: vi.fn(async (repositories: readonly string[]) => {
+      vscodeState.repositories = [...repositories];
     }),
-  } as unknown as ProjectRegistryStore;
+  } as unknown as RepositoryRegistryStore;
   const worktreeOrders = {
     get: vi.fn(),
     set: vi.fn(async () => undefined),
   } as unknown as WorktreeOrderStore;
   return {
-    controller: new DeckTreeDragAndDropController(refresh, projectRegistry, worktreeOrders),
-    projectRegistry,
+    controller: new DeckTreeDragAndDropController(refresh, repositoryRegistry, worktreeOrders),
+    repositoryRegistry,
     refresh,
     worktreeOrders,
   };
@@ -68,7 +68,7 @@ function createController(refresh = vi.fn()) {
 describe('DeckTreeDragAndDropController', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vscodeState.projects = ['/repo/a', '/repo/b', '/repo/c', '/repo/d'];
+    vscodeState.repositories = ['/repo/a', '/repo/b', '/repo/c', '/repo/d'];
     vscodeState.getCommonDirSafe.mockResolvedValue('/git/a');
     vscodeState.listWorktrees.mockResolvedValue([
       {
@@ -95,57 +95,57 @@ describe('DeckTreeDragAndDropController', () => {
     ]);
   });
 
-  it('reorders Projects in ProjectRegistryStore and refreshes the tree', async () => {
-    const { controller, projectRegistry, refresh } = createController();
+  it('reorders Repositories in RepositoryRegistryStore and refreshes the tree', async () => {
+    const { controller, repositoryRegistry, refresh } = createController();
     const dataTransfer = new DataTransferMock();
 
-    controller.handleDrag?.([project('/repo/b')], dataTransfer as vscode.DataTransfer, {} as never);
-    await controller.handleDrop?.(project('/repo/d'), dataTransfer as vscode.DataTransfer, {} as never);
+    controller.handleDrag?.([repository('/repo/b')], dataTransfer as vscode.DataTransfer, {} as never);
+    await controller.handleDrop?.(repository('/repo/d'), dataTransfer as vscode.DataTransfer, {} as never);
 
-    expect(projectRegistry.replace).toHaveBeenCalledWith(
+    expect(repositoryRegistry.replace).toHaveBeenCalledWith(
       ['/repo/a', '/repo/c', '/repo/d', '/repo/b'],
     );
     expect(refresh).toHaveBeenCalledOnce();
   });
 
-  it('moves Projects upward above the target', async () => {
-    const { controller, projectRegistry, refresh } = createController();
+  it('moves Repositories upward above the target', async () => {
+    const { controller, repositoryRegistry, refresh } = createController();
     const dataTransfer = new DataTransferMock();
 
-    controller.handleDrag?.([project('/repo/d')], dataTransfer as vscode.DataTransfer, {} as never);
-    await controller.handleDrop?.(project('/repo/b'), dataTransfer as vscode.DataTransfer, {} as never);
+    controller.handleDrag?.([repository('/repo/d')], dataTransfer as vscode.DataTransfer, {} as never);
+    await controller.handleDrop?.(repository('/repo/b'), dataTransfer as vscode.DataTransfer, {} as never);
 
-    expect(projectRegistry.replace).toHaveBeenCalledWith(
+    expect(repositoryRegistry.replace).toHaveBeenCalledWith(
       ['/repo/a', '/repo/d', '/repo/b', '/repo/c'],
     );
     expect(refresh).toHaveBeenCalledOnce();
   });
 
-  it('moves Projects to the bottom when dropped on the empty root area', async () => {
-    const { controller, projectRegistry, refresh } = createController();
+  it('moves Repositories to the bottom when dropped on the empty root area', async () => {
+    const { controller, repositoryRegistry, refresh } = createController();
     const dataTransfer = new DataTransferMock();
 
-    controller.handleDrag?.([project('/repo/b')], dataTransfer as vscode.DataTransfer, {} as never);
+    controller.handleDrag?.([repository('/repo/b')], dataTransfer as vscode.DataTransfer, {} as never);
     await controller.handleDrop?.(undefined, dataTransfer as vscode.DataTransfer, {} as never);
 
-    expect(projectRegistry.replace).toHaveBeenCalledWith(
+    expect(repositoryRegistry.replace).toHaveBeenCalledWith(
       ['/repo/a', '/repo/c', '/repo/d', '/repo/b'],
     );
     expect(refresh).toHaveBeenCalledOnce();
   });
 
-  it('ignores Project drops onto Worktree rows', async () => {
+  it('ignores Repository drops onto Worktree rows', async () => {
     const { controller, refresh } = createController();
     const dataTransfer = new DataTransferMock();
 
-    controller.handleDrag?.([project('/repo/b')], dataTransfer as vscode.DataTransfer, {} as never);
+    controller.handleDrag?.([repository('/repo/b')], dataTransfer as vscode.DataTransfer, {} as never);
     await controller.handleDrop?.(
       worktree('/repo/a', '/repo/a-feature'),
       dataTransfer as vscode.DataTransfer,
       {} as never,
     );
 
-    expect(vscodeState.projects).toEqual(['/repo/a', '/repo/b', '/repo/c', '/repo/d']);
+    expect(vscodeState.repositories).toEqual(['/repo/a', '/repo/b', '/repo/c', '/repo/d']);
     expect(refresh).not.toHaveBeenCalled();
   });
 
@@ -196,7 +196,7 @@ describe('DeckTreeDragAndDropController', () => {
     expect(refresh).toHaveBeenCalledOnce();
   });
 
-  it('ignores Worktree drops onto Project rows', async () => {
+  it('ignores Worktree drops onto Repository rows', async () => {
     const { controller, refresh, worktreeOrders } = createController();
     const dataTransfer = new DataTransferMock();
 
@@ -205,14 +205,14 @@ describe('DeckTreeDragAndDropController', () => {
       dataTransfer as vscode.DataTransfer,
       {} as never,
     );
-    await controller.handleDrop?.(project('/repo/b'), dataTransfer as vscode.DataTransfer, {} as never);
+    await controller.handleDrop?.(repository('/repo/b'), dataTransfer as vscode.DataTransfer, {} as never);
 
-    expect(vscodeState.projects).toEqual(['/repo/a', '/repo/b', '/repo/c', '/repo/d']);
+    expect(vscodeState.repositories).toEqual(['/repo/a', '/repo/b', '/repo/c', '/repo/d']);
     expect(worktreeOrders.set).not.toHaveBeenCalled();
     expect(refresh).not.toHaveBeenCalled();
   });
 
-  it('ignores Worktree drops onto another Project worktree', async () => {
+  it('ignores Worktree drops onto another Repository worktree', async () => {
     const { controller, refresh, worktreeOrders } = createController();
     const dataTransfer = new DataTransferMock();
 

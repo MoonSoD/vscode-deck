@@ -1,8 +1,8 @@
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { getCommonDir, listWorktrees, Worktree } from '../git/worktrees';
-import { ProjectCommonDirCache, resolveCommonDirSafe } from '../project/projectCommonDirCache';
-import { ProjectRegistryStore } from '../project/projectRegistryStore';
+import { RepositoryCommonDirCache, resolveCommonDirSafe } from '../repository/repositoryCommonDirCache';
+import { RepositoryRegistryStore } from '../repository/repositoryRegistryStore';
 import { ActiveWorktreeStore } from '../switch/activeWorktreeStore';
 import { WorktreeListCacheStore } from '../worktree/worktreeListCacheStore';
 import { WorktreeOrderStore } from '../worktree/worktreeOrderStore';
@@ -15,14 +15,14 @@ import {
 import { excludePending } from './excludePending';
 import { reconcileWorktreeOrder } from './reconcileWorktreeOrder';
 import {
-  describeProjectTreeItem,
+  describeRepositoryTreeItem,
   describeTmuxUnavailableTreeItem,
   describeTerminalAddTreeItem,
   describeTerminalTreeItem,
   describeWorktreeTreeItem,
 } from './worktreeTreeItem';
 
-type Node = ProjectNode | WorktreeNode | TerminalNode | TerminalAddNode | TmuxUnavailableNode;
+type Node = RepositoryNode | WorktreeNode | TerminalNode | TerminalAddNode | TmuxUnavailableNode;
 
 interface TerminalSessionLister {
   listSessions(prefix?: string): Promise<TmuxSession[]>;
@@ -31,21 +31,21 @@ interface TerminalSessionLister {
 // Stable TreeItem.id values let VS Code persist expand/collapse + selection
 // across reloads (it stores state per id under workbench.tree.<viewId>).
 
-class ProjectNode extends vscode.TreeItem {
-  constructor(public readonly projectPath: string, isActiveProject: boolean) {
-    const item = describeProjectTreeItem(projectPath, isActiveProject);
+class RepositoryNode extends vscode.TreeItem {
+  constructor(public readonly repositoryPath: string, isActiveRepository: boolean) {
+    const item = describeRepositoryTreeItem(repositoryPath, isActiveRepository);
     super(item.label, vscode.TreeItemCollapsibleState.Expanded);
-    this.id = `project::${projectPath}`;
-    this.contextValue = 'deck.project';
+    this.id = `repository::${repositoryPath}`;
+    this.contextValue = 'deck.repository';
     this.description = item.description;
-    this.tooltip = projectPath;
+    this.tooltip = repositoryPath;
     this.iconPath = new vscode.ThemeIcon(item.iconId);
   }
 }
 
 class WorktreeNode extends vscode.TreeItem {
   constructor(
-    public readonly projectPath: string,
+    public readonly repositoryPath: string,
     public readonly worktree: Worktree,
     activeWorktreePath: string | undefined,
     public readonly mainWorktreePath: string | undefined,
@@ -109,26 +109,26 @@ class TmuxUnavailableNode extends vscode.TreeItem {
   }
 }
 
-export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
+export class RepositoryTreeProvider implements vscode.TreeDataProvider<Node> {
   private readonly _onDidChangeTreeData = new vscode.EventEmitter<Node | undefined>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
-  private activeProjectCommonDir: string | null = null;
-  private resolvingActiveProject = false;
-  private readonly projectCommonDirs = new Map<string, string | null>();
-  private readonly resolvingProjectPaths = new Set<string>();
+  private activeRepositoryCommonDir: string | null = null;
+  private resolvingActiveRepository = false;
+  private readonly repositoryCommonDirs = new Map<string, string | null>();
+  private readonly resolvingRepositoryPaths = new Set<string>();
   private readonly refreshingWorktrees = new Set<string>();
   private readonly tmux: TerminalSessionLister;
   private readonly tmuxAvailable: boolean;
 
   constructor(
-    private readonly projectRegistry: Pick<ProjectRegistryStore, 'list'>,
+    private readonly repositoryRegistry: Pick<RepositoryRegistryStore, 'list'>,
     private readonly activeWorktrees: ActiveWorktreeStore,
     private readonly worktreeOrders: WorktreeOrderStore,
     private readonly worktreeListCache: Pick<WorktreeListCacheStore, 'get' | 'set'> = {
       get: () => undefined,
       set: async () => undefined,
     },
-    private readonly projectCommonDirCache: Pick<ProjectCommonDirCache, 'get' | 'set'> = {
+    private readonly repositoryCommonDirCache: Pick<RepositoryCommonDirCache, 'get' | 'set'> = {
       get: () => undefined,
       set: async () => undefined,
     },
@@ -147,7 +147,7 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
   }
 
   refresh(): void {
-    this.resolveActiveProject();
+    this.resolveActiveRepository();
     this._onDidChangeTreeData.fire(undefined);
   }
 
@@ -156,7 +156,7 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
   }
 
   getParent(_element: Node): Node | undefined {
-    // ProjectNodes are roots; WorktreeNodes aren't revealed programmatically
+    // RepositoryNodes are roots; WorktreeNodes aren't revealed programmatically
     // today, so undefined is correct for both. TreeView.reveal requires this
     // method to exist on the provider.
     return undefined;
@@ -165,21 +165,21 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
   getChildren(element?: Node): vscode.ProviderResult<Node[]> {
     if (!element) {
       // Sync return: any `await` here would yield to the event loop and let
-      // viewsWelcome ("No projects yet") flash on every tree.refresh().
-      const projects = this.projectRegistry.list();
-      this.resolveActiveProject();
-      return projects.map((p) => {
-        this.resolveProjectCommonDir(p);
-        const projectCommonDir = this.projectCommonDirs.get(p);
-        return new ProjectNode(
+      // viewsWelcome ("No repositories yet") flash on every tree.refresh().
+      const repositories = this.repositoryRegistry.list();
+      this.resolveActiveRepository();
+      return repositories.map((p) => {
+        this.resolveRepositoryCommonDir(p);
+        const repositoryCommonDir = this.repositoryCommonDirs.get(p);
+        return new RepositoryNode(
           p,
-          projectCommonDir !== undefined &&
-            projectCommonDir !== null &&
-            projectCommonDir === this.activeProjectCommonDir,
+          repositoryCommonDir !== undefined &&
+            repositoryCommonDir !== null &&
+            repositoryCommonDir === this.activeRepositoryCommonDir,
         );
       });
     }
-    if (element instanceof ProjectNode) {
+    if (element instanceof RepositoryNode) {
       return this.getWorktreeChildren(element);
     }
     if (element instanceof WorktreeNode) {
@@ -189,20 +189,20 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
     return [];
   }
 
-  private getWorktreeChildren(element: ProjectNode): Node[] | Promise<Node[]> {
+  private getWorktreeChildren(element: RepositoryNode): Node[] | Promise<Node[]> {
     const activeWorktreePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
     const commonDir =
-      this.projectCommonDirCache.get(element.projectPath) ??
-      this.projectCommonDirs.get(element.projectPath) ??
+      this.repositoryCommonDirCache.get(element.repositoryPath) ??
+      this.repositoryCommonDirs.get(element.repositoryPath) ??
       undefined;
 
     if (commonDir !== undefined) {
       const cached = this.worktreeListCache.get(commonDir);
       if (cached !== undefined) {
         const visibleCached = this.visibleWorktrees(cached);
-        this.refreshWorktreesInBackground(element.projectPath, commonDir, visibleCached);
+        this.refreshWorktreesInBackground(element.repositoryPath, commonDir, visibleCached);
         return this.toWorktreeNodes(
-          element.projectPath,
+          element.repositoryPath,
           visibleCached,
           commonDir,
           activeWorktreePath,
@@ -210,82 +210,82 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
       }
     }
 
-    return this.loadWorktreeChildren(element.projectPath, commonDir, activeWorktreePath);
+    return this.loadWorktreeChildren(element.repositoryPath, commonDir, activeWorktreePath);
   }
 
-  private resolveActiveProject(): void {
+  private resolveActiveRepository(): void {
     const folder = vscode.workspace.workspaceFolders?.[0];
     if (!folder) {
-      this.setActiveProjectCommonDir(null);
+      this.setActiveRepositoryCommonDir(null);
       return;
     }
 
-    const cached = this.projectCommonDirCache.get(folder.uri.fsPath);
-    if (cached !== undefined) this.setActiveProjectCommonDir(cached, false);
-    if (this.resolvingActiveProject) return;
+    const cached = this.repositoryCommonDirCache.get(folder.uri.fsPath);
+    if (cached !== undefined) this.setActiveRepositoryCommonDir(cached, false);
+    if (this.resolvingActiveRepository) return;
 
-    this.resolvingActiveProject = true;
-    void resolveCommonDirSafe(this.projectCommonDirCache, folder.uri.fsPath)
+    this.resolvingActiveRepository = true;
+    void resolveCommonDirSafe(this.repositoryCommonDirCache, folder.uri.fsPath)
       .then((commonDir) => {
-        this.setActiveProjectCommonDir(commonDir);
+        this.setActiveRepositoryCommonDir(commonDir);
       })
       .finally(() => {
-        this.resolvingActiveProject = false;
+        this.resolvingActiveRepository = false;
       });
   }
 
-  private resolveProjectCommonDir(projectPath: string): void {
-    const cached = this.projectCommonDirCache.get(projectPath);
+  private resolveRepositoryCommonDir(repositoryPath: string): void {
+    const cached = this.repositoryCommonDirCache.get(repositoryPath);
     if (cached !== undefined) {
-      this.projectCommonDirs.set(projectPath, cached);
-      this.refreshProjectCommonDirInBackground(projectPath, cached);
+      this.repositoryCommonDirs.set(repositoryPath, cached);
+      this.refreshRepositoryCommonDirInBackground(repositoryPath, cached);
       return;
     }
-    if (this.projectCommonDirs.has(projectPath) || this.resolvingProjectPaths.has(projectPath)) return;
+    if (this.repositoryCommonDirs.has(repositoryPath) || this.resolvingRepositoryPaths.has(repositoryPath)) return;
 
-    this.refreshProjectCommonDirInBackground(projectPath, undefined);
+    this.refreshRepositoryCommonDirInBackground(repositoryPath, undefined);
   }
 
-  private refreshProjectCommonDirInBackground(projectPath: string, previous: string | undefined): void {
-    if (this.resolvingProjectPaths.has(projectPath)) return;
-    this.resolvingProjectPaths.add(projectPath);
-    void getCommonDir(projectPath)
+  private refreshRepositoryCommonDirInBackground(repositoryPath: string, previous: string | undefined): void {
+    if (this.resolvingRepositoryPaths.has(repositoryPath)) return;
+    this.resolvingRepositoryPaths.add(repositoryPath);
+    void getCommonDir(repositoryPath)
       .then(async (commonDir) => {
-        await this.projectCommonDirCache.set(projectPath, commonDir);
-        this.projectCommonDirs.set(projectPath, commonDir);
+        await this.repositoryCommonDirCache.set(repositoryPath, commonDir);
+        this.repositoryCommonDirs.set(repositoryPath, commonDir);
         if (previous !== commonDir) this._onDidChangeTreeData.fire(undefined);
       })
       .catch(() => {
         if (previous === undefined) {
-          this.projectCommonDirs.set(projectPath, null);
+          this.repositoryCommonDirs.set(repositoryPath, null);
           this._onDidChangeTreeData.fire(undefined);
         }
       })
       .finally(() => {
-        this.resolvingProjectPaths.delete(projectPath);
+        this.resolvingRepositoryPaths.delete(repositoryPath);
       });
   }
 
-  private setActiveProjectCommonDir(commonDir: string | null, fire = true): void {
-    if (this.activeProjectCommonDir === commonDir) return;
-    this.activeProjectCommonDir = commonDir;
+  private setActiveRepositoryCommonDir(commonDir: string | null, fire = true): void {
+    if (this.activeRepositoryCommonDir === commonDir) return;
+    this.activeRepositoryCommonDir = commonDir;
     if (fire) this._onDidChangeTreeData.fire(undefined);
   }
 
   private async loadWorktreeChildren(
-    projectPath: string,
+    repositoryPath: string,
     knownCommonDir: string | undefined,
     activeWorktreePath: string | undefined,
   ): Promise<Node[]> {
     const pendingAtListStart = new Set(this.pendingWorktreeRemovals);
-    const gitWorktrees = await listWorktrees(projectPath);
+    const gitWorktrees = await listWorktrees(repositoryPath);
     const visibleWorktrees = this.visibleWorktrees(gitWorktrees, pendingAtListStart);
     const commonDir =
       knownCommonDir ??
-      (await resolveCommonDirSafe(this.projectCommonDirCache, projectPath)) ??
+      (await resolveCommonDirSafe(this.repositoryCommonDirCache, repositoryPath)) ??
       undefined;
     if (commonDir !== undefined) await this.worktreeListCache.set(commonDir, visibleWorktrees);
-    return this.toWorktreeNodes(projectPath, visibleWorktrees, commonDir, activeWorktreePath);
+    return this.toWorktreeNodes(repositoryPath, visibleWorktrees, commonDir, activeWorktreePath);
   }
 
   private async getTerminalChildren(element: WorktreeNode): Promise<Node[]> {
@@ -310,14 +310,14 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
   }
 
   private refreshWorktreesInBackground(
-    projectPath: string,
+    repositoryPath: string,
     commonDir: string,
     previous: readonly Worktree[],
   ): void {
     if (this.refreshingWorktrees.has(commonDir)) return;
     this.refreshingWorktrees.add(commonDir);
     const pendingAtListStart = new Set(this.pendingWorktreeRemovals);
-    void listWorktrees(projectPath)
+    void listWorktrees(repositoryPath)
       .then(async (worktrees) => {
         const visibleWorktrees = this.visibleWorktrees(worktrees, pendingAtListStart);
         if (sameWorktrees(previous, visibleWorktrees)) return;
@@ -331,7 +331,7 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
   }
 
   private toWorktreeNodes(
-    projectPath: string,
+    repositoryPath: string,
     gitWorktrees: readonly Worktree[],
     commonDir: string | undefined,
     activeWorktreePath: string | undefined,
@@ -343,7 +343,7 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
       ),
     );
     const mainWorktreePath = gitWorktrees.find((w) => !w.bare)?.path;
-    return worktrees.map((w) => new WorktreeNode(projectPath, w, activeWorktreePath, mainWorktreePath));
+    return worktrees.map((w) => new WorktreeNode(repositoryPath, w, activeWorktreePath, mainWorktreePath));
   }
 
   private visibleWorktrees(

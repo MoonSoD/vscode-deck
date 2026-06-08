@@ -1,14 +1,13 @@
 import { join } from 'node:path';
 import * as vscode from 'vscode';
-import { ProjectTreeProvider } from './tree/projectTree';
+import { RepositoryTreeProvider } from './tree/repositoryTree';
 import { ActiveWorktreeStore } from './switch/activeWorktreeStore';
 import { DetachedOpener } from './switch/detachedOpener';
 import { WorktreeSwitcher } from './switch/worktreeSwitcher';
-import { AddProjectCommand, VsCodeProjectFolderPicker } from './project/addProjectCommand';
-import { ProjectRemovalCommand } from './project/projectRemovalCommand';
-import { ProjectCommonDirCache } from './project/projectCommonDirCache';
-import { ProjectRegistryStore } from './project/projectRegistryStore';
-import { projectsMigration } from './project/projectsMigration';
+import { AddRepositoryCommand, VsCodeRepositoryFolderPicker } from './repository/addRepositoryCommand';
+import { RepositoryRemovalCommand } from './repository/repositoryRemovalCommand';
+import { RepositoryCommonDirCache } from './repository/repositoryCommonDirCache';
+import { RepositoryRegistryStore } from './repository/repositoryRegistryStore';
 import { AddWorktreeCommand } from './worktree/addWorktreeCommand';
 import { BranchDeletionPreferenceStore } from './worktree/branchDeletionPreferenceStore';
 import { WorktreeListCacheStore } from './worktree/worktreeListCacheStore';
@@ -34,8 +33,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const tmuxConfigPath = join(context.extensionPath, 'resources', 'deck.conf');
   const tmux = new TmuxCli(tmuxConfigPath);
 
-  const projectRegistry = new ProjectRegistryStore(context.globalState);
-  await migrateProjects(projectRegistry);
+  const repositoryRegistry = new RepositoryRegistryStore(context.globalState);
 
   const activeWorktrees = new ActiveWorktreeStore(context.globalState);
   const worktreeRoots = new WorktreeRootStore(context.globalState);
@@ -43,16 +41,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const worktreeListCache = new WorktreeListCacheStore(context.globalState);
   const pendingTerminalOpens = new PendingTerminalOpenStore(context.globalState);
   const pendingWorktreeRemovals = new Set<string>();
-  const projectCommonDirCache = new ProjectCommonDirCache(context.globalState);
+  const repositoryCommonDirCache = new RepositoryCommonDirCache(context.globalState);
   const branchDeletionPreferences = new BranchDeletionPreferenceStore(context.globalState);
   const switcher = new WorktreeSwitcher(activeWorktrees);
   const detachedOpener = new DetachedOpener();
-  const tree = new ProjectTreeProvider(
-    projectRegistry,
+  const tree = new RepositoryTreeProvider(
+    repositoryRegistry,
     activeWorktrees,
     worktreeOrders,
     worktreeListCache,
-    projectCommonDirCache,
+    repositoryCommonDirCache,
     tmux,
     tmuxAvailability.available,
     pendingWorktreeRemovals,
@@ -93,11 +91,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     () => tree.refresh(),
     worktreeRoots,
     worktreeListCache,
-    projectCommonDirCache,
+    repositoryCommonDirCache,
   );
   const dragAndDropController = new DeckTreeDragAndDropController(
     () => tree.refresh(),
-    projectRegistry,
+    repositoryRegistry,
     worktreeOrders,
   );
   const removeWorktree = new WorktreeRemovalCommand(
@@ -105,12 +103,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     () => tree.refresh(),
     branchDeletionPreferences,
     worktreeListCache,
-    projectCommonDirCache,
+    repositoryCommonDirCache,
     terminalCascade,
     pendingWorktreeRemovals,
   );
-  const removeProject = new ProjectRemovalCommand(
-    projectRegistry,
+  const removeRepository = new RepositoryRemovalCommand(
+    repositoryRegistry,
     activeWorktrees,
     worktreeRoots,
     worktreeOrders,
@@ -119,33 +117,33 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     worktreeListCache,
   );
 
-  const treeView = vscode.window.createTreeView('deck.projects', {
+  const treeView = vscode.window.createTreeView('deck.repositories', {
     treeDataProvider: tree,
     dragAndDropController,
     canSelectMany: false,
   });
-  const addProject = new AddProjectCommand(
-    new VsCodeProjectFolderPicker(),
-    projectRegistry,
+  const addRepository = new AddRepositoryCommand(
+    new VsCodeRepositoryFolderPicker(),
+    repositoryRegistry,
     activeWorktrees,
     switcher,
     detachedOpener,
     () => tree.refresh(),
-    async (projectPath) => {
+    async (repositoryPath) => {
       const roots = tree.getChildren();
       if (!Array.isArray(roots)) return;
-      const project = roots.find((node) => 'projectPath' in node && node.projectPath === projectPath);
-      if (!project) return;
+      const repository = roots.find((node) => 'repositoryPath' in node && node.repositoryPath === repositoryPath);
+      if (!repository) return;
       try {
-        await treeView.reveal(project, { expand: true, select: true });
+        await treeView.reveal(repository, { expand: true, select: true });
       } catch (error) {
         // Reveal can fail if VS Code's internal element map is out of sync
-        // with the freshly-constructed ProjectNode; the project is still in
+        // with the freshly-constructed RepositoryNode; the repository is still in
         // the tree, just not scrolled into view.
         console.warn('Deck: TreeView.reveal failed', error);
       }
     },
-    projectCommonDirCache,
+    repositoryCommonDirCache,
   );
 
   context.subscriptions.push(
@@ -160,7 +158,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand('deck.refresh', () => {
       tree.refresh();
     }),
-    vscode.commands.registerCommand('deck.addProject', () => addProject.run()),
+    vscode.commands.registerCommand('deck.addRepository', () => addRepository.run()),
     vscode.commands.registerCommand('deck.addWorktree', (node) => addWorktree.run(node)),
     vscode.commands.registerCommand('deck.addTerminal', (node) => addTerminal.run(node)),
     vscode.commands.registerCommand('deck.openTerminal', (node) => openTerminal.run(node)),
@@ -169,7 +167,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     ),
     vscode.commands.registerCommand('deck.killTerminal', (node) => closeTerminal.run(node)),
     vscode.commands.registerCommand('deck.terminal.find', () => terminalEditorProvider.showFind()),
-    vscode.commands.registerCommand('deck.removeProject', (node) => removeProject.run(node)),
+    vscode.commands.registerCommand('deck.removeRepository', (node) => removeRepository.run(node)),
     vscode.commands.registerCommand('deck.removeWorktree', (node) => removeWorktree.run(node)),
     vscode.commands.registerCommand('deck.openWorktreeInNewWindow', (node: { worktree: { path: string } }) =>
       detachedOpener.open(node.worktree.path),
@@ -189,17 +187,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 }
 
 export function deactivate(): void {}
-
-async function migrateProjects(projectRegistry: ProjectRegistryStore): Promise<void> {
-  const cfg = vscode.workspace.getConfiguration('deck');
-  const settingsProjects = cfg.get<string[]>('projects', []);
-  const migration = projectsMigration(settingsProjects, projectRegistry.list());
-
-  await projectRegistry.replace(migration.merged);
-  if (migration.clearSettings) {
-    await cfg.update('projects', undefined, vscode.ConfigurationTarget.Global);
-  }
-}
 
 interface PendingTerminalOpenConsumer {
   consume(worktreePath: string): Promise<string | undefined>;

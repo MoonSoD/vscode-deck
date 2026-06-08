@@ -1,7 +1,7 @@
 # Deck
 
 A VS Code extension that hosts a unified
-**Projects & Worktrees** tree in the secondary sidebar, switches worktrees in
+**Repositories & Worktrees** tree in the secondary sidebar, switches worktrees in
 one window without reload, and restores per-worktree tab snapshots.\
 
 ## Quick start
@@ -13,7 +13,7 @@ npm run build
 # Then press F5 in VS Code (uses .vscode/launch.json) to launch a dev host.
 ```
 
-In the dev host: open **Deck** from the secondary sidebar -> "Add Project" ->
+In the dev host: open **Deck** from the secondary sidebar -> "Add Repository" ->
 pick a folder with git worktrees -> click a worktree to switch.
 
 ## Docs
