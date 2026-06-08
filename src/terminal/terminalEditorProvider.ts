@@ -458,15 +458,14 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
         document.documentElement,
         { attributes: true, attributeFilter: ['class', 'data-vscode-theme-kind', 'data-vscode-theme-name'] },
       );
-      // On reattach the seed + tmux cursor-restore arrive as one burst and xterm
-      // can leave the cursor painted on a stale cell until a redraw is forced
-      // (what a manual resize/keypress does). Repaint once the burst settles,
-      // until the first user keystroke makes rendering live.
+      // xterm's write() is asynchronous; on reattach the seed + tmux
+      // cursor-restore arrive as a burst and the cursor can stay painted on a
+      // stale cell until a redraw is forced (what a manual resize/keypress does).
+      // Repaint in write()'s completion callback — the documented hook for
+      // "data processed" — until the first keystroke makes rendering live.
       let needsStartupRepaint = true;
-      let startupRepaintTimer;
       terminal.onData((payload) => {
         needsStartupRepaint = false;
-        clearTimeout(startupRepaintTimer);
         vscode.postMessage({ type: 'input', payload });
       });
 
@@ -590,10 +589,10 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
       window.addEventListener('message', async (event) => {
         const message = event.data;
         if (message.type === 'data') {
-          terminal.write(message.payload);
           if (needsStartupRepaint) {
-            clearTimeout(startupRepaintTimer);
-            startupRepaintTimer = setTimeout(() => terminal.refresh(0, terminal.rows - 1), 80);
+            terminal.write(message.payload, () => terminal.refresh(0, terminal.rows - 1));
+          } else {
+            terminal.write(message.payload);
           }
         }
         if (message.type === 'config') {
