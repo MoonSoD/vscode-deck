@@ -220,7 +220,7 @@ describe('WorktreeRemovalCommand', () => {
     }
   });
 
-  it('runs the background removal under a window progress indicator', async () => {
+  it('runs the background removal under a notification progress indicator', async () => {
     const command = new WorktreeRemovalCommand(
       { get: vi.fn(() => undefined), clear: vi.fn(async () => undefined) },
       vi.fn(),
@@ -240,7 +240,7 @@ describe('WorktreeRemovalCommand', () => {
 
     expect(vscode.window.withProgress).toHaveBeenCalledWith(
       expect.objectContaining({
-        location: vscode.ProgressLocation.Window,
+        location: vscode.ProgressLocation.Notification,
         title: 'Deck: Removing worktree feature…',
       }),
       expect.any(Function),

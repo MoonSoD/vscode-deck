@@ -126,7 +126,7 @@ export class WorktreeRemovalCommand {
 
     void vscode.window.withProgress(
       {
-        location: vscode.ProgressLocation.Window,
+        location: vscode.ProgressLocation.Notification,
         title: `Deck: Removing worktree ${path.basename(node.worktree.path)}…`,
       },
       () => this.removeInBackground(node, commonDir, force, deleteLocalBranch, branchName),
