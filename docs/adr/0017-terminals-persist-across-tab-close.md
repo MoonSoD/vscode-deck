@@ -53,13 +53,21 @@ Two current behaviours contradict the file-model:
    both `openTerminalCommand` and `addTerminalCommand`. `pendingTerminalOpens`
    and `switcher` survive only on the "Open Terminal in New Window" path.
 
-5. **The worktree-on-tab label is descoped.** `WebviewPanel` exposes only
-   `title` and `iconPath` — no `description`, and tab tooltips are not
-   settable — so the native integrated-terminal look (dimmed folder suffix)
-   is unreachable for a custom-editor webview tab. The Terminal's Worktree is
-   already visible on tab **hover** for free, derived from the ADR-0015 URI
-   path (`deck-terminal:/<worktree>/term-N`). A visible in-title suffix is
-   deferred, not adopted.
+5. **The worktree-on-tab label is descoped — but not absent.** `WebviewPanel`
+   exposes only `title` and `iconPath`; Deck cannot set a tab `description` or
+   tooltip. However, VS Code *automatically* derives a dimmed description from
+   the tab's resource URI (the worktree dir of `deck-terminal:/<worktree>/term-N`,
+   ADR-0015), home-collapsed and ellipsized (e.g. `~/…/maze-monorepo`). So a
+   worktree indicator already appears for free — it is just **uncontrollable**:
+   - it is the folder *path*, not a clean branch/worktree name;
+   - its visibility is governed by `workbench.editor.labelFormat` (a global
+     workbench setting) — at the `default` value it shows **only to
+     disambiguate tabs with the same label**, so it vanishes the moment the
+     tmux window name (the tab label) becomes unique (e.g. `claude`);
+   - it cannot be omitted only for the current worktree, nor scoped to Deck.
+
+   The product goal of decision-3-quality labeling (clean name, shown only for
+   foreign Terminals) remains unreachable via the webview API and is deferred.
 
 ## Considered Options
 
