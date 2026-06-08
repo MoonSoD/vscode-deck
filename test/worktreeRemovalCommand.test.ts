@@ -4,7 +4,9 @@ vi.mock('vscode', () => ({
   window: {
     showErrorMessage: vi.fn(),
     showWarningMessage: vi.fn(),
+    withProgress: vi.fn((_options, task) => task()),
   },
+  ProgressLocation: { Window: 10, Notification: 15, SourceControl: 1 },
   workspace: {
     workspaceFolders: [{ uri: { fsPath: '/repo/main' } }],
   },
@@ -216,6 +218,33 @@ describe('WorktreeRemovalCommand', () => {
       await waitUntil(() => !pendingRemovals.has('/repo/feature'));
       await run;
     }
+  });
+
+  it('runs the background removal under a window progress indicator', async () => {
+    const command = new WorktreeRemovalCommand(
+      { get: vi.fn(() => undefined), clear: vi.fn(async () => undefined) },
+      vi.fn(),
+      undefined,
+      { add: vi.fn(async () => undefined), remove: vi.fn(async () => undefined) },
+      undefined,
+      undefined,
+      new Set<string>(),
+    );
+
+    vi.mocked(vscode.window.showWarningMessage).mockResolvedValue(
+      'Remove (keep branch)' as never,
+    );
+
+    await command.run(node);
+    await waitUntil(() => removeWorktree.mock.calls.length > 0);
+
+    expect(vscode.window.withProgress).toHaveBeenCalledWith(
+      expect.objectContaining({
+        location: vscode.ProgressLocation.Window,
+        title: 'Deck: Removing worktree feature…',
+      }),
+      expect.any(Function),
+    );
   });
 
   it('keeps the path pending until background removal settles', async () => {

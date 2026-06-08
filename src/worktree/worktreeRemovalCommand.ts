@@ -1,3 +1,4 @@
+import * as path from 'path';
 import * as vscode from 'vscode';
 import {
   CommonDirCacheLike,
@@ -123,7 +124,13 @@ export class WorktreeRemovalCommand {
     await this.worktreeListCache.remove(commonDir, node.worktree.path);
     this.refresh();
 
-    void this.removeInBackground(node, commonDir, force, deleteLocalBranch, branchName);
+    void vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Window,
+        title: `Deck: Removing worktree ${path.basename(node.worktree.path)}…`,
+      },
+      () => this.removeInBackground(node, commonDir, force, deleteLocalBranch, branchName),
+    );
   }
 
   private async resolveCommonDirForRemoval(projectPath: string): Promise<string | undefined> {
