@@ -12,6 +12,7 @@ import {
   type CachedTerminalSession,
   toCachedTerminalSessions,
 } from '../terminal/terminalSession';
+import { excludePending } from './excludePending';
 import { reconcileWorktreeOrder } from './reconcileWorktreeOrder';
 import {
   describeProjectTreeItem,
@@ -133,6 +134,7 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
     },
     tmuxOrAvailable: TerminalSessionLister | boolean = true,
     tmuxAvailable?: boolean,
+    private readonly pendingWorktreeRemovals: ReadonlySet<string> = new Set(),
   ) {
     if (typeof tmuxOrAvailable === 'boolean') {
       this.tmux = { listSessions: async () => [] };
@@ -197,10 +199,11 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
     if (commonDir !== undefined) {
       const cached = this.worktreeListCache.get(commonDir);
       if (cached !== undefined) {
-        this.refreshWorktreesInBackground(element.projectPath, commonDir, cached);
+        const visibleCached = excludePending(cached, this.pendingWorktreeRemovals);
+        this.refreshWorktreesInBackground(element.projectPath, commonDir, visibleCached);
         return this.toWorktreeNodes(
           element.projectPath,
-          cached,
+          visibleCached,
           commonDir,
           activeWorktreePath,
         );
@@ -275,12 +278,13 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
     activeWorktreePath: string | undefined,
   ): Promise<Node[]> {
     const gitWorktrees = await listWorktrees(projectPath);
+    const visibleWorktrees = excludePending(gitWorktrees, this.pendingWorktreeRemovals);
     const commonDir =
       knownCommonDir ??
       (await resolveCommonDirSafe(this.projectCommonDirCache, projectPath)) ??
       undefined;
-    if (commonDir !== undefined) await this.worktreeListCache.set(commonDir, gitWorktrees);
-    return this.toWorktreeNodes(projectPath, gitWorktrees, commonDir, activeWorktreePath);
+    if (commonDir !== undefined) await this.worktreeListCache.set(commonDir, visibleWorktrees);
+    return this.toWorktreeNodes(projectPath, visibleWorktrees, commonDir, activeWorktreePath);
   }
 
   private async getTerminalChildren(element: WorktreeNode): Promise<Node[]> {
@@ -313,8 +317,9 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
     this.refreshingWorktrees.add(commonDir);
     void listWorktrees(projectPath)
       .then(async (worktrees) => {
-        if (sameWorktrees(previous, worktrees)) return;
-        await this.worktreeListCache.set(commonDir, worktrees);
+        const visibleWorktrees = excludePending(worktrees, this.pendingWorktreeRemovals);
+        if (sameWorktrees(previous, visibleWorktrees)) return;
+        await this.worktreeListCache.set(commonDir, visibleWorktrees);
         this._onDidChangeTreeData.fire(undefined);
       })
       .catch(() => undefined)
@@ -329,9 +334,12 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
     commonDir: string | undefined,
     activeWorktreePath: string | undefined,
   ): WorktreeNode[] {
-    const worktrees = reconcileWorktreeOrder(
-      commonDir === undefined ? undefined : this.worktreeOrders.get(commonDir),
-      [...gitWorktrees],
+    const worktrees = excludePending(
+      reconcileWorktreeOrder(
+        commonDir === undefined ? undefined : this.worktreeOrders.get(commonDir),
+        [...gitWorktrees],
+      ),
+      this.pendingWorktreeRemovals,
     );
     const mainWorktreePath = gitWorktrees.find((w) => !w.bare)?.path;
     return worktrees.map((w) => new WorktreeNode(projectPath, w, activeWorktreePath, mainWorktreePath));
