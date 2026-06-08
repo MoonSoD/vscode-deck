@@ -188,11 +188,6 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
     return [];
   }
 
-  private getTerminalChildren(element: WorktreeNode): Node[] | Promise<Node[]> {
-    const prefix = terminalSessionPrefix(element.worktree.path);
-    return this.loadTerminalChildren(element, prefix);
-  }
-
   private getWorktreeChildren(element: ProjectNode): Node[] | Promise<Node[]> {
     const activeWorktreePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
     const commonDir =
@@ -289,13 +284,10 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
     return this.toWorktreeNodes(projectPath, gitWorktrees, commonDir, activeWorktreePath);
   }
 
-  private async loadTerminalChildren(
-    element: WorktreeNode,
-    prefix: string,
-  ): Promise<Node[]> {
+  private async getTerminalChildren(element: WorktreeNode): Promise<Node[]> {
     const terminals = toCachedTerminalSessions(
       element.worktree.path,
-      await this.tmux.listSessions(prefix),
+      await this.tmux.listSessions(terminalSessionPrefix(element.worktree.path)),
     );
     return this.toTerminalNodes(element, terminals);
   }
