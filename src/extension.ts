@@ -21,7 +21,11 @@ import { OpenTerminalCommand } from './terminal/openTerminalCommand';
 import { OpenTerminalInNewWindowCommand } from './terminal/openTerminalInNewWindowCommand';
 import { PendingTerminalOpenStore } from './terminal/pendingTerminalOpenStore';
 import { TerminalCascade } from './terminal/terminalCascade';
-import { TerminalEditorProvider, terminalEditorViewType } from './terminal/terminalEditorProvider';
+import {
+  TerminalEditorProvider,
+  terminalEditorViewType,
+  type TerminalEditorDisposeHandler,
+} from './terminal/terminalEditorProvider';
 import { TmuxCli, type TmuxSession } from './terminal/tmuxCli';
 import { terminalSessionNumber, terminalSessionPrefix } from './terminal/tmuxSafe';
 import { tmuxPreflight } from './terminal/tmuxPreflight';
@@ -184,7 +188,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
 export function deactivate(): void {}
 
-export function refreshTerminalTreeOnEditorDispose(refresh: () => void): () => void {
+export function refreshTerminalTreeOnEditorDispose(refresh: () => void): TerminalEditorDisposeHandler {
   return () => {
     refresh();
   };

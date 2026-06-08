@@ -70,14 +70,7 @@ describe('OpenTerminalCommand', () => {
   });
 
   it('opens cross-worktree terminal clicks in place without switching', async () => {
-    const pendingTerminalOpens = {
-      set: vi.fn(async () => undefined),
-    };
-    const switcher = {
-      switchTo: vi.fn(async () => undefined),
-    };
-
-    await new OpenTerminalCommand({ pendingTerminalOpens, switcher }).run({
+    await new OpenTerminalCommand().run({
       terminal: { sessionName: 'wt-_work_beta-main__term-1', windowName: 'zsh' },
       n: 1,
       worktreePath: '/work/beta-main',
@@ -92,8 +85,6 @@ describe('OpenTerminalCommand', () => {
       'deck.terminal',
       { viewColumn: -1 },
     );
-    expect(pendingTerminalOpens.set).not.toHaveBeenCalled();
-    expect(switcher.switchTo).not.toHaveBeenCalled();
     expect(vscodeState.createTerminal).not.toHaveBeenCalled();
   });
 });
