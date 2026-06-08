@@ -105,6 +105,19 @@ describe('package contributions', () => {
       mac: 'cmd+f',
       when: "activeCustomEditorId == 'deck.terminal'",
     });
+    // Palette entry is scoped to an active Deck terminal so it does not
+    // appear (and silently no-op) while editing a normal file.
+    expect(pkg.contributes.menus.commandPalette).toContainEqual({
+      command: 'deck.terminal.find',
+      when: "activeCustomEditorId == 'deck.terminal'",
+    });
+  });
+
+  it('hides the auto-generated view focus command from the palette', () => {
+    expect(pkg.contributes.menus.commandPalette).toContainEqual({
+      command: 'deck.repositories.focus',
+      when: 'false',
+    });
   });
 
   it('contributes add worktree as a repository-only inline tree action', () => {

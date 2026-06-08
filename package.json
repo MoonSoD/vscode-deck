@@ -208,6 +208,14 @@
       ],
       "commandPalette": [
         {
+          "command": "deck.terminal.find",
+          "when": "activeCustomEditorId == 'deck.terminal'"
+        },
+        {
+          "command": "deck.repositories.focus",
+          "when": "false"
+        },
+        {
           "command": "deck.switchWorktree",
           "when": "false"
         },
