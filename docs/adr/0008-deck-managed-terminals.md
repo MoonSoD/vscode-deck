@@ -77,11 +77,23 @@ state, not the user's whole tmux. Sanctel solved this with `-L sanctel -f
    session name surfaces only as the row's stable numeric prefix
    (`1 zsh`, `3 claude`).
 
+   > **Update (post-custom-editor):** the numeric prefix was dropped. It
+   > existed to identify the tmux session before tabs had a stable identity;
+   > the custom-editor URI (`deck-terminal://…/<sessionName>`) now carries
+   > that identity, so the label is exactly `#{window_name}`. N still drives
+   > session naming (`term-N`) and row ordering, but is not displayed.
+
 4. **Source of truth = the DeckSocket itself.** Deck does not persist a
    list of Terminals. `tmux -L deck list-sessions -F …` filtered by the
    Worktree's prefix is the canonical query. A `globalState`-backed
    stale-while-revalidate cache (same pattern as ADR-0007) backs instant
    first paint; reality from the next `list-sessions` reconciles it.
+
+   > **Superseded in part by [ADR-0014](./0014-terminal-rows-from-live-tmux-not-persisted-cache.md):**
+   > the `globalState` SWR cache is removed — rows resolve directly from
+   > `list-sessions` on every expand/refresh. The headline decision
+   > ("source of truth = the DeckSocket; Deck persists no Terminal list") is
+   > unchanged, and stronger for it.
 
 5. **Creation is lazy.** No tmux state exists for a Worktree until the
    user clicks `+`. The first `+` creates session+window atomically

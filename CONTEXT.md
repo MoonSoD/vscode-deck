@@ -31,8 +31,8 @@ folder.
 │  │  Projects & Worktrees (TreeView)                   │  │
 │  │  ├── ProjectA  ●  ← marker = ActiveProject         │  │
 │  │  │   ├─▾ main  ✓  ← marker = ActiveWorktree        │  │
-│  │  │   │   ├─ 1 zsh    ← Terminal (attach in editor) │  │
-│  │  │   │   ├─ 2 claude                               │  │
+│  │  │   │   ├─ zsh      ← Terminal (xterm editor)     │  │
+│  │  │   │   ├─ claude                                 │  │
 │  │  │   │   └─ + Add Terminal                         │  │
 │  │  │   ├─▸ feature/x   ← click label = SwitchOp      │  │
 │  │  │   └─▸ bugfix/y                                  │  │
@@ -61,9 +61,13 @@ Code layout:
 - **Workspace folder → ActiveProject.** Derived at read time. There is at most one mounted folder (or none, on a brand-new window).
 - **SwitchOperation persists the new ActiveWorktree before reload**, so the persisted state is correct after the extension host restarts.
 
+## State ownership
+
+Deck is a frontend over systems that already own state: **tmux** owns terminal/session existence, **VS Code** owns editor tabs and per-folder layout, **git** owns worktrees. Read from them live rather than mirroring their state. Persist Deck-side only what is genuinely Deck's — the Project registry, WorktreeOrder, per-Project ActiveWorktree, the branch-deletion preference — never a second copy of state a host already tracks. A persisted mirror only adds a sync seam where bugs live; mirrors since removed include the terminal PID store, `TabSnapshotStore` (ADR-0013), and the terminal session-list cache (ADR-0014). Caching host state for paint speed is the rare exception — taken on measured need and documented, e.g. the git worktree-list / common-dir caches (git is comparatively slow; ADR-0007), not the local, fast `tmux list-sessions`.
+
 ## Out of scope (deliberately, for now)
 
-- ~~**Per-worktree terminals (tmux-backed).**~~ Now in scope (Terminal vocab above); ADR-0008.
+- ~~**Per-worktree terminals (tmux-backed).**~~ Now in scope: custom-editor xterm.js webviews over a tmux control-mode client (Terminal vocab above; ADR-0008, refined by 0011–0014).
 - **Per-worktree agent chat session.** TBD.
 - ~~**Multi-root mounting.**~~ Rejected by ADR-0003: one folder is mounted at a time. Multi-root + a per-Project `MountReconciliation` were explored in ADR-0002 (now superseded).
 - ~~**Per-worktree tab snapshot/restore.**~~ Provided by VS Code: each folder URI has its own workspace storage, so tabs, dirty buffers, layout, cursor positions all restore per Worktree automatically.

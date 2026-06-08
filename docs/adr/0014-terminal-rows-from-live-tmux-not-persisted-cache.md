@@ -96,6 +96,9 @@ state that nothing needs.
 
 ## Refines
 
+- ADR-0008. Supersedes the second half of §4 (the `globalState`
+  stale-while-revalidate cache); §4's headline — "source of truth = the
+  DeckSocket; Deck persists no Terminal list" — is unchanged and reinforced.
 - ADR-0011 / ADR-0012 / ADR-0013. This is a state-ownership cleanup *enabled*
   by them: control mode made tmux live-observable and VS Code-native restore
   removed the other persisted terminal store (`TabSnapshotStore`, ADR-0013),
