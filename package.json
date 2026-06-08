@@ -198,17 +198,17 @@
         {
           "command": "deck.switchWorktree",
           "when": "view == deck.repositories && (viewItem == deck.worktree || viewItem == deck.worktree.main)",
-          "group": "navigation"
+          "group": "navigation@1"
         },
         {
           "command": "deck.removeWorktree",
           "when": "view == deck.repositories && viewItem == deck.worktree",
-          "group": "navigation"
+          "group": "navigation@3"
         },
         {
           "command": "deck.openWorktreeInNewWindow",
           "when": "view == deck.repositories && (viewItem == deck.worktree || viewItem == deck.worktree.main)",
-          "group": "navigation"
+          "group": "navigation@2"
         },
         {
           "command": "deck.removeRepository",

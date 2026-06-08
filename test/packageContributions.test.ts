@@ -147,7 +147,7 @@ describe('package contributions', () => {
     ).toEqual([{
       command: 'deck.removeWorktree',
       when: 'view == deck.repositories && viewItem == deck.worktree',
-      group: 'navigation',
+      group: 'navigation@3',
     }]);
     expect(pkg.contributes.menus.commandPalette).toContainEqual({
       command: 'deck.removeWorktree',
@@ -208,7 +208,7 @@ describe('package contributions', () => {
     ).toEqual([{
       command: 'deck.openWorktreeInNewWindow',
       when: 'view == deck.repositories && (viewItem == deck.worktree || viewItem == deck.worktree.main)',
-      group: 'navigation',
+      group: 'navigation@2',
     }]);
     expect(pkg.contributes.menus.commandPalette).toContainEqual({
       command: 'deck.openWorktreeInNewWindow',
@@ -277,7 +277,7 @@ describe('package contributions', () => {
     ).toEqual([{
       command: 'deck.switchWorktree',
       when: 'view == deck.repositories && (viewItem == deck.worktree || viewItem == deck.worktree.main)',
-      group: 'navigation',
+      group: 'navigation@1',
     }]);
     expect(
       pkg.contributes.menus['view/item/context'].some(
