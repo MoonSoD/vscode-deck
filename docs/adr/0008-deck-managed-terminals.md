@@ -79,7 +79,7 @@ state, not the user's whole tmux. Sanctel solved this with `-L sanctel -f
 
    > **Update (post-custom-editor):** the numeric prefix was dropped. It
    > existed to identify the tmux session before tabs had a stable identity;
-   > the custom-editor URI (`deck-terminal://…/<sessionName>`) now carries
+   > the custom-editor URI (`deck-terminal:/<worktree>/term-N`) now carries
    > that identity, so the label is exactly `#{window_name}`. N still drives
    > session naming (`term-N`) and row ordering, but is not displayed.
 

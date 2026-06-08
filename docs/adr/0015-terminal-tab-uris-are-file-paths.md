@@ -135,8 +135,8 @@ the path was the mangled session name.
 - The handover's hard constraint is unchanged: the *live* command name still
   cannot appear on a not-yet-resolved tab (it is volatile and must not be in
   the stable URI). Restore shows `term-N`; focus upgrades it to the live name.
-- Stale docs to correct at implementation time: ADR-0011 §2 and §13, and the
-  `CONTEXT.md` Terminal entry.
+- Implemented alongside updates to ADR-0011 §2 and the `CONTEXT.md` Terminal
+  entry so the docs, glossary, and code describe the same URI shape.
 
 ## Refines
 
@@ -176,4 +176,4 @@ present.
 
 ## Status
 
-Accepted. Not yet implemented.
+Accepted. Implemented by issue #64.

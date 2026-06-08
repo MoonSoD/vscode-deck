@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { terminalSessionName } from './tmuxSafe';
 
 export const terminalUriScheme = 'deck-terminal';
+const terminalPathSegmentPattern = /^term-(\d+)$/;
 
 export interface EncodeTerminalSessionUriParts {
   worktreePath: string;
@@ -28,9 +29,11 @@ export class SessionUriCodec {
     if (uri.authority || uri.query) throw new Error('Malformed terminal URI');
 
     const separator = uri.path.lastIndexOf('/');
-    const basename = separator >= 0 ? uri.path.slice(separator + 1) : uri.path;
-    const match = /^term-(\d+)$/.exec(basename);
-    if (!match || separator <= 0) throw new Error('Malformed terminal URI');
+    if (separator <= 0) throw new Error('Malformed terminal URI');
+
+    const terminalPathSegment = uri.path.slice(separator + 1);
+    const match = terminalPathSegmentPattern.exec(terminalPathSegment);
+    if (!match) throw new Error('Malformed terminal URI');
 
     const worktreePath = uri.path.slice(0, separator);
     const term = Number(match[1]);
