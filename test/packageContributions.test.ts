@@ -221,11 +221,10 @@ describe('package contributions', () => {
     ).toBe(false);
   });
 
-  it('contributes Delete Terminal as the inline trash action on Terminal rows', () => {
+  it('contributes Delete Terminal as a context-menu and keybinding action on Terminal rows', () => {
     expect(pkg.contributes.commands).toContainEqual({
       command: 'deck.killTerminal',
       title: 'Delete Terminal',
-      icon: '$(trash)',
     });
 
     const killWhen =
@@ -235,7 +234,6 @@ describe('package contributions', () => {
         (item: { command: string }) => item.command === 'deck.killTerminal',
       ),
     ).toEqual([
-      { command: 'deck.killTerminal', when: killWhen, group: 'inline' },
       { command: 'deck.killTerminal', when: killWhen, group: 'navigation' },
     ]);
     expect(pkg.contributes.menus.commandPalette).toContainEqual({

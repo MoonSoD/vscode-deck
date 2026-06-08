@@ -131,8 +131,7 @@
       },
       {
         "command": "deck.killTerminal",
-        "title": "Delete Terminal",
-        "icon": "$(trash)"
+        "title": "Delete Terminal"
       },
       {
         "command": "deck.terminal.find",
@@ -200,11 +199,6 @@
           "command": "deck.removeRepository",
           "when": "view == deck.repositories && viewItem == deck.repository",
           "group": "navigation"
-        },
-        {
-          "command": "deck.killTerminal",
-          "when": "view == deck.repositories && (viewItem == deck.terminal.active || viewItem == deck.terminal.foreign) && deck.tmuxAvailable",
-          "group": "inline"
         },
         {
           "command": "deck.killTerminal",
