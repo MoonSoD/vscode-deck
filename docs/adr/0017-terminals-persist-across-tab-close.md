@@ -103,4 +103,4 @@ Two current behaviours contradict the file-model:
 
 ## Status
 
-Proposed.
+Accepted.

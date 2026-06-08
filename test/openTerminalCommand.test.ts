@@ -69,7 +69,7 @@ describe('OpenTerminalCommand', () => {
     expect(vscodeState.createTerminal).not.toHaveBeenCalled();
   });
 
-  it('stores a pending intent and switches worktree for cross-worktree terminal clicks', async () => {
+  it('opens cross-worktree terminal clicks in place without switching', async () => {
     const pendingTerminalOpens = {
       set: vi.fn(async () => undefined),
     };
@@ -83,12 +83,17 @@ describe('OpenTerminalCommand', () => {
       worktreePath: '/work/beta-main',
     });
 
-    expect(pendingTerminalOpens.set).toHaveBeenCalledWith(
-      '/work/beta-main',
-      'wt-_work_beta-main__term-1',
+    expect(vscodeState.executeCommand).toHaveBeenCalledWith(
+      'vscode.openWith',
+      {
+        scheme: 'deck-terminal',
+        path: '/work/beta-main/term-1',
+      },
+      'deck.terminal',
+      { viewColumn: -1 },
     );
-    expect(switcher.switchTo).toHaveBeenCalledWith('/work/beta-main');
+    expect(pendingTerminalOpens.set).not.toHaveBeenCalled();
+    expect(switcher.switchTo).not.toHaveBeenCalled();
     expect(vscodeState.createTerminal).not.toHaveBeenCalled();
-    expect(vscodeState.executeCommand).not.toHaveBeenCalled();
   });
 });

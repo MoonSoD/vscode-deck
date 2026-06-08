@@ -25,7 +25,7 @@ vi.mock('vscode', () => ({
   },
 }));
 
-import { CloseTerminalCommand } from '../src/terminal/killTerminalCommand';
+import { TerminalRemovalCommand } from '../src/terminal/killTerminalCommand';
 import { TmuxCli, type CommandResult, type CommandRunner } from '../src/terminal/tmuxCli';
 
 class MockRunner implements CommandRunner {
@@ -36,7 +36,7 @@ class MockRunner implements CommandRunner {
   }
 }
 
-describe('CloseTerminalCommand', () => {
+describe('TerminalRemovalCommand', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vscodeState.tabGroups = [];
@@ -47,7 +47,7 @@ describe('CloseTerminalCommand', () => {
       killSession: vi.fn(async () => undefined),
     };
     const refresh = vi.fn();
-    await new CloseTerminalCommand(
+    await new TerminalRemovalCommand(
       tmux,
       refresh,
     ).run({ terminal: { sessionName: 'wt-_work_repo__term-1' } });
@@ -61,7 +61,7 @@ describe('CloseTerminalCommand', () => {
       killSession: vi.fn(async () => undefined),
     };
     const refresh = vi.fn();
-    const command = new CloseTerminalCommand(tmux, refresh);
+    const command = new TerminalRemovalCommand(tmux, refresh);
     const node = { terminal: { sessionName: 'wt-_work_repo__term-1' } };
 
     await command.run(node);
@@ -86,7 +86,7 @@ describe('CloseTerminalCommand', () => {
     };
     vscodeState.tabGroups = [{ tabs: [tab] }];
 
-    await new CloseTerminalCommand(
+    await new TerminalRemovalCommand(
       tmux,
       vi.fn(),
     ).run({ terminal: { sessionName: 'wt-_work_repo__term-1' } });
@@ -105,7 +105,7 @@ describe('CloseTerminalCommand', () => {
     const refresh = vi.fn();
 
     await expect(
-      new CloseTerminalCommand(
+      new TerminalRemovalCommand(
         tmux,
         refresh,
       ).run({

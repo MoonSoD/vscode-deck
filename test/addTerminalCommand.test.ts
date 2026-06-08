@@ -67,33 +67,32 @@ describe('AddTerminalCommand', () => {
     expect(refresh).toHaveBeenCalledOnce();
   });
 
-  it('creates the tmux session, stores a pending intent, and switches for cross-worktree adds', async () => {
+  it('creates and opens cross-worktree terminals in place with the worktree cwd', async () => {
     vscodeState.workspaceFolders = [{ uri: { fsPath: '/work/alpha-main' } }];
     const tmux = {
       listSessions: vi.fn().mockResolvedValueOnce([]),
       ensureSession: vi.fn(async () => undefined),
     };
     const refresh = vi.fn();
-    const pendingTerminalOpens = { set: vi.fn(async () => undefined) };
-    const switcher = { switchTo: vi.fn(async () => undefined) };
-
     await new AddTerminalCommand(
       tmux,
       refresh,
-      { pendingTerminalOpens, switcher },
     ).run({ worktree: { path: '/work/beta-main' } });
 
     expect(tmux.ensureSession).toHaveBeenCalledWith(
       'wt-_work_beta-main__term-1',
       '/work/beta-main',
     );
-    expect(pendingTerminalOpens.set).toHaveBeenCalledWith(
-      '/work/beta-main',
-      'wt-_work_beta-main__term-1',
+    expect(vscodeState.executeCommand).toHaveBeenCalledWith(
+      'vscode.openWith',
+      {
+        scheme: 'deck-terminal',
+        path: '/work/beta-main/term-1',
+      },
+      'deck.terminal',
+      { viewColumn: -1 },
     );
-    expect(switcher.switchTo).toHaveBeenCalledWith('/work/beta-main');
     expect(vscodeState.createTerminal).not.toHaveBeenCalled();
-    expect(vscodeState.executeCommand).not.toHaveBeenCalled();
-    expect(refresh).not.toHaveBeenCalled();
+    expect(refresh).toHaveBeenCalledOnce();
   });
 });

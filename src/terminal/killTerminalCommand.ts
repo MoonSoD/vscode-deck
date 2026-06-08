@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { SessionUriCodec } from './sessionUriCodec';
 import { terminalEditorViewType } from './terminalEditorProvider';
 
-export interface CloseTerminalTmuxCli {
+export interface TerminalRemovalTmuxCli {
   killSession(session: string): Promise<void>;
 }
 
@@ -12,9 +12,9 @@ interface TerminalNodeLike {
   };
 }
 
-export class CloseTerminalCommand {
+export class TerminalRemovalCommand {
   constructor(
-    private readonly tmux: CloseTerminalTmuxCli,
+    private readonly tmux: TerminalRemovalTmuxCli,
     private readonly refresh: () => void = () => undefined,
     private readonly sessionUriCodec: SessionUriCodec = new SessionUriCodec(),
   ) {}
@@ -50,5 +50,6 @@ export class CloseTerminalCommand {
   }
 }
 
-export type KillTerminalTmuxCli = CloseTerminalTmuxCli;
-export { CloseTerminalCommand as KillTerminalCommand };
+export type CloseTerminalTmuxCli = TerminalRemovalTmuxCli;
+export type KillTerminalTmuxCli = TerminalRemovalTmuxCli;
+export { TerminalRemovalCommand as CloseTerminalCommand, TerminalRemovalCommand as KillTerminalCommand };

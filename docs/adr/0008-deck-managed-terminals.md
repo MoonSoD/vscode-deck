@@ -130,6 +130,8 @@ state, not the user's whole tmux. Sanctel solved this with `-L sanctel -f
    pending terminal-open intents are consumed.
 
 10. **Lifecycle.**
+    > **Superseded in part by [ADR-0017](./0017-terminals-persist-across-tab-close.md):** close-tab is now non-destructive; TerminalRemoval, shell `exit`, WorktreeRemoval, and RepositoryRemoval destroy Terminals.
+
     - Close editor tab → tmux session killed; row removed on next refresh.
     - User runs `exit` in the shell → window dies, session has 0 windows,
       session dies. VS Code's terminal-in-editor tab stays open showing
