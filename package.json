@@ -142,10 +142,6 @@
         "command": "deck.refresh",
         "title": "Deck: Refresh",
         "icon": "$(refresh)"
-      },
-      {
-        "command": "deck.repositories.focus",
-        "title": "Deck: Focus"
       }
     ],
     "keybindings": [
@@ -220,10 +216,6 @@
         {
           "command": "deck.terminal.find",
           "when": "activeCustomEditorId == 'deck.terminal'"
-        },
-        {
-          "command": "deck.repositories.focus",
-          "when": "false"
         },
         {
           "command": "deck.switchWorktree",
