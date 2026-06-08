@@ -237,7 +237,7 @@ describe('package contributions', () => {
   it('contributes Delete Terminal as the inline trash action on Terminal rows', () => {
     expect(pkg.contributes.commands).toContainEqual({
       command: 'deck.killTerminal',
-      title: 'Deck: Delete Terminal',
+      title: 'Delete Terminal',
       icon: '$(trash)',
     });
 
