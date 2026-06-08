@@ -114,6 +114,12 @@ describe('package contributions', () => {
   });
 
   it('hides the auto-generated view focus command from the palette', () => {
+    // Referencing it in a menu requires declaring it in `commands`, or VS Code
+    // warns the command is not defined.
+    expect(pkg.contributes.commands).toContainEqual({
+      command: 'deck.repositories.focus',
+      title: 'Deck: Focus',
+    });
     expect(pkg.contributes.menus.commandPalette).toContainEqual({
       command: 'deck.repositories.focus',
       when: 'false',

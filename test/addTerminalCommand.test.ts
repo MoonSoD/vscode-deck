@@ -67,13 +67,14 @@ describe('AddTerminalCommand', () => {
     expect(refresh).toHaveBeenCalledOnce();
   });
 
-  it('creates and opens cross-worktree terminals in place with the worktree cwd', async () => {
+  it('creates a foreign-worktree tmux session and opens it in place without switching', async () => {
     vscodeState.workspaceFolders = [{ uri: { fsPath: '/work/alpha-main' } }];
     const tmux = {
       listSessions: vi.fn().mockResolvedValueOnce([]),
       ensureSession: vi.fn(async () => undefined),
     };
     const refresh = vi.fn();
+
     await new AddTerminalCommand(
       tmux,
       refresh,
@@ -92,6 +93,7 @@ describe('AddTerminalCommand', () => {
       'deck.terminal',
       { viewColumn: -1 },
     );
+    expect(vscodeState.executeCommand).toHaveBeenCalledOnce();
     expect(vscodeState.createTerminal).not.toHaveBeenCalled();
     expect(refresh).toHaveBeenCalledOnce();
   });

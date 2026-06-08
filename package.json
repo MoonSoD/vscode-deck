@@ -142,6 +142,10 @@
         "command": "deck.refresh",
         "title": "Deck: Refresh",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "deck.repositories.focus",
+        "title": "Deck: Focus"
       }
     ],
     "keybindings": [

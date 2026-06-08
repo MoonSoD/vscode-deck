@@ -69,7 +69,7 @@ describe('OpenTerminalCommand', () => {
     expect(vscodeState.createTerminal).not.toHaveBeenCalled();
   });
 
-  it('opens cross-worktree terminal clicks in place without switching', async () => {
+  it('opens a foreign-worktree terminal row in place without switching', async () => {
     await new OpenTerminalCommand().run({
       terminal: { sessionName: 'wt-_work_beta-main__term-1', windowName: 'zsh' },
       n: 1,
@@ -85,6 +85,7 @@ describe('OpenTerminalCommand', () => {
       'deck.terminal',
       { viewColumn: -1 },
     );
+    expect(vscodeState.executeCommand).toHaveBeenCalledOnce();
     expect(vscodeState.createTerminal).not.toHaveBeenCalled();
   });
 });
