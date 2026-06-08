@@ -80,6 +80,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const terminalRemoval = new TerminalRemovalCommand(
     tmux,
     () => tree.refresh(),
+    confirmTerminalRemoval,
   );
   const terminalCascade = new TerminalCascade(tmux);
   const addWorktree = new AddWorktreeCommand(
@@ -192,6 +193,21 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 }
 
 export function deactivate(): void {}
+
+// Mirrors the Explorer's delete confirmation (a modal warning gated by a
+// setting). The webview API has no in-dialog "do not ask again" checkbox, so
+// `deck.confirmTerminalDelete` carries that effect instead.
+async function confirmTerminalRemoval(label: string): Promise<boolean> {
+  if (vscode.workspace.getConfiguration('deck').get<boolean>('confirmTerminalDelete', true) === false) {
+    return true;
+  }
+  const choice = await vscode.window.showWarningMessage(
+    `Are you sure you want to delete the terminal '${label}'?`,
+    { modal: true, detail: 'The shell and any running process will be terminated.' },
+    'Delete',
+  );
+  return choice === 'Delete';
+}
 
 async function revealActiveTerminalInTree(
   tree: RepositoryTreeProvider,

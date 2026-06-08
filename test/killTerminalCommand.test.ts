@@ -56,6 +56,36 @@ describe('TerminalRemovalCommand', () => {
     expect(refresh).toHaveBeenCalledOnce();
   });
 
+  it('skips deletion when the confirmation is declined', async () => {
+    const tmux = {
+      killSession: vi.fn(async () => undefined),
+    };
+    const refresh = vi.fn();
+    const confirm = vi.fn(async () => false);
+
+    await new TerminalRemovalCommand(tmux, refresh, confirm).run({
+      terminal: { sessionName: 'wt-_work_repo__term-1', windowName: 'zsh' },
+    });
+
+    expect(confirm).toHaveBeenCalledWith('zsh');
+    expect(tmux.killSession).not.toHaveBeenCalled();
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it('kills the session once the confirmation is accepted', async () => {
+    const tmux = {
+      killSession: vi.fn(async () => undefined),
+    };
+    const confirm = vi.fn(async () => true);
+
+    await new TerminalRemovalCommand(tmux, vi.fn(), confirm).run({
+      terminal: { sessionName: 'wt-_work_repo__term-1', windowName: 'claude' },
+    });
+
+    expect(confirm).toHaveBeenCalledWith('claude');
+    expect(tmux.killSession).toHaveBeenCalledWith('wt-_work_repo__term-1');
+  });
+
   it('no-ops on a non-Terminal selection (Worktree/Repository row)', async () => {
     const tmux = {
       killSession: vi.fn(async () => undefined),

@@ -9,13 +9,17 @@ export interface TerminalRemovalTmuxCli {
 interface TerminalNodeLike {
   terminal?: {
     sessionName?: string;
+    windowName?: string;
   };
 }
+
+export type ConfirmTerminalRemoval = (label: string) => Promise<boolean>;
 
 export class TerminalRemovalCommand {
   constructor(
     private readonly tmux: TerminalRemovalTmuxCli,
     private readonly refresh: () => void = () => undefined,
+    private readonly confirm: ConfirmTerminalRemoval = async () => true,
     private readonly sessionUriCodec: SessionUriCodec = new SessionUriCodec(),
   ) {}
 
@@ -24,6 +28,8 @@ export class TerminalRemovalCommand {
     // non-Terminal selection (Worktree/Repository) reaches here — no-op it.
     const session = node?.terminal?.sessionName;
     if (!session) return;
+
+    if (!(await this.confirm(node?.terminal?.windowName ?? session))) return;
 
     await this.tmux.killSession(session);
     await this.closeMatchingEditorTab(session);
