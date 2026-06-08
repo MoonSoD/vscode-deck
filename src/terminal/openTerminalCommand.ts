@@ -12,7 +12,7 @@ interface TerminalNodeLike {
 }
 
 interface TerminalEditorPanelLike {
-  reveal(): void;
+  reveal(viewColumn?: vscode.ViewColumn, preserveFocus?: boolean): void;
 }
 
 interface TerminalEditorPanelRegistryLike {
@@ -32,9 +32,12 @@ export class OpenTerminalCommand {
   async run(node: TerminalNodeLike | undefined): Promise<void> {
     if (!node) return;
 
+    // Single-click reveals the Terminal but keeps focus on the tree, like the
+    // Explorer opening a file in preview — so cmd+backspace deletes the row.
+    // Clicking into the Terminal focuses it for typing.
     const existing = this.options.terminalPanels?.panelFor(node.terminal.sessionName);
     if (existing) {
-      existing.reveal();
+      existing.reveal(undefined, true);
       return;
     }
 
@@ -48,7 +51,7 @@ export class OpenTerminalCommand {
       'vscode.openWith',
       this.sessionUriCodec.encode({ worktreePath: cwd, term }),
       terminalEditorViewType,
-      { viewColumn: vscode.ViewColumn.Active },
+      { viewColumn: vscode.ViewColumn.Active, preserveFocus: true },
     );
   }
 }

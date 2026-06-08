@@ -45,12 +45,12 @@ describe('OpenTerminalCommand', () => {
         path: '/work/alpha-main/term-1',
       },
       'deck.terminal',
-      { viewColumn: -1 },
+      { viewColumn: -1, preserveFocus: true },
     );
     expect(vscodeState.createTerminal).not.toHaveBeenCalled();
   });
 
-  it('focuses an existing custom-editor tab on re-click', async () => {
+  it('reveals an existing custom-editor tab on re-click without taking focus', async () => {
     const panel = { reveal: vi.fn() };
     const terminalPanels = {
       panelFor: vi.fn(() => panel),
@@ -62,7 +62,7 @@ describe('OpenTerminalCommand', () => {
     });
 
     expect(terminalPanels.panelFor).toHaveBeenCalledWith('wt-_work_alpha-main__term-1');
-    expect(panel.reveal).toHaveBeenCalledWith();
+    expect(panel.reveal).toHaveBeenCalledWith(undefined, true);
     expect(vscodeState.executeCommand).not.toHaveBeenCalled();
     expect(vscodeState.createTerminal).not.toHaveBeenCalled();
   });
@@ -80,7 +80,7 @@ describe('OpenTerminalCommand', () => {
         path: '/work/beta-main/term-1',
       },
       'deck.terminal',
-      { viewColumn: -1 },
+      { viewColumn: -1, preserveFocus: true },
     );
     expect(vscodeState.executeCommand).toHaveBeenCalledOnce();
     expect(vscodeState.createTerminal).not.toHaveBeenCalled();
@@ -99,7 +99,7 @@ describe('OpenTerminalCommand', () => {
         path: '/work/alpha-main/term-7',
       },
       'deck.terminal',
-      { viewColumn: -1 },
+      { viewColumn: -1, preserveFocus: true },
     );
   });
 });

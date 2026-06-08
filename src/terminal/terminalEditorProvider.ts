@@ -448,7 +448,11 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
 
       terminal.open(terminalElement);
       fitAddon.fit();
-      terminal.focus();
+      // Only grab focus if this webview was opened focused. A preserveFocus
+      // open (single-clicking a row, like the Explorer) leaves focus on the
+      // tree so cmd+backspace can delete; clicking into the terminal focuses it.
+      if (document.hasFocus()) terminal.focus();
+      window.addEventListener('focus', () => terminal.focus());
       new ResizeObserver(debounceResize).observe(terminalElement);
       new MutationObserver(() => { terminal.options.theme = readVsCodeTheme(); }).observe(
         document.documentElement,
@@ -592,7 +596,7 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
       });
       requestAnimationFrame(() => {
         postResize();
-        terminal.focus();
+        if (document.hasFocus()) terminal.focus();
         vscode.postMessage({ type: 'ready', cols: terminal.cols, rows: terminal.rows });
       });
     })();
