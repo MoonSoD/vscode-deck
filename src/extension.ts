@@ -208,13 +208,15 @@ async function revealActiveTerminalInTree(
     return;
   }
 
-  const terminalNode = await tree.findTerminal(decoded.sessionName, decoded.worktreePath);
-  if (!terminalNode) return;
-
   try {
+    const terminalNode = await tree.findTerminal(decoded.sessionName, decoded.worktreePath);
+    if (!terminalNode) return;
     await treeView.reveal(terminalNode, { select: true, focus: false });
   } catch (error) {
-    console.warn('Deck: TreeView.reveal failed', error);
+    // findTerminal walks getChildren (a git subprocess) and reveal can fail on
+    // a hidden view; neither should surface as an unhandled rejection from a
+    // tab event.
+    console.warn('Deck: revealing the active terminal failed', error);
   }
 }
 
