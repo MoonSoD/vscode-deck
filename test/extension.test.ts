@@ -29,7 +29,6 @@ const vscodeState = vi.hoisted(() => ({
   registerCommand: vi.fn(() => ({ dispose: vi.fn() })),
   registerCustomEditorProvider: vi.fn(() => ({ dispose: vi.fn() })),
   settingsProjects: ['/settings/repo'],
-  terminalSessionListCacheInstances: [] as Array<{ removeSession: ReturnType<typeof vi.fn> }>,
   tmuxInstances: [] as Array<{
     killSession: ReturnType<typeof vi.fn>;
     listSessions: ReturnType<typeof vi.fn>;
@@ -98,25 +97,6 @@ vi.mock('../src/worktree/branchDeletionPreferenceStore', () => ({
 
 vi.mock('../src/worktree/worktreeListCacheStore', () => ({
   WorktreeListCacheStore: class {},
-}));
-
-vi.mock('../src/terminal/terminalSessionListCacheStore', () => ({
-  TerminalSessionListCacheStore: class {
-    removeSession = vi.fn(async () => undefined);
-    set = vi.fn(async () => undefined);
-
-    constructor() {
-      vscodeState.terminalSessionListCacheInstances.push(this);
-    }
-  },
-  toCachedTerminalSessions: (
-    worktreePath: string,
-    sessions: Array<{ sessionName: string; windowName: string }>,
-  ) =>
-    sessions.map((session) => ({
-      ...session,
-      n: Number(session.sessionName.slice(`wt-${worktreePath.replace(/[:./]/g, '_')}__term-`.length)),
-    })),
 }));
 
 vi.mock('../src/project/projectCommonDirCache', () => ({
@@ -236,7 +216,6 @@ describe('activate', () => {
     vscodeState.projectTreeArgs = undefined;
     vscodeState.projectTreeInstances = [];
     vscodeState.settingsProjects = ['/settings/repo'];
-    vscodeState.terminalSessionListCacheInstances = [];
     vscodeState.tmuxInstances = [];
     vscodeState.tabGroups = [];
     vscodeState.workspaceFolders = [{ uri: { fsPath: '/work/alpha-main' } }];
@@ -319,18 +298,7 @@ describe('activate', () => {
       'deck.tmuxAvailable',
       false,
     );
-    expect(vscodeState.projectTreeArgs?.at(-2)).toBe(false);
-  });
-
-  it('hydrates terminal session list cache into the tree and terminal commands', async () => {
-    const context = createContext();
-
-    await activate(context as never);
-
-    const terminalSessionListCache = vscodeState.projectTreeArgs?.at(-1);
-    expect(terminalSessionListCache).toBeDefined();
-    expect(vscodeState.addTerminalArgs?.at(-2)).toBe(terminalSessionListCache);
-    expect(vscodeState.closeTerminalArgs?.at(-1)).toBe(terminalSessionListCache);
+    expect(vscodeState.projectTreeArgs?.at(-1)).toBe(false);
   });
 
   it('consumes pending intents and registers no VS Code terminal listeners', async () => {
@@ -474,9 +442,6 @@ describe('activate', () => {
     const pendingTerminalOpens = {
       consume: vi.fn(async () => 'wt-_work_alpha-main__term-1'),
     };
-    const terminalSessionListCache = {
-      set: vi.fn(async () => undefined),
-    };
     const tmux = {
       listSessions: vi.fn(async () => [
         { sessionName: 'wt-_work_alpha-main__term-1', windowName: 'zsh' },
@@ -485,14 +450,10 @@ describe('activate', () => {
 
     await openPendingTerminalForCurrentWorktree(
       pendingTerminalOpens,
-      terminalSessionListCache,
       tmux,
     );
 
     expect(pendingTerminalOpens.consume).toHaveBeenCalledWith('/work/alpha-main');
-    expect(terminalSessionListCache.set).toHaveBeenCalledWith('wt-_work_alpha-main__', [
-      { sessionName: 'wt-_work_alpha-main__term-1', n: 1, windowName: 'zsh' },
-    ]);
     expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
       'vscode.openWith',
       {
@@ -527,14 +488,13 @@ describe('activate', () => {
       },
     ];
     const pendingTerminalOpens = { consume: vi.fn(async () => 'wt-_work_alpha-main__term-1') };
-    const terminalSessionListCache = { set: vi.fn(async () => undefined) };
     const tmux = {
       listSessions: vi.fn(async () => [
         { sessionName: 'wt-_work_alpha-main__term-1', windowName: 'zsh' },
       ]),
     };
 
-    await openPendingTerminalForCurrentWorktree(pendingTerminalOpens, terminalSessionListCache, tmux);
+    await openPendingTerminalForCurrentWorktree(pendingTerminalOpens, tmux);
 
     // Reveal in its restored group (2), not ViewColumn.Active (-1), which would
     // yank the tab to the last-focused group.
@@ -550,16 +510,12 @@ describe('activate', () => {
     const pendingTerminalOpens = {
       consume: vi.fn(async () => undefined),
     };
-    const terminalSessionListCache = {
-      set: vi.fn(async () => undefined),
-    };
     const tmux = {
       listSessions: vi.fn(async () => []),
     };
 
     await openPendingTerminalForCurrentWorktree(
       pendingTerminalOpens,
-      terminalSessionListCache,
       tmux,
     );
 
@@ -572,22 +528,17 @@ describe('activate', () => {
     const pendingTerminalOpens = {
       consume: vi.fn(async () => 'wt-_work_alpha-main__term-1'),
     };
-    const terminalSessionListCache = {
-      set: vi.fn(async () => undefined),
-    };
     const tmux = {
       listSessions: vi.fn(async () => []),
     };
 
     await openPendingTerminalForCurrentWorktree(
       pendingTerminalOpens,
-      terminalSessionListCache,
       tmux,
     );
 
     expect(pendingTerminalOpens.consume).toHaveBeenCalledWith('/work/alpha-main');
     expect(tmux.listSessions).toHaveBeenCalledWith('wt-_work_alpha-main__term-');
-    expect(terminalSessionListCache.set).not.toHaveBeenCalled();
     expect(vscode.commands.executeCommand).not.toHaveBeenCalled();
   });
 
@@ -611,7 +562,6 @@ describe('activate', () => {
 
     await openPendingTerminalForCurrentWorktree(
       pendingTerminalOpens,
-      { set: vi.fn(async () => undefined) },
       tmux,
     );
 

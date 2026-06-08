@@ -40,27 +40,14 @@ describe('AddTerminalCommand', () => {
       { sessionName: 'wt-_work_repo__term-3', windowName: 'claude' },
     ];
     const tmux = {
-      // First call returns existing; second call (post-create) returns
-      // the existing plus the new session with whatever name tmux assigned
-      // (we don't set -n anymore, so tmux defaults to the shell name).
-      listSessions: vi
-        .fn()
-        .mockResolvedValueOnce(existing)
-        .mockResolvedValueOnce([
-          ...existing,
-          { sessionName: 'wt-_work_repo__term-4', windowName: 'zsh' },
-        ]),
+      listSessions: vi.fn().mockResolvedValueOnce(existing),
       ensureSession: vi.fn(async () => undefined),
     };
     const refresh = vi.fn();
-    const terminalSessionListCache = {
-      set: vi.fn(async () => undefined),
-    };
 
     await new AddTerminalCommand(
       tmux,
       refresh,
-      terminalSessionListCache,
     ).run({ worktree: { path: '/work/repo' } });
 
     expect(tmux.ensureSession).toHaveBeenCalledWith(
@@ -79,34 +66,22 @@ describe('AddTerminalCommand', () => {
       { viewColumn: -1 },
     );
     expect(vscodeState.createTerminal).not.toHaveBeenCalled();
-    expect(terminalSessionListCache.set).toHaveBeenCalledWith('wt-_work_repo__', [
-      { sessionName: 'wt-_work_repo__term-1', n: 1, windowName: 'zsh' },
-      { sessionName: 'wt-_work_repo__term-3', n: 3, windowName: 'claude' },
-      { sessionName: 'wt-_work_repo__term-4', n: 4, windowName: 'zsh' },
-    ]);
     expect(refresh).toHaveBeenCalledOnce();
   });
 
   it('creates the tmux session, stores a pending intent, and switches for cross-worktree adds', async () => {
     vscodeState.workspaceFolders = [{ uri: { fsPath: '/work/alpha-main' } }];
     const tmux = {
-      listSessions: vi
-        .fn()
-        .mockResolvedValueOnce([])
-        .mockResolvedValueOnce([
-          { sessionName: 'wt-_work_beta-main__term-1', windowName: 'zsh' },
-        ]),
+      listSessions: vi.fn().mockResolvedValueOnce([]),
       ensureSession: vi.fn(async () => undefined),
     };
     const refresh = vi.fn();
-    const terminalSessionListCache = { set: vi.fn(async () => undefined) };
     const pendingTerminalOpens = { set: vi.fn(async () => undefined) };
     const switcher = { switchTo: vi.fn(async () => undefined) };
 
     await new AddTerminalCommand(
       tmux,
       refresh,
-      terminalSessionListCache,
       { pendingTerminalOpens, switcher },
     ).run({ worktree: { path: '/work/beta-main' } });
 

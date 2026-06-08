@@ -4,13 +4,8 @@ import {
   allocateTermN,
   terminalSessionName,
   terminalSessionPrefix,
-  terminalWorktreePrefix,
 } from './tmuxSafe';
 import type { TmuxSession } from './tmuxCli';
-import {
-  toCachedTerminalSessions,
-  type TerminalSessionListCacheStore,
-} from './terminalSessionListCacheStore';
 import { SessionUriCodec } from './sessionUriCodec';
 
 export interface AddTerminalTmuxCli {
@@ -41,9 +36,6 @@ export class AddTerminalCommand {
   constructor(
     private readonly tmux: AddTerminalTmuxCli,
     private readonly refresh: () => void = () => undefined,
-    private readonly terminalSessionListCache: Pick<TerminalSessionListCacheStore, 'set'> = {
-      set: async () => undefined,
-    },
     private readonly options: AddTerminalCommandOptions = {},
     private readonly sessionUriCodec: SessionUriCodec = new SessionUriCodec(),
   ) {}
@@ -52,14 +44,10 @@ export class AddTerminalCommand {
     if (!node) return;
 
     const prefix = terminalSessionPrefix(node.worktree.path);
-    const cacheKey = terminalWorktreePrefix(node.worktree.path);
     const existing = await this.tmux.listSessions(prefix);
     const termN = allocateTermN(node.worktree.path, existing.map((session) => session.sessionName));
     const session = terminalSessionName(node.worktree.path, termN);
     await this.tmux.ensureSession(session, node.worktree.path);
-    const refreshed = await this.tmux.listSessions(prefix);
-    const cached = toCachedTerminalSessions(node.worktree.path, refreshed);
-    await this.terminalSessionListCache.set(cacheKey, cached);
 
     // Foreign worktree: don't attach a vscode.Terminal in this window — it
     // would land in the wrong workspace folder. Persist the new session as

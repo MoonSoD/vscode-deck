@@ -23,13 +23,8 @@ import { OpenTerminalInNewWindowCommand } from './terminal/openTerminalInNewWind
 import { PendingTerminalOpenStore } from './terminal/pendingTerminalOpenStore';
 import { TerminalCascade } from './terminal/terminalCascade';
 import { TerminalEditorProvider, terminalEditorViewType } from './terminal/terminalEditorProvider';
-import {
-  type CachedTerminalSession,
-  TerminalSessionListCacheStore,
-  toCachedTerminalSessions,
-} from './terminal/terminalSessionListCacheStore';
 import { TmuxCli, type TmuxSession } from './terminal/tmuxCli';
-import { terminalSessionPrefix, terminalWorktreePrefix } from './terminal/tmuxSafe';
+import { terminalSessionPrefix } from './terminal/tmuxSafe';
 import { tmuxPreflight } from './terminal/tmuxPreflight';
 import { SessionUriCodec } from './terminal/sessionUriCodec';
 
@@ -46,7 +41,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const worktreeRoots = new WorktreeRootStore(context.globalState);
   const worktreeOrders = new WorktreeOrderStore(context.globalState);
   const worktreeListCache = new WorktreeListCacheStore(context.globalState);
-  const terminalSessionListCache = new TerminalSessionListCacheStore(context.globalState);
   const pendingTerminalOpens = new PendingTerminalOpenStore(context.globalState);
   const projectCommonDirCache = new ProjectCommonDirCache(context.globalState);
   const branchDeletionPreferences = new BranchDeletionPreferenceStore(context.globalState);
@@ -60,12 +54,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     projectCommonDirCache,
     tmux,
     tmuxAvailability.available,
-    terminalSessionListCache,
   );
   const addTerminal = new AddTerminalCommand(
     tmux,
     () => tree.refresh(),
-    terminalSessionListCache,
     { pendingTerminalOpens, switcher },
   );
   const terminalEditorProvider = new TerminalEditorProvider(
@@ -75,7 +67,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     undefined,
     async (sessionName) => {
       await tmux.killSession(sessionName);
-      await terminalSessionListCache.removeSession(sessionName);
       tree.refresh();
     },
     // %window-renamed from any open terminal's control client → relabel the row
@@ -91,7 +82,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const closeTerminal = new CloseTerminalCommand(
     tmux,
     () => tree.refresh(),
-    terminalSessionListCache,
   );
   const terminalCascade = new TerminalCascade(tmux);
   const addWorktree = new AddWorktreeCommand(
@@ -190,7 +180,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }),
   );
   if (tmuxAvailability.available) {
-    await openPendingTerminalForCurrentWorktree(pendingTerminalOpens, terminalSessionListCache, tmux);
+    await openPendingTerminalForCurrentWorktree(pendingTerminalOpens, tmux);
   }
 }
 
@@ -211,17 +201,12 @@ interface PendingTerminalOpenConsumer {
   consume(worktreePath: string): Promise<string | undefined>;
 }
 
-interface TerminalSessionCacheWriter {
-  set(prefix: string, terminals: readonly CachedTerminalSession[]): Promise<void>;
-}
-
 interface TerminalSessionLister {
   listSessions(prefix?: string): Promise<TmuxSession[]>;
 }
 
 export async function openPendingTerminalForCurrentWorktree(
   pendingTerminalOpens: PendingTerminalOpenConsumer,
-  terminalSessionListCache: TerminalSessionCacheWriter,
   tmux: TerminalSessionLister,
 ): Promise<void> {
   const worktreePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
@@ -230,14 +215,9 @@ export async function openPendingTerminalForCurrentWorktree(
   const sessionName = await pendingTerminalOpens.consume(worktreePath);
   if (!sessionName) return;
 
-  const terminals = toCachedTerminalSessions(
-    worktreePath,
-    await tmux.listSessions(terminalSessionPrefix(worktreePath)),
-  );
+  const terminals = await tmux.listSessions(terminalSessionPrefix(worktreePath));
   const terminal = terminals.find((candidate) => candidate.sessionName === sessionName);
   if (!terminal) return;
-
-  await terminalSessionListCache.set(terminalWorktreePrefix(worktreePath), terminals);
 
   // VS Code natively restores this worktree's terminal tabs in their original
   // groups on switch-back. If the clicked terminal is already a restored tab,

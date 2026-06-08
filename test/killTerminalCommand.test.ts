@@ -42,22 +42,17 @@ describe('CloseTerminalCommand', () => {
     vscodeState.tabGroups = [];
   });
 
-  it('kills the selected terminal session, removes it from cache, and refreshes the tree', async () => {
+  it('kills the selected terminal session and refreshes the tree', async () => {
     const tmux = {
       killSession: vi.fn(async () => undefined),
     };
     const refresh = vi.fn();
-    const terminalSessionListCache = {
-      removeSession: vi.fn(async () => undefined),
-    };
     await new CloseTerminalCommand(
       tmux,
       refresh,
-      terminalSessionListCache,
     ).run({ terminal: { sessionName: 'wt-_work_repo__term-1' } });
 
     expect(tmux.killSession).toHaveBeenCalledWith('wt-_work_repo__term-1');
-    expect(terminalSessionListCache.removeSession).toHaveBeenCalledWith('wt-_work_repo__term-1');
     expect(refresh).toHaveBeenCalledOnce();
   });
 
@@ -66,26 +61,19 @@ describe('CloseTerminalCommand', () => {
       killSession: vi.fn(async () => undefined),
     };
     const refresh = vi.fn();
-    const terminalSessionListCache = {
-      removeSession: vi.fn(async () => undefined),
-    };
-    const command = new CloseTerminalCommand(tmux, refresh, terminalSessionListCache);
+    const command = new CloseTerminalCommand(tmux, refresh);
     const node = { terminal: { sessionName: 'wt-_work_repo__term-1' } };
 
     await command.run(node);
     await command.run(node);
 
     expect(tmux.killSession).toHaveBeenCalledTimes(2);
-    expect(terminalSessionListCache.removeSession).toHaveBeenCalledTimes(2);
     expect(refresh).toHaveBeenCalledTimes(2);
   });
 
   it('closes the matching Deck custom-editor tab after killing the session', async () => {
     const tmux = {
       killSession: vi.fn(async () => undefined),
-    };
-    const terminalSessionListCache = {
-      removeSession: vi.fn(async () => undefined),
     };
     const tab = {
       input: {
@@ -102,7 +90,6 @@ describe('CloseTerminalCommand', () => {
     await new CloseTerminalCommand(
       tmux,
       vi.fn(),
-      terminalSessionListCache,
     ).run({ terminal: { sessionName: 'wt-_work_repo__term-1' } });
 
     expect(vscodeState.closeTab).toHaveBeenCalledWith(tab);
@@ -117,21 +104,16 @@ describe('CloseTerminalCommand', () => {
       new MockRunner({ code: 1, stdout: '', stderr: 'no server running on /tmp/tmux-1000/deck' }),
     );
     const refresh = vi.fn();
-    const terminalSessionListCache = {
-      removeSession: vi.fn(async () => undefined),
-    };
 
     await expect(
       new CloseTerminalCommand(
         tmux,
         refresh,
-        terminalSessionListCache,
       ).run({
         terminal: { sessionName: 'wt-_work_repo__term-1' },
       }),
     ).resolves.toBeUndefined();
 
-    expect(terminalSessionListCache.removeSession).toHaveBeenCalledWith('wt-_work_repo__term-1');
     expect(refresh).toHaveBeenCalledOnce();
   });
 });

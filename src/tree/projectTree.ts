@@ -6,16 +6,12 @@ import { ProjectRegistryStore } from '../project/projectRegistryStore';
 import { ActiveWorktreeStore } from '../switch/activeWorktreeStore';
 import { WorktreeListCacheStore } from '../worktree/worktreeListCacheStore';
 import { WorktreeOrderStore } from '../worktree/worktreeOrderStore';
-import {
-  terminalSessionPrefix,
-  terminalWorktreePrefix,
-} from '../terminal/tmuxSafe';
+import { terminalSessionPrefix } from '../terminal/tmuxSafe';
 import type { TmuxSession } from '../terminal/tmuxCli';
 import {
-  CachedTerminalSession,
-  TerminalSessionListCacheStore,
+  type CachedTerminalSession,
   toCachedTerminalSessions,
-} from '../terminal/terminalSessionListCacheStore';
+} from '../terminal/terminalSession';
 import { reconcileWorktreeOrder } from './reconcileWorktreeOrder';
 import {
   describeProjectTreeItem,
@@ -121,7 +117,6 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
   private readonly projectCommonDirs = new Map<string, string | null>();
   private readonly resolvingProjectPaths = new Set<string>();
   private readonly refreshingWorktrees = new Set<string>();
-  private readonly refreshingTerminals = new Set<string>();
   private readonly tmux: TerminalSessionLister;
   private readonly tmuxAvailable: boolean;
 
@@ -139,10 +134,6 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
     },
     tmuxOrAvailable: TerminalSessionLister | boolean = true,
     tmuxAvailable?: boolean,
-    private readonly terminalSessionListCache: Pick<TerminalSessionListCacheStore, 'get' | 'set'> = {
-      get: () => undefined,
-      set: async () => undefined,
-    },
   ) {
     if (typeof tmuxOrAvailable === 'boolean') {
       this.tmux = { listSessions: async () => [] };
@@ -199,14 +190,7 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
 
   private getTerminalChildren(element: WorktreeNode): Node[] | Promise<Node[]> {
     const prefix = terminalSessionPrefix(element.worktree.path);
-    const cacheKey = terminalWorktreePrefix(element.worktree.path);
-    const cached = this.terminalSessionListCache.get(cacheKey);
-    if (cached !== undefined) {
-      this.refreshTerminalsInBackground(element, prefix, cacheKey, cached);
-      return this.toTerminalNodes(element, cached);
-    }
-
-    return this.loadTerminalChildren(element, prefix, cacheKey);
+    return this.loadTerminalChildren(element, prefix);
   }
 
   private getWorktreeChildren(element: ProjectNode): Node[] | Promise<Node[]> {
@@ -308,36 +292,12 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
   private async loadTerminalChildren(
     element: WorktreeNode,
     prefix: string,
-    cacheKey: string,
   ): Promise<Node[]> {
     const terminals = toCachedTerminalSessions(
       element.worktree.path,
       await this.tmux.listSessions(prefix),
     );
-    await this.terminalSessionListCache.set(cacheKey, terminals);
     return this.toTerminalNodes(element, terminals);
-  }
-
-  private refreshTerminalsInBackground(
-    element: WorktreeNode,
-    prefix: string,
-    cacheKey: string,
-    previous: readonly CachedTerminalSession[],
-  ): void {
-    if (this.refreshingTerminals.has(prefix)) return;
-    this.refreshingTerminals.add(prefix);
-    void this.tmux
-      .listSessions(prefix)
-      .then(async (sessions) => {
-        const terminals = toCachedTerminalSessions(element.worktree.path, sessions);
-        if (sameTerminals(previous, terminals)) return;
-        await this.terminalSessionListCache.set(cacheKey, terminals);
-        this._onDidChangeTreeData.fire(undefined);
-      })
-      .catch(() => undefined)
-      .finally(() => {
-        this.refreshingTerminals.delete(prefix);
-      });
   }
 
   private toTerminalNodes(element: WorktreeNode, terminals: readonly CachedTerminalSession[]): Node[] {
@@ -385,22 +345,6 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<Node> {
     const mainWorktreePath = gitWorktrees.find((w) => !w.bare)?.path;
     return worktrees.map((w) => new WorktreeNode(projectPath, w, activeWorktreePath, mainWorktreePath));
   }
-}
-
-function sameTerminals(
-  left: readonly CachedTerminalSession[],
-  right: readonly CachedTerminalSession[],
-): boolean {
-  if (left.length !== right.length) return false;
-  return left.every((terminal, index) => sameTerminal(terminal, right[index]));
-}
-
-function sameTerminal(left: CachedTerminalSession, right: CachedTerminalSession): boolean {
-  return (
-    left.sessionName === right.sessionName &&
-    left.n === right.n &&
-    left.windowName === right.windowName
-  );
 }
 
 function sameWorktrees(left: readonly Worktree[], right: readonly Worktree[]): boolean {

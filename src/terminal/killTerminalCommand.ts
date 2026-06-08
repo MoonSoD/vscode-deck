@@ -1,6 +1,5 @@
 import * as vscode from 'vscode';
 import { SessionUriCodec } from './sessionUriCodec';
-import type { TerminalSessionListCacheStore } from './terminalSessionListCacheStore';
 import { terminalEditorViewType } from './terminalEditorProvider';
 
 export interface CloseTerminalTmuxCli {
@@ -17,9 +16,6 @@ export class CloseTerminalCommand {
   constructor(
     private readonly tmux: CloseTerminalTmuxCli,
     private readonly refresh: () => void = () => undefined,
-    private readonly terminalSessionListCache: Pick<TerminalSessionListCacheStore, 'removeSession'> = {
-      removeSession: async () => undefined,
-    },
     private readonly sessionUriCodec: SessionUriCodec = new SessionUriCodec(),
   ) {}
 
@@ -28,7 +24,6 @@ export class CloseTerminalCommand {
 
     const session = node.terminal.sessionName;
     await this.tmux.killSession(session);
-    await this.terminalSessionListCache.removeSession(session);
     await this.closeMatchingEditorTab(session);
     this.refresh();
   }
