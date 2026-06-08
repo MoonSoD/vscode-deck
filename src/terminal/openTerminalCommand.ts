@@ -55,7 +55,7 @@ export class OpenTerminalCommand {
 
     await vscode.commands.executeCommand(
       'vscode.openWith',
-      this.sessionUriCodec.encode({ sessionName: node.terminal.sessionName, cwd }),
+      this.sessionUriCodec.encode({ worktreePath: cwd, term: node.n }),
       terminalEditorViewType,
       { viewColumn: vscode.ViewColumn.Active },
     );

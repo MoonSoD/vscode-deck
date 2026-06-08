@@ -74,8 +74,7 @@ describe('TerminalCascade', () => {
         viewType: 'deck.terminal',
         uri: {
           scheme: 'deck-terminal',
-          path: '/wt-_repo_feature__term-1',
-          query: 'cwd=%2Frepo%2Ffeature',
+          path: '/repo/feature/term-1',
         },
       },
     };
@@ -84,8 +83,7 @@ describe('TerminalCascade', () => {
         viewType: 'deck.terminal',
         uri: {
           scheme: 'deck-terminal',
-          path: '/wt-_repo_other__term-1',
-          query: 'cwd=%2Frepo%2Fother',
+          path: '/repo/other/term-1',
         },
       },
     };

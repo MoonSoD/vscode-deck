@@ -62,15 +62,17 @@ the editor tab and how reload is handled.
 
 ## Decision
 
-> **Superseded in part by [ADR-0012](./0012-terminal-transport-tmux-control-mode.md)
-> and [ADR-0013](./0013-vscode-native-custom-editor-restore.md).**
+> **Superseded in part by [ADR-0012](./0012-terminal-transport-tmux-control-mode.md),
+> [ADR-0013](./0013-vscode-native-custom-editor-restore.md), and
+> [ADR-0015](./0015-terminal-tab-uris-are-file-paths.md).**
 > The custom-editor surface, URI identity, kill-on-dispose, and cascade all
 > carry forward. What changed: the *transport* — decision 3 (one node-pty
 > child per tab) and the pty-relay half of decision 4 — is replaced by a
 > `tmux -C` control-mode client (`TerminalTransport`); node-pty and its
 > `spawn-helper` postinstall hack are gone (ADR-0012). The reload-persistence
 > mechanism in decision 8 (`TabSnapshotStore`) is deleted wholesale — VS Code
-> restores custom-editor tabs natively across switches (ADR-0013). The
+> restores custom-editor tabs natively across switches (ADR-0013). The URI
+> shape in decision 2 is replaced by file-path URIs (ADR-0015). The
 > `spawn-helper` consequence note below is therefore historical.
 
 1. **Terminals are custom-editor tabs.** Register a `CustomEditorProvider`
@@ -78,18 +80,13 @@ the editor tab and how reload is handled.
    webview attached to a tmux session on the DeckSocket. VS Code's
    built-in terminal-in-editor is no longer used for Deck Terminals.
 
-2. **URI carries the session name and the cwd.** Tabs are addressed by
-   `deck-terminal://<workspace-id>/<sessionName>?cwd=<encodeURIComponent(worktreePath)>`.
-   `sessionName` is the same `wt-<sanitized(worktree.path)>__term-N`
-   ADR-0008 §2 specifies. `<workspace-id>` is a redundant authority for
-   URI legibility. The `cwd` query carries the unsanitized worktree path
-   so `new-session -A -c <cwd>` always has a real path even if the
-   session was killed externally between resolves — sessionName
-   sanitization is lossy and not reversible. On normal attach (session
-   exists) tmux ignores `-c`, so carrying `cwd` is harmless. The
-   provider's `resolveCustomEditor(document, panel)` decodes the URI to
-   recover `(sessionName, cwd)` — there is no other identification
-   heuristic.
+2. **URI identifies a terminal as a file inside its Worktree.**
+   Superseded by ADR-0015: tabs are addressed by
+   `deck-terminal:/<worktreePath>/term-N`. There is no authority and no
+   query. The provider's `resolveCustomEditor(document, panel)` decodes the
+   URI to recover `(worktreePath, term, sessionName, cwd)`; `sessionName`
+   still derives as `wt-<sanitized(worktree.path)>__term-N`, byte-identical
+   to ADR-0008 §2.
 
 3. **One node-pty child per tab, spawned through the DeckSocket wrapper.**
    On `resolveCustomEditor`, the provider mints a `TerminalPtyBridge`

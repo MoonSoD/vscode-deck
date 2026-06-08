@@ -58,9 +58,7 @@ describe('AddTerminalCommand', () => {
       'vscode.openWith',
       {
         scheme: 'deck-terminal',
-        authority: 'session',
-        path: '/wt-_work_repo__term-4',
-        query: 'cwd=%2Fwork%2Frepo',
+        path: '/work/repo/term-4',
       },
       'deck.terminal',
       { viewColumn: -1 },

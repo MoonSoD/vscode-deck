@@ -406,8 +406,7 @@ describe('activate', () => {
     };
     const document = provider.openCustomDocument({
       scheme: 'deck-terminal',
-      path: '/wt-_work_repo__term-1',
-      query: 'cwd=%2Fwork%2Frepo',
+      path: '/work/repo/term-1',
     });
     provider.resolveCustomEditor(document, panel);
     disposePanel?.();
@@ -459,9 +458,7 @@ describe('activate', () => {
       'vscode.openWith',
       {
         scheme: 'deck-terminal',
-        authority: 'session',
-        path: '/wt-_work_alpha-main__term-1',
-        query: 'cwd=%2Fwork%2Falpha-main',
+        path: '/work/alpha-main/term-1',
       },
       'deck.terminal',
       { viewColumn: -1 },
@@ -480,8 +477,7 @@ describe('activate', () => {
               viewType: 'deck.terminal',
               uri: {
                 scheme: 'deck-terminal',
-                path: '/wt-_work_alpha-main__term-1',
-                query: 'cwd=%2Fwork%2Falpha-main',
+                path: '/work/alpha-main/term-1',
               },
             },
           },

@@ -64,8 +64,7 @@ function providerDocument(
     provider,
     document: provider.openCustomDocument({
       scheme: 'deck-terminal',
-      path: '/wt-_work_alpha-main__term-1',
-      query: 'cwd=%2Fwork%2Falpha-main',
+      path: '/work/alpha-main/term-1',
     } as never),
   };
 }
@@ -89,8 +88,7 @@ describe('TerminalEditorProvider', () => {
     );
     const document = provider.openCustomDocument({
       scheme: 'deck-terminal',
-      path: '/wt-_work_alpha-main__term-1',
-      query: 'cwd=%2Fwork%2Falpha-main',
+      path: '/work/alpha-main/term-1',
     } as never);
 
     provider.resolveCustomEditor(document, terminalPanel as never);
@@ -123,8 +121,7 @@ describe('TerminalEditorProvider', () => {
     );
     const document = provider.openCustomDocument({
       scheme: 'deck-terminal',
-      path: '/wt-_work_alpha-main__term-1',
-      query: 'cwd=%2Fwork%2Falpha-main',
+      path: '/work/alpha-main/term-1',
     } as never);
 
     provider.resolveCustomEditor(document, terminalPanel as never);
@@ -279,8 +276,7 @@ describe('TerminalEditorProvider', () => {
     );
     const document = provider.openCustomDocument({
       scheme: 'deck-terminal',
-      path: '/wt-_work_alpha-main__term-1',
-      query: 'cwd=%2Fwork%2Falpha-main',
+      path: '/work/alpha-main/term-1',
     } as never);
 
     provider.resolveCustomEditor(document, firstPanel as never);
@@ -330,8 +326,7 @@ describe('TerminalEditorProvider', () => {
     );
     const document = provider.openCustomDocument({
       scheme: 'deck-terminal',
-      path: '/wt-_work_alpha-main__term-1',
-      query: 'cwd=%2Fwork%2Falpha-main',
+      path: '/work/alpha-main/term-1',
     } as never);
 
     provider.resolveCustomEditor(document, panel as never);
@@ -354,8 +349,7 @@ describe('TerminalEditorProvider', () => {
     );
     const document = provider.openCustomDocument({
       scheme: 'deck-terminal',
-      path: '/wt-_work_alpha-main__term-1',
-      query: 'cwd=%2Fwork%2Falpha-main',
+      path: '/work/alpha-main/term-1',
     } as never);
 
     provider.resolveCustomEditor(document, panel as never);

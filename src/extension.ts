@@ -24,7 +24,7 @@ import { PendingTerminalOpenStore } from './terminal/pendingTerminalOpenStore';
 import { TerminalCascade } from './terminal/terminalCascade';
 import { TerminalEditorProvider, terminalEditorViewType } from './terminal/terminalEditorProvider';
 import { TmuxCli, type TmuxSession } from './terminal/tmuxCli';
-import { terminalSessionPrefix } from './terminal/tmuxSafe';
+import { terminalSessionNumber, terminalSessionPrefix } from './terminal/tmuxSafe';
 import { tmuxPreflight } from './terminal/tmuxPreflight';
 import { SessionUriCodec } from './terminal/sessionUriCodec';
 
@@ -219,6 +219,8 @@ export async function openPendingTerminalForCurrentWorktree(
   const terminals = await tmux.listSessions(terminalSessionPrefix(worktreePath));
   const terminal = terminals.find((candidate) => candidate.sessionName === sessionName);
   if (!terminal) return;
+  const term = terminalSessionNumber(worktreePath, sessionName);
+  if (term === 0) return;
 
   // VS Code natively restores this worktree's terminal tabs in their original
   // groups on switch-back. If the clicked terminal is already a restored tab,
@@ -228,7 +230,7 @@ export async function openPendingTerminalForCurrentWorktree(
   const existingColumn = findTerminalTabColumn(sessionName);
   await vscode.commands.executeCommand(
     'vscode.openWith',
-    new SessionUriCodec().encode({ sessionName, cwd: worktreePath }),
+    new SessionUriCodec().encode({ worktreePath, term }),
     terminalEditorViewType,
     { viewColumn: existingColumn ?? vscode.ViewColumn.Active },
   );

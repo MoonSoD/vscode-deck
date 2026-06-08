@@ -56,7 +56,7 @@ export class AddTerminalCommand {
 
     await vscode.commands.executeCommand(
       'vscode.openWith',
-      this.sessionUriCodec.encode({ sessionName: session, cwd: node.worktree.path }),
+      this.sessionUriCodec.encode({ worktreePath: node.worktree.path, term: termN }),
       'deck.terminal',
       { viewColumn: vscode.ViewColumn.Active },
     );

@@ -67,7 +67,7 @@ Deck's own isolated tmux server, separate from the user's personal tmux.
 _Avoid_: tmux (the user's own tmux is a distinct thing)
 
 **Terminal**:
-A persistent shell owned by Deck — one tmux session on the DeckSocket — shown as a row under a Worktree and opened as an xterm.js editor tab.
+A persistent shell owned by Deck — one tmux session on the DeckSocket — shown as a row under a Worktree and opened as an xterm.js editor tab addressed by `deck-terminal:/<worktree>/term-N`.
 _Avoid_: tmux session, tmux window, pane
 
 ## Relationships
@@ -95,4 +95,3 @@ _Avoid_: tmux session, tmux window, pane
 - "active" meant both **ActiveProject** and **ActiveWorktree** — resolved: distinct concepts (the Project vs the specific Worktree).
 - A Project's registered path was treated as its identity — resolved: it is a **discovery seed**; the git common dir is the identity.
 - "tmux session" was used for **Terminal** — resolved: the session is the backing mechanism; **Terminal** is the domain concept.
-

@@ -43,9 +43,7 @@ describe('OpenTerminalCommand', () => {
       'vscode.openWith',
       {
         scheme: 'deck-terminal',
-        authority: 'session',
-        path: '/wt-_work_alpha-main__term-1',
-        query: 'cwd=%2Fwork%2Falpha-main',
+        path: '/work/alpha-main/term-1',
       },
       'deck.terminal',
       { viewColumn: -1 },

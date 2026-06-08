@@ -80,8 +80,7 @@ describe('CloseTerminalCommand', () => {
         viewType: 'deck.terminal',
         uri: {
           scheme: 'deck-terminal',
-          path: '/wt-_work_repo__term-1',
-          query: 'cwd=%2Fwork%2Frepo',
+          path: '/work/repo/term-1',
         },
       },
     };
