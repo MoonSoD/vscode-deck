@@ -173,7 +173,7 @@ describe('RepositoryTreeProvider', () => {
     ]);
   });
 
-  it('renders warm cached worktrees synchronously and refreshes in the background only on diff', async () => {
+  it('renders warm cached worktrees and refreshes in the background only on diff', async () => {
     const activeWorktrees = {
       get: vi.fn(),
     } as unknown as ActiveWorktreeStore;
@@ -207,7 +207,7 @@ describe('RepositoryTreeProvider', () => {
     const repositoryNode = provider.getChildren();
     if (!Array.isArray(repositoryNode)) throw new Error('expected sync repository roots');
 
-    const worktreeNodes = provider.getChildren(repositoryNode[0]);
+    const worktreeNodes = await provider.getChildren(repositoryNode[0]);
 
     expect(Array.isArray(worktreeNodes)).toBe(true);
     expect((worktreeNodes as Array<{ worktree: { path: string } }>).map((node) => node.worktree.path)).toEqual([
@@ -279,7 +279,7 @@ describe('RepositoryTreeProvider', () => {
     expect(worktreeListCache.set).not.toHaveBeenCalled();
   });
 
-  it('hides pending worktree removals from warm cached rows', () => {
+  it('hides pending worktree removals from warm cached rows', async () => {
     const activeWorktrees = {
       get: vi.fn(),
     } as unknown as ActiveWorktreeStore;
@@ -323,7 +323,7 @@ describe('RepositoryTreeProvider', () => {
     const repositoryNode = provider.getChildren();
     if (!Array.isArray(repositoryNode)) throw new Error('expected sync repository roots');
 
-    const worktreeNodes = provider.getChildren(repositoryNode[0]);
+    const worktreeNodes = await provider.getChildren(repositoryNode[0]);
 
     expect(Array.isArray(worktreeNodes)).toBe(true);
     expect((worktreeNodes as Array<{ worktree: { path: string } }>).map((node) => node.worktree.path)).toEqual([
@@ -455,7 +455,7 @@ describe('RepositoryTreeProvider', () => {
     expect(vscode.workspace.getConfiguration).not.toHaveBeenCalled();
   });
 
-  it('renders existing Worktree terminals without the add row when tmux is available', async () => {
+  it('renders existing Worktree terminals expanded without the add row when tmux is available', async () => {
     const tmux = {
       listSessions: vi.fn(async () => [
         { sessionName: 'wt-_work_alpha-main__term-2', windowName: 'claude' },
@@ -477,11 +477,13 @@ describe('RepositoryTreeProvider', () => {
     const worktrees = await provider.getChildren(repositories[0]);
     if (!Array.isArray(worktrees)) throw new Error('expected worktree children');
 
-    expect(worktrees[0].collapsibleState).toBe(1);
+    expect(worktrees.map((worktree) => worktree.collapsibleState)).toEqual([2, 0]);
     expect(worktrees[0].command).toMatchObject({ command: 'deck.switchWorktree' });
     const terminalRows = await provider.getChildren(worktrees[0]);
+    const emptyRows = await provider.getChildren(worktrees[1]);
 
     expect(Array.isArray(terminalRows)).toBe(true);
+    expect(emptyRows).toEqual([]);
     expect((terminalRows as Array<{ label: string; command?: { command: string } }>)).toEqual([
       expect.objectContaining({
         label: 'zsh',
@@ -496,7 +498,8 @@ describe('RepositoryTreeProvider', () => {
         contextValue: 'deck.terminal.foreign',
       }),
     ]);
-    expect(tmux.listSessions).toHaveBeenCalledWith('wt-_work_alpha-main__term-');
+    expect(tmux.listSessions).toHaveBeenCalledWith();
+    expect(tmux.listSessions).toHaveBeenCalledTimes(1);
   });
 
   it('returns parent rows for Worktree and Terminal rows', async () => {
@@ -589,7 +592,7 @@ describe('RepositoryTreeProvider', () => {
     ]);
   });
 
-  it('renders the Add Terminal row only as the empty-state hint when no terminals exist', async () => {
+  it('renders an empty Worktree as a leaf with no children when no terminals exist', async () => {
     const tmux = { listSessions: vi.fn(async () => []) };
     const provider = new RepositoryTreeProvider(
       registry(['/work/alpha-main']),
@@ -605,10 +608,9 @@ describe('RepositoryTreeProvider', () => {
     const worktrees = await provider.getChildren(repositories[0]);
     if (!Array.isArray(worktrees)) throw new Error('expected worktree children');
 
+    expect(worktrees[0].collapsibleState).toBe(0);
     const terminalRows = await provider.getChildren(worktrees[0]);
-    expect((terminalRows as Array<{ label: string }>).map((r) => r.label)).toEqual([
-      'Add Terminal',
-    ]);
+    expect(terminalRows).toEqual([]);
   });
 
   it('resolves terminal rows from live tmux and re-lists after refresh', async () => {

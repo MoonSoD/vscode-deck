@@ -6,23 +6,22 @@ import { RepositoryRegistryStore } from '../repository/repositoryRegistryStore';
 import { ActiveWorktreeStore } from '../switch/activeWorktreeStore';
 import { WorktreeListCacheStore } from '../worktree/worktreeListCacheStore';
 import { WorktreeOrderStore } from '../worktree/worktreeOrderStore';
-import { terminalSessionPrefix } from '../terminal/tmuxSafe';
 import type { TmuxSession } from '../terminal/tmuxCli';
 import {
   type CachedTerminalSession,
   toCachedTerminalSessions,
 } from '../terminal/terminalSession';
+import { groupTerminalSessionsByWorktree } from '../terminal/worktreeTerminalSessions';
 import { excludePending } from './excludePending';
 import { reconcileWorktreeOrder } from './reconcileWorktreeOrder';
 import {
   describeRepositoryTreeItem,
   describeTmuxUnavailableTreeItem,
-  describeTerminalAddTreeItem,
   describeTerminalTreeItem,
   describeWorktreeTreeItem,
 } from './worktreeTreeItem';
 
-export type RepositoryTreeNode = RepositoryNode | WorktreeNode | TerminalNode | TerminalAddNode | TmuxUnavailableNode;
+export type RepositoryTreeNode = RepositoryNode | WorktreeNode | TerminalNode | TmuxUnavailableNode;
 
 interface TerminalSessionLister {
   listSessions(prefix?: string): Promise<TmuxSession[]>;
@@ -49,9 +48,16 @@ class WorktreeNode extends vscode.TreeItem {
     public readonly worktree: Worktree,
     activeWorktreePath: string | undefined,
     public readonly mainWorktreePath: string | undefined,
+    public readonly terminals: readonly CachedTerminalSession[] | undefined,
+    public readonly renderVersion: number,
   ) {
     const item = describeWorktreeTreeItem(worktree, activeWorktreePath, mainWorktreePath);
-    super(item.label, vscode.TreeItemCollapsibleState.Collapsed);
+    super(
+      item.label,
+      terminals !== undefined && terminals.length === 0
+        ? vscode.TreeItemCollapsibleState.None
+        : vscode.TreeItemCollapsibleState.Expanded,
+    );
     this.id = `worktree::${worktree.path}`;
     this.contextValue = item.contextValue;
     this.description = item.description;
@@ -60,21 +66,6 @@ class WorktreeNode extends vscode.TreeItem {
       command: 'deck.switchWorktree',
       title: 'Switch',
       arguments: [worktree.path],
-    };
-  }
-}
-
-class TerminalAddNode extends vscode.TreeItem {
-  constructor(public readonly worktreeNode: WorktreeNode) {
-    const item = describeTerminalAddTreeItem();
-    super(item.label, vscode.TreeItemCollapsibleState.None);
-    this.id = `add-terminal::${worktreeNode.worktree.path}`;
-    this.contextValue = item.contextValue;
-    this.iconPath = new vscode.ThemeIcon(item.iconId);
-    this.command = {
-      command: 'deck.addTerminal',
-      title: 'Add Terminal',
-      arguments: [worktreeNode],
     };
   }
 }
@@ -127,6 +118,7 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
   private readonly refreshingWorktrees = new Set<string>();
   private readonly tmux: TerminalSessionLister;
   private readonly tmuxAvailable: boolean;
+  private renderVersion = 0;
 
   constructor(
     private readonly repositoryRegistry: Pick<RepositoryRegistryStore, 'list'>,
@@ -155,6 +147,7 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
   }
 
   refresh(): void {
+    this.renderVersion += 1;
     this.resolveActiveRepository();
     this._onDidChangeTreeData.fire(undefined);
   }
@@ -170,7 +163,7 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
     if (element instanceof TerminalNode) {
       return this.toParentWorktreeNode(element.worktreeNode);
     }
-    if (element instanceof TerminalAddNode || element instanceof TmuxUnavailableNode) {
+    if (element instanceof TmuxUnavailableNode) {
       return this.toParentWorktreeNode(element.worktreeNode);
     }
     return undefined;
@@ -244,6 +237,8 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
       worktreeNode.worktree,
       this.currentWorktreePath(),
       worktreeNode.mainWorktreePath,
+      worktreeNode.terminals,
+      worktreeNode.renderVersion,
     );
   }
 
@@ -259,7 +254,7 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
       if (cached !== undefined) {
         const visibleCached = this.visibleWorktrees(cached);
         this.refreshWorktreesInBackground(element.repositoryPath, commonDir, visibleCached);
-        return this.toWorktreeNodes(
+        return this.toWorktreeNodesWithLiveTerminals(
           element.repositoryPath,
           visibleCached,
           commonDir,
@@ -343,21 +338,21 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
       (await resolveCommonDirSafe(this.repositoryCommonDirCache, repositoryPath)) ??
       undefined;
     if (commonDir !== undefined) await this.worktreeListCache.set(commonDir, visibleWorktrees);
-    return this.toWorktreeNodes(repositoryPath, visibleWorktrees, commonDir, activeWorktreePath);
+    return this.toWorktreeNodesWithLiveTerminals(repositoryPath, visibleWorktrees, commonDir, activeWorktreePath);
   }
 
   private async getTerminalChildren(element: WorktreeNode): Promise<RepositoryTreeNode[]> {
+    if (element.terminals !== undefined && element.renderVersion === this.renderVersion) {
+      return this.toTerminalNodes(element, element.terminals);
+    }
     const terminals = toCachedTerminalSessions(
       element.worktree.path,
-      await this.tmux.listSessions(terminalSessionPrefix(element.worktree.path)),
+      await this.tmux.listSessions(),
     );
     return this.toTerminalNodes(element, terminals);
   }
 
   private toTerminalNodes(element: WorktreeNode, terminals: readonly CachedTerminalSession[]): RepositoryTreeNode[] {
-    // The Worktree row's inline `+` icon is the always-available add affordance.
-    // Show the explicit "Add Terminal" row only as the empty-state hint.
-    if (terminals.length === 0) return [new TerminalAddNode(element)];
     const activeWorktreePath = this.currentWorktreePath();
     const isActiveWorktree =
       activeWorktreePath !== undefined &&
@@ -365,6 +360,23 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
     return terminals.map(
       (terminal) => new TerminalNode(terminal, element, isActiveWorktree),
     );
+  }
+
+  private async toWorktreeNodesWithLiveTerminals(
+    repositoryPath: string,
+    gitWorktrees: readonly Worktree[],
+    commonDir: string | undefined,
+    activeWorktreePath: string | undefined,
+  ): Promise<WorktreeNode[]> {
+    if (!this.tmuxAvailable) {
+      return this.toWorktreeNodes(repositoryPath, gitWorktrees, commonDir, activeWorktreePath, undefined);
+    }
+
+    const sessionsByWorktree = groupTerminalSessionsByWorktree(
+      gitWorktrees.map((worktree) => worktree.path),
+      await this.tmux.listSessions(),
+    );
+    return this.toWorktreeNodes(repositoryPath, gitWorktrees, commonDir, activeWorktreePath, sessionsByWorktree);
   }
 
   private refreshWorktreesInBackground(
@@ -393,6 +405,7 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
     gitWorktrees: readonly Worktree[],
     commonDir: string | undefined,
     activeWorktreePath: string | undefined,
+    sessionsByWorktree: ReadonlyMap<string, readonly CachedTerminalSession[]> | undefined,
   ): WorktreeNode[] {
     const worktrees = this.visibleWorktrees(
       reconcileWorktreeOrder(
@@ -401,7 +414,14 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
       ),
     );
     const mainWorktreePath = gitWorktrees.find((w) => !w.bare)?.path;
-    return worktrees.map((w) => new WorktreeNode(repositoryPath, w, activeWorktreePath, mainWorktreePath));
+    return worktrees.map((w) => new WorktreeNode(
+      repositoryPath,
+      w,
+      activeWorktreePath,
+      mainWorktreePath,
+      sessionsByWorktree?.get(w.path),
+      this.renderVersion,
+    ));
   }
 
   private visibleWorktrees(

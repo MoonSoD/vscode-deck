@@ -13,12 +13,6 @@ export interface WorktreeTreeItemDescription {
   contextValue: 'deck.worktree.active' | 'deck.worktree.main' | 'deck.worktree';
 }
 
-export interface TerminalAddTreeItemDescription {
-  label: 'Add Terminal';
-  iconId: 'add';
-  contextValue: 'deck.terminal.add';
-}
-
 export interface TerminalTreeItemDescription {
   label: string;
   iconId: 'terminal';
@@ -62,14 +56,6 @@ export function describeWorktreeTreeItem(
     description: worktree.path,
     iconId: isActive ? 'check' : 'git-branch',
     contextValue,
-  };
-}
-
-export function describeTerminalAddTreeItem(): TerminalAddTreeItemDescription {
-  return {
-    label: 'Add Terminal',
-    iconId: 'add',
-    contextValue: 'deck.terminal.add',
   };
 }
 
