@@ -40,7 +40,6 @@ import { createRestoreGate } from './terminal/restoreGate';
 import { AgentSidecarStore } from './agent/agentSidecarStore';
 import { AgentDetection } from './agent/agentDetection';
 import { AGENT_HOOK_SETUP_DISMISSED_KEY, AgentSetupPrompt } from './agent/agentSetupPrompt';
-import { AgentSetupVerifier } from './agent/agentSetupVerifier';
 import { HookInstaller } from './agent/hookInstaller';
 import { rewriteTerminalSnapshotAgentSessions } from './agent/terminalSnapshotAgentSessions';
 import { ResumeTemplate } from './agent/resumeTemplate';
@@ -65,16 +64,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     codexHookScriptPath: join(deckDir, 'bin', 'deck-codex-hook.sh'),
     sidecarDir: join(deckDir, 'hooks'),
   });
-  const agentSetupVerifier = new AgentSetupVerifier({
-    sidecars: agentSidecars,
-    notifications: vscode.window,
-  });
   const agentSetupPrompt = new AgentSetupPrompt({
     detector: new AgentDetection(),
     installer: hookInstaller,
     globalState: context.globalState,
     notifications: vscode.window,
-    verifier: agentSetupVerifier,
     reviewer: {
       async showChanges(configs) {
         for (const { agent, configPath } of configs) {

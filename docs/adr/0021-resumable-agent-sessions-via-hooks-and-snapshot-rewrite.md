@@ -109,12 +109,13 @@ by id. Two findings shaped the design:
    side and a safety net for a bad merge; the surgical remove command stays the
    primary undo.)* Writes target the **user-global** config, **merge** into
    existing hooks (never clobber foreign entries), and are **tagged** for
-   surgical removal (`Deck: Remove agent hooks`). After install, Deck **arms and
-   verifies**: it watches for the first sidecar to appear and confirms capture
-   worked in-context — turning an unverified promise into an observed fact, and
-   surfacing a broken hook immediately instead of post-reboot. Deck also sets the
-   expectation that **already-running agents must be restarted** to be tracked
-   (a hook only binds sessions started after install).
+   surgical removal (`Deck: Remove agent hooks`). Deck sets the expectation that
+   **already-running agents must be restarted** to be tracked (a hook only binds
+   sessions started after install). *(An automatic "arm-and-verify" — a post-install
+   timer that confirmed the first captured sidecar — was tried and dropped: it
+   couldn't tell "you haven't started an agent yet" from "hooks are broken," so it
+   false-alarmed on the normal install-then-later case. The sidecar appearing when
+   you run an agent is the real proof.)*
 
    **Delivery mechanism — v1 uniform config-layer hooks; v2 Claude plugin.** v1
    writes a tagged hook entry to both `~/.claude/settings.json` and
@@ -239,8 +240,6 @@ by id. Two findings shaped the design:
   - The §6 wrap (`<resume>; exec $SHELL`) must survive resurrect's tab-delimited
     snapshot column parsing (`;`, spaces) on restore.
   - The hook no-ops correctly when `$DECK_SESSION` is absent (non-Deck `claude`).
-  - Arm-and-verify timing: a sidecar appears within a few seconds of the first
-    `SessionStart`/`UserPromptSubmit` so the confirmation feels immediate.
 
 ## Status
 

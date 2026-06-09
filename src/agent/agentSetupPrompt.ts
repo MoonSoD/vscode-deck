@@ -31,10 +31,6 @@ interface Notifications {
   ): Thenable<readonly AgentPick[] | undefined>;
 }
 
-interface AgentSetupVerifier {
-  arm(): void;
-}
-
 export interface AgentConfigChange {
   agent: AgentName;
   configPath: string;
@@ -50,7 +46,6 @@ export class AgentSetupPrompt {
     installer: AgentHookInstaller;
     globalState: GlobalState;
     notifications: Notifications;
-    verifier?: AgentSetupVerifier;
     reviewer?: AgentSetupReviewer;
   }) {}
 
@@ -80,7 +75,6 @@ export class AgentSetupPrompt {
     if (selected.length === 0) return;
 
     await this.deps.installer.install(selected);
-    this.deps.verifier?.arm();
     await this.offerReview(selected, detected);
   }
 

@@ -13,7 +13,6 @@ const vscodeState = vi.hoisted(() => ({
   agentDetectionArgs: undefined as unknown[] | undefined,
   agentSetupPromptArgs: undefined as unknown[] | undefined,
   agentSetupPromptRun: vi.fn(),
-  agentSetupVerifierArgs: undefined as unknown[] | undefined,
   hookInstallerArgs: undefined as unknown[] | undefined,
   hookInstallerRemove: vi.fn(),
   configUpdate: vi.fn(),
@@ -300,14 +299,6 @@ vi.mock('../src/agent/agentSetupPrompt', () => ({
   },
 }));
 
-vi.mock('../src/agent/agentSetupVerifier', () => ({
-  AgentSetupVerifier: class {
-    constructor(...args: unknown[]) {
-      vscodeState.agentSetupVerifierArgs = args;
-    }
-  },
-}));
-
 vi.mock('../src/terminal/addTerminalCommand', () => ({
   AddTerminalCommand: class {
     constructor(...args: unknown[]) {
@@ -357,7 +348,6 @@ describe('activate', () => {
     vscodeState.agentDetectionArgs = undefined;
     vscodeState.agentSetupPromptArgs = undefined;
     vscodeState.agentSetupPromptRun.mockResolvedValue(undefined);
-    vscodeState.agentSetupVerifierArgs = undefined;
     vscodeState.hookInstallerArgs = undefined;
     vscodeState.hookInstallerRemove.mockResolvedValue(undefined);
     vscodeState.externalWatchDisposables = [];
@@ -679,20 +669,6 @@ describe('activate', () => {
     await registration[1]();
 
     expect(vscodeState.agentSetupPromptRun).toHaveBeenCalledWith({ explicit: true });
-  });
-
-  it('wires agent setup verification through the setup prompt', async () => {
-    const context = createContext();
-
-    await activate(context as never);
-
-    expect(vscodeState.agentSetupVerifierArgs?.[0]).toEqual(expect.objectContaining({
-      notifications: vscode.window,
-      sidecars: expect.any(Object),
-    }));
-    expect(vscodeState.agentSetupPromptArgs?.[0]).toEqual(expect.objectContaining({
-      verifier: expect.any(Object),
-    }));
   });
 
   it('registers deck.removeAgentHooks through HookInstaller and dismisses setup prompts', async () => {

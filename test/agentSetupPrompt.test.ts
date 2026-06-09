@@ -27,7 +27,7 @@ describe('AgentSetupPrompt', () => {
     expect(prompt.installer.install).toHaveBeenCalledWith(['codex']);
   });
 
-  it('installs without a blocking modal preview and arms verification', async () => {
+  it('installs without a blocking modal preview', async () => {
     const prompt = createPrompt({
       detected: [{ agent: 'claude', configPath: '/home/me/.claude/settings.json' }],
       infoChoices: ['Set Up Claude'],
@@ -36,7 +36,6 @@ describe('AgentSetupPrompt', () => {
     await prompt.run();
 
     expect(prompt.installer.install).toHaveBeenCalledWith(['claude']);
-    expect(prompt.verifier.arm).toHaveBeenCalledOnce();
     // No modal dialog is ever shown — that is the bug we removed.
     for (const call of prompt.notifications.showInformationMessage.mock.calls) {
       expect(call[1]).not.toMatchObject({ modal: true });
@@ -167,9 +166,6 @@ function createPrompt(input: {
     isInstalled: vi.fn(async (agent: AgentName) => input.installed?.has(agent) ?? false),
     install: vi.fn(async () => undefined),
   };
-  const verifier = {
-    arm: vi.fn(),
-  };
   const reviewer = {
     showChanges: vi.fn(async () => undefined),
   };
@@ -183,8 +179,7 @@ function createPrompt(input: {
       }),
     },
     notifications,
-    verifier,
     reviewer,
   });
-  return Object.assign(prompt, { notifications, installer, values, verifier, reviewer });
+  return Object.assign(prompt, { notifications, installer, values, reviewer });
 }
