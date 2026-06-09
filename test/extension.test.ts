@@ -199,6 +199,7 @@ vi.mock('../src/terminal/tmuxCli', () => ({
     configPath: string;
     killSession = vi.fn(async () => undefined);
     windowName = vi.fn(async () => 'zsh');
+    isServerRunning = vi.fn(async () => false);
     listSessions = vi.fn(async () => {
       vscodeState.lifecycleOrder.push('pending-list');
       return [{ sessionName: 'wt-_work_alpha-main__term-1', windowName: 'zsh' }];

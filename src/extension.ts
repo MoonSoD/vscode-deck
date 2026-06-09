@@ -35,6 +35,7 @@ import { tmuxPreflight } from './terminal/tmuxPreflight';
 import { SessionUriCodec } from './terminal/sessionUriCodec';
 import { renderDeckConf } from './terminal/deckConf';
 import { TerminalSnapshotRuntime } from './terminal/terminalSnapshotRuntime';
+import { createRestoreGate } from './terminal/restoreGate';
 
 let terminalSnapshotRuntime: TerminalSnapshotRuntime | undefined;
 
@@ -44,12 +45,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const tmuxConfigPath = await writeDeckConf(context);
   const tmux = new TmuxCli(tmuxConfigPath);
 
-  // Kick off TerminalSnapshot restore before the terminal editor provider is
-  // wired up, and expose it as a barrier. Terminal tab reattaches (which issue
-  // `new-session -A`) await this barrier, so a reattach can never resurrect a
-  // blank session ahead of restore on reopen — see TerminalEditorProvider's
-  // beforeReattach. Not awaited inline: activation stays responsive; the gate is
-  // on the reattach, not on activate.
   terminalSnapshotRuntime = tmuxAvailability.available
     ? new TerminalSnapshotRuntime(
         tmux,
@@ -58,9 +53,21 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         () => deckDataDir(),
       )
     : undefined;
-  const terminalSnapshotRestored: Promise<void> = terminalSnapshotRuntime
-    ? terminalSnapshotRuntime.restoreOnActivation().then(() => undefined)
-    : Promise.resolve();
+
+  // A terminal-tab reattach (which issues `new-session -A`) awaits this gate
+  // before touching tmux, so it can never resurrect a session blank ahead of
+  // restore — on reopen after reboot, or when the DeckSocket dies while VS Code
+  // stays open. See restoreGate.ts.
+  const snapshotRuntime = terminalSnapshotRuntime;
+  const ensureSnapshotRestored = snapshotRuntime
+    ? createRestoreGate({
+        isServerRunning: () => tmux.isServerRunning(),
+        restore: () => snapshotRuntime.restoreOnActivation(),
+      })
+    : () => Promise.resolve();
+  // Kick off the reboot restore now so the tree shows restored rows even before
+  // any tab reattaches.
+  void ensureSnapshotRestored();
 
   const repositoryRegistry = new RepositoryRegistryStore(context.globalState);
 
@@ -116,7 +123,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // live (automatic-rename tracks the foreground command); event-driven, no poll.
     refreshTree,
     (sessionName) => tmux.windowName(sessionName),
-    () => terminalSnapshotRestored,
+    ensureSnapshotRestored,
   );
   const openTerminal = new OpenTerminalCommand({
     terminalPanels: terminalEditorProvider,
