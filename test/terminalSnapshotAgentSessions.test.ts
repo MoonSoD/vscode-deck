@@ -28,7 +28,7 @@ describe('rewriteTerminalSnapshotAgentSessions', () => {
     await rewriteTerminalSnapshotAgentSessions(snapshotPath, sidecarStore);
 
     expect(readFileSync(snapshotPath, 'utf8')).toBe([
-      'pane\twt-_work_repo__term-1\t0\t1\t:*\t0\t%0\t:/work/repo\t1\tclaude\t:sh -lc \'claude --resume abc-123; exec "$SHELL"\'',
+      'pane\twt-_work_repo__term-1\t0\t1\t:*\t0\t%0\t:/work/repo\t1\tclaude\t:claude --resume abc-123',
       'window\twt-_work_repo__term-1\t0\tzsh\t1\t:*\tlayout\ton',
     ].join('\n'));
   });

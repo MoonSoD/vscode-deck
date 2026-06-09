@@ -80,16 +80,19 @@ by id. Two findings shaped the design:
    keeps Deck **agent-grammar-agnostic** (the user writes the correct flag
    ordering / `resume` syntax, not Deck).
 
-6. **Wrap the resume so a failed/stale id never loses the Terminal.** Inject
-   `<rendered-template>; exec $SHELL` semantics rather than the agent as the
-   pane's process. A dead `session_id` flashes the agent's own "session not
-   found" and falls through to an interactive shell at the right cwd — i.e. it
-   degrades to exactly ADR-0019's behavior. Injecting the agent *as* the pane
-   process would close the window on a non-zero exit and **destroy** a Terminal
-   that would otherwise have restored fine. (This is the safety property
-   `send-keys` gets for free; the wrap ports it into the rewrite world without
-   the race.) Pre-validating the id against the agent's transcript files was
-   rejected — it re-introduces the per-agent store coupling that §3 avoided.
+6. **Inject the bare resume command; it's non-destructive by construction.**
+   Resurrect restores a process by **`send-keys`-ing** the command into the
+   pane's already-running shell (`restore_pane_process`), *not* by exec'ing it as
+   the pane process — so a bare `<rendered-template>` is inherently safe: a dead
+   `session_id` flashes the agent's own "session not found" and returns to that
+   shell at the right cwd (degrading to exactly ADR-0019's behavior), and a
+   Terminal is never lost. *(An earlier `sh -lc '<resume>; exec "$SHELL"'` wrapper
+   was dropped: it was redundant given send-keys, and inside that `sh` `$SHELL`
+   resolved to `/bin/sh`, not the user's login shell — so an exited resume landed
+   the user in the wrong shell. The bare command runs in the pane's restored shell
+   (tmux `default-shell`), so the fallback is correct.)* Pre-validating the id
+   against the agent's transcript files was rejected — it re-introduces the
+   per-agent store coupling that §3 avoided.
 
 7. **Install is consented, transparent, and reversible.** On activation Deck
    shows a notification for **detected** agents (binary on PATH or config dir
@@ -161,7 +164,7 @@ by id. Two findings shaped the design:
     the rewrite **load-bearing**: it runs on every restore (wired into
     `restoreOnActivation` before `restore.sh`) and is **best-effort**, so a
     failure degrades to shells rather than aborting restore. A narrower
-    `~`-sentinel allowlist (matching only Deck's injected wrapper) was considered
+    `~`-sentinel allowlist (matching only Deck's injected resume command) was considered
     as defense-in-depth against a buggy rewrite leaving a stray program; deferred
     as optional, since the clamp plus best-effort cover the real paths.
 
@@ -197,8 +200,9 @@ by id. Two findings shaped the design:
 - **TerminalSnapshot now captures the AgentSession.** ADR-0019's reboot story —
   "whatever was *running* is not relaunched" — no longer holds for agents; it
   still holds for every other program.
-- **Failure degrades to ADR-0019 behavior** (bare shell at cwd) via the §6 wrap;
-  a Terminal is never lost to a bad resume.
+- **Failure degrades to ADR-0019 behavior** (bare shell at cwd): the bare resume
+  command is send-keys'd into the restored shell (§6), so a bad resume returns to
+  that shell — a Terminal is never lost.
 - **Coexists with sanctel** (which the maintainer also runs): writes are
   idempotent and merge-based, sidecar dirs are Deck-namespaced, and the
   per-agent gate tolerates foreign hooks. Deck never assumes sole ownership.
@@ -241,10 +245,11 @@ by id. Two findings shaped the design:
   column 9), not `claude`. The rewriter therefore matches the agent against the
   ps-derived **full-command** column (10, which reads `claude`) as well as column
   9 — matching only column 9 silently failed to resume.
-- **Open verification items:**
-  - The §6 wrap (`<resume>; exec $SHELL`) must survive resurrect's tab-delimited
-    snapshot column parsing (`;`, spaces) on restore.
-  - The hook no-ops correctly when `$DECK_SESSION` is absent (non-Deck `claude`).
+- **Verified (QA, macOS):** install → capture → `kill-server` → restore resumes
+  the conversation; the restored session keeps `DECK_SESSION` and re-captures
+  (High-1); the hook no-ops when `$DECK_SESSION` is absent. The bare resume
+  command (spaces, no tabs) survives resurrect's tab-delimited column and runs in
+  the restored `default-shell`.
 
 ## Status
 

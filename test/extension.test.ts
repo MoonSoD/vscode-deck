@@ -587,7 +587,7 @@ describe('activate', () => {
       );
 
     expect(rewritten.split('\t')[10]).toBe(
-      ':sh -lc \'codex --dangerously-bypass-approvals-and-sandbox resume codex-123; exec "$SHELL"\'',
+      ':codex --dangerously-bypass-approvals-and-sandbox resume codex-123',
     );
   });
 

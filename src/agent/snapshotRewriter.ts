@@ -42,7 +42,11 @@ export class SnapshotRewriter {
     sidecar: AgentSidecar | undefined,
   ): string {
     if (sidecar && this.isRunningAgent(sidecar.agent, currentCommand, fullCommand)) {
-      return `:${this.wrappedResume(sidecar.agent, sidecar.session_id)}`;
+      // Bare resume command: resurrect restores a process by `send-keys`-ing this
+      // into the pane's already-running shell (not by exec'ing it), so a failed
+      // or exited resume simply returns to that shell — non-destructive, and in
+      // the user's own shell, with no `sh -lc … exec "$SHELL"` wrapper needed.
+      return `:${this.resumeTemplate.render(sidecar.agent, sidecar.session_id)}`;
     }
     return SHELL_COMMAND;
   }
@@ -60,15 +64,6 @@ export class SnapshotRewriter {
     if (agent === 'claude') return names.includes('claude');
     return names.some((name) => name === 'codex' || name.startsWith('codex-'));
   }
-
-  private wrappedResume(agent: AgentSidecar['agent'], sessionId: string): string {
-    const resumeCommand = this.resumeTemplate.render(agent, sessionId);
-    return `sh -lc '${shellQuote(`${resumeCommand}; exec "$SHELL"`)}'`;
-  }
-}
-
-function shellQuote(value: string): string {
-  return value.replaceAll("'", "'\"'\"'");
 }
 
 function commandBasename(fullCommand: string): string {
