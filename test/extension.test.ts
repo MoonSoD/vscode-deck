@@ -404,6 +404,10 @@ describe('activate', () => {
     expect(generatedConfContents).toContain(
       `set -g @resurrect-dir '${resurrectDir}'`,
     );
+    // Regression guard: resurrect's restore.sh restores nothing when
+    // @resurrect-dir contains a space, and globalStorage is spaced on macOS.
+    expect(resurrectDir).not.toMatch(/\s/);
+    expect(resurrectDir.startsWith(context.globalStorageUri.fsPath)).toBe(false);
     expect(generatedConfContents).toContain(
       `run-shell '${join(process.cwd(), 'resources', 'plugins', 'tmux-resurrect', 'resurrect.tmux')}'`,
     );
