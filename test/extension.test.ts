@@ -442,6 +442,21 @@ describe('activate', () => {
     expect(runtime.restoreOnActivation).toHaveBeenCalledOnce();
   });
 
+  it('restores before registering the terminal editor provider', async () => {
+    const context = createContext();
+
+    await activate(context as never);
+
+    // VS Code reattaches restored terminal tabs (via `new-session -A`) only once
+    // the custom editor provider is registered; that would start the DeckSocket
+    // blank and make restoreOnActivation skip. Restore must run first.
+    const runtime = vscodeState.terminalSnapshotRuntimeInstances[0];
+    const restoreOrder = runtime.restoreOnActivation.mock.invocationCallOrder[0];
+    const registerOrder =
+      vscodeState.registerCustomEditorProvider.mock.invocationCallOrder[0];
+    expect(restoreOrder).toBeLessThan(registerOrder);
+  });
+
   it('syncs one ExternalGitWatch per registered Repository common dir', async () => {
     const context = createContext(['/work/alpha-main', '/work/alpha-linked']);
     vi.mocked(resolveCommonDirSafe).mockResolvedValue('/git/alpha');
