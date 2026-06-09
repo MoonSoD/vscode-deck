@@ -32,6 +32,12 @@ interface HookSettings {
   [key: string]: unknown;
 }
 
+export interface HookPreview {
+  agent: AgentName;
+  configPath: string;
+  contents: string;
+}
+
 interface HookGroupRemoval {
   groups: HookGroup[];
   removed: boolean;
@@ -44,6 +50,19 @@ export class HookInstaller {
     for (const agent of agents) {
       await this.installAgent(agent);
     }
+  }
+
+  async preview(agents: readonly AgentName[]): Promise<HookPreview[]> {
+    const previews: HookPreview[] = [];
+    for (const agent of agents) {
+      const config = this.configFor(agent);
+      previews.push({
+        agent,
+        configPath: config.configPath,
+        contents: await this.renderSettingsWithDeckHooks(config.configPath, config.scriptPath, agent),
+      });
+    }
+    return previews;
   }
 
   async installClaude(): Promise<void> {
@@ -74,18 +93,27 @@ export class HookInstaller {
   private async installAgent(agent: AgentName): Promise<void> {
     const config = this.configFor(agent);
     await this.writeHookScript(config.scriptPath, agent);
+    const contents = await this.renderSettingsWithDeckHooks(config.configPath, config.scriptPath, agent);
 
-    const settings = await this.readSettings(config.configPath);
+    await mkdir(dirname(config.configPath), { recursive: true });
+    await writeFile(config.configPath, contents, 'utf8');
+  }
+
+  private async renderSettingsWithDeckHooks(
+    configPath: string,
+    scriptPath: string,
+    agent: AgentName,
+  ): Promise<string> {
+    const settings = await this.readSettings(configPath);
     settings.hooks = settings.hooks ?? {};
     for (const event of HOOK_EVENTS) {
       settings.hooks[event] = [
         ...removeDeckHookGroups(settings.hooks[event] ?? []).groups,
-        deckHookGroup(config.scriptPath, agent),
+        deckHookGroup(scriptPath, agent),
       ];
     }
 
-    await mkdir(dirname(config.configPath), { recursive: true });
-    await writeFile(config.configPath, `${JSON.stringify(settings, null, 2)}\n`, 'utf8');
+    return `${JSON.stringify(settings, null, 2)}\n`;
   }
 
   private async writeHookScript(scriptPath: string, agent: AgentName): Promise<void> {

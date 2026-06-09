@@ -35,6 +35,79 @@ describe('HookInstaller', () => {
     });
   });
 
+  it('previews the exact Claude config change without writing', async () => {
+    const root = tempRoot();
+    const settingsPath = join(root, '.claude', 'settings.json');
+    const scriptPath = join(root, '.local', 'share', 'deck', 'bin', 'deck-claude-hook.sh');
+    const installer = new HookInstaller({
+      claudeSettingsPath: settingsPath,
+      codexHooksPath: join(root, '.codex', 'hooks.json'),
+      hookScriptPath: scriptPath,
+      sidecarDir: join(root, '.local', 'share', 'deck', 'hooks'),
+    });
+
+    const preview = await installer.preview(['claude']);
+
+    expect(preview).toEqual([{
+      agent: 'claude',
+      configPath: settingsPath,
+      contents: `${JSON.stringify({
+        hooks: {
+          SessionStart: [deckHookGroup(scriptPath)],
+          UserPromptSubmit: [deckHookGroup(scriptPath)],
+        },
+      }, null, 2)}\n`,
+    }]);
+    expect(existsSync(settingsPath)).toBe(false);
+    expect(existsSync(scriptPath)).toBe(false);
+  });
+
+  it('previews the exact Codex config merge without writing', async () => {
+    const root = tempRoot();
+    const hooksPath = join(root, '.codex', 'hooks.json');
+    const scriptPath = join(root, '.local', 'share', 'deck', 'bin', 'deck-codex-hook.sh');
+    mkdirSync(join(root, '.codex'), { recursive: true });
+    writeFileSync(hooksPath, JSON.stringify({
+      model: 'gpt-5',
+      hooks: {
+        SessionStart: [{
+          matcher: 'startup',
+          hooks: [{ type: 'command', command: '/other/session-start.sh' }],
+        }],
+      },
+    }), 'utf8');
+    const originalHooks = readFileSync(hooksPath, 'utf8');
+    const installer = new HookInstaller({
+      claudeSettingsPath: join(root, '.claude', 'settings.json'),
+      codexHooksPath: hooksPath,
+      hookScriptPath: join(root, '.local', 'share', 'deck', 'bin', 'deck-claude-hook.sh'),
+      codexHookScriptPath: scriptPath,
+      sidecarDir: join(root, '.local', 'share', 'deck', 'hooks'),
+    });
+
+    const preview = await installer.preview(['codex']);
+
+    expect(preview).toEqual([{
+      agent: 'codex',
+      configPath: hooksPath,
+      contents: `${JSON.stringify({
+        model: 'gpt-5',
+        hooks: {
+          SessionStart: [
+            {
+              matcher: 'startup',
+              hooks: [{ type: 'command', command: '/other/session-start.sh' }],
+            },
+            codexDeckHookGroup(scriptPath),
+          ],
+          UserPromptSubmit: [codexDeckHookGroup(scriptPath)],
+        },
+      }, null, 2)}\n`,
+    }]);
+    expect(readFileSync(hooksPath, 'utf8')).toBe(originalHooks);
+    expect(existsSync(scriptPath)).toBe(false);
+  });
+
   it('is idempotent and preserves foreign Claude hooks', async () => {
     const root = tempRoot();
     const settingsPath = join(root, '.claude', 'settings.json');
