@@ -165,14 +165,14 @@ describe('AgentSetupPrompt', () => {
     expect(prompt.notifications.showInformationMessage).toHaveBeenCalledOnce();
   });
 
-  it('uninstall removes a single installed agent and dismisses (full opt-out)', async () => {
+  it('uninstall removes a single installed agent without prompting or dismissing', async () => {
     const prompt = createPrompt({ detected: [], installed: new Set(['claude']) });
 
     await prompt.uninstall();
 
     expect(prompt.notifications.showQuickPick).not.toHaveBeenCalled();
     expect(prompt.installer.remove).toHaveBeenCalledWith(['claude']);
-    expect(prompt.values[AGENT_HOOK_SETUP_DISMISSED_KEY]).toBe(true);
+    expect(prompt.values[AGENT_HOOK_SETUP_DISMISSED_KEY]).toBeUndefined();
   });
 
   it('uninstall quick-picks multiple installed agents and removes the selection', async () => {
@@ -188,7 +188,8 @@ describe('AgentSetupPrompt', () => {
       expect.objectContaining({ canPickMany: true }),
     );
     expect(prompt.installer.remove).toHaveBeenCalledWith(['claude', 'codex']);
-    expect(prompt.values[AGENT_HOOK_SETUP_DISMISSED_KEY]).toBe(true);
+    // Uninstall never dismisses — only "Don't ask again" does.
+    expect(prompt.values[AGENT_HOOK_SETUP_DISMISSED_KEY]).toBeUndefined();
   });
 
   it('uninstall removes only the selected agent and stays active when one remains', async () => {

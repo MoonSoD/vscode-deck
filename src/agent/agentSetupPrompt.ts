@@ -84,9 +84,9 @@ export class AgentSetupPrompt {
   }
 
   // Mirrors install: offer the *installed* agents (quick-pick when more than one),
-  // remove the selected ones, report what changed. Removing the last installed
-  // agent is a full opt-out (stay quiet); removing some while others remain leaves
-  // the activation offer free to resurface the removed agent.
+  // remove the selected ones, report what changed. Uninstall never sets the
+  // dismissal — suppression is only ever an explicit user choice ("Don't ask
+  // again") — so after removing an agent the activation offer can resurface it.
   async uninstall(): Promise<void> {
     const installed = await this.installedAgentList();
     if (installed.length === 0) {
@@ -98,9 +98,6 @@ export class AgentSetupPrompt {
     if (selected.length === 0) return;
 
     const removed = await this.deps.installer.remove(selected);
-    if (removed.length > 0 && installed.every((agent) => removed.includes(agent))) {
-      await this.deps.globalState.update(AGENT_HOOK_SETUP_DISMISSED_KEY, true);
-    }
     await this.deps.notifications.showInformationMessage(
       removed.length > 0
         ? `Removed Deck agent hooks for ${formatAgentList(removed)}. Your other hooks are untouched.`

@@ -132,13 +132,13 @@ by id. Two findings shaped the design:
 
 8. **No feature flag. State lives in two places only.** The **hooks on disk are
    the on/off** (the install/uninstall commands toggle them, per agent); a
-   **`globalState` dismissal flag** suppresses the setup nag. It is set by "Don't
-   ask again" *or* by uninstalling the **last** installed agent (a full opt-out);
-   it is **cleared** when the install command is invoked (an explicit opt-in).
-   Uninstalling one agent while another remains does *not* dismiss — so the
-   activation offer can resurface the removed agent. The *only* settings.json
-   entries are the two resume-command templates from §5 — config, not flags.
-   "Installed?" is always read from disk, never cached as a preference.
+   **`globalState` dismissal flag** suppresses the setup nag. Suppression is
+   **only ever an explicit user choice**: the flag is set *solely* by "Don't ask
+   again", and **cleared** when the install command is invoked (an explicit
+   opt-in). **Uninstall never touches it** — so after removing an agent the
+   activation offer can resurface it; "Don't ask again" is how you silence it.
+   The *only* settings.json entries are the two resume-command templates from §5
+   — config, not flags. "Installed?" is always read from disk, never cached.
 
 9. **The setup-notification gate is evaluated per detected agent; dismissal is
    global.**
