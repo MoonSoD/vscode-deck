@@ -71,8 +71,12 @@ Deck's own isolated tmux server, separate from the user's personal tmux.
 _Avoid_: tmux (the user's own tmux is a distinct thing)
 
 **TerminalSnapshot**:
-The capture of every Terminal on the DeckSocket — each one's working directory and scrollback — that lets Terminals survive death of the DeckSocket (reboot, crash, `kill-server`). Saved periodically and restored when Deck next starts.
+The capture of every Terminal on the DeckSocket — each one's working directory, scrollback, and the AgentSession it was running (if any) — that lets Terminals survive death of the DeckSocket (reboot, crash, `kill-server`). Saved periodically and restored when Deck next starts.
 _Avoid_: backup, session dump
+
+**AgentSession**:
+The resumable AI-agent conversation (Claude Code or Codex) a Terminal was running, identified by the agent's own session id. Deck only *observes* it — the user starts the agent — and captures it in the TerminalSnapshot so that on restore the Terminal relaunches the agent (`claude --resume` / `codex resume`) instead of returning to a bare shell. Discovered via a Deck hook installed in the agent's config, keyed to the Terminal by an injected `DECK_SESSION` env var.
+_Avoid_: agent chat session (implies a separate chat surface; this is an attribute of a Terminal), conversation, thread, agent process
 
 **Terminal**:
 A persistent shell owned by Deck — one tmux session on the DeckSocket — shown as a row under a Worktree and opened as an xterm.js editor tab addressed by `deck-terminal:/<worktree>/term-N`. Like a file, the Terminal is the durable thing and its tab is just a view onto it: closing the tab leaves the Terminal running, and any Terminal can be opened from any mounted Worktree without a Switch.
@@ -92,6 +96,7 @@ _Avoid_: file watcher, watcher controller (implementation); polling (it is event
 - A **Worktree** hosts zero or more **Terminals**.
 - A **Terminal** belongs to exactly one **Worktree** and lives on the one **DeckSocket**.
 - A **TerminalSnapshot** captures every **Terminal** on the **DeckSocket**.
+- A **Terminal** may be running one **AgentSession**; the **TerminalSnapshot** captures it so the agent is resumed (not just the shell) on restore.
 - A **Switch** changes which **Worktree** is mounted; a **DetachedOpen** does not.
 
 ## Example dialogue
@@ -119,6 +124,7 @@ _Avoid_: file watcher, watcher controller (implementation); polling (it is event
 - "delete" conflated removing a **Worktree** with deleting its branch — resolved: **WorktreeRemoval** keeps them separate; branch deletion is opt-in.
 - "active" meant both **ActiveRepository** and **ActiveWorktree** — resolved: distinct concepts (the Repository vs the specific Worktree).
 - A Repository's registered path was treated as its identity — resolved: it is a **discovery seed**; the git common dir is the identity.
+- "agent session" could mean a Deck-managed entity (with its own tree rows / chat surface) or an observed attribute of a Terminal — resolved: it is an **AgentSession**, an observed attribute. Deck never launches agents; it discovers the session via agent hooks keyed to the Terminal and resumes it by rewriting the TerminalSnapshot. (The intro's "agent chat sessions are planned" is this, not a separate chat UI.)
 - "tmux session" was used for **Terminal** — resolved: the session is the backing mechanism; **Terminal** is the domain concept.
 - "close" conflated closing a **Terminal**'s editor tab with destroying the **Terminal** — resolved: closing the tab is a non-destructive view operation; destroying is **TerminalRemoval** ("Delete"). Reverses ADR-0011 §6's kill-on-tab-close.
 - "Project" was the canonical term for a registered repo — resolved: renamed to **Repository** for precision (it is literally a git repo, keyed by common dir). "project" is now avoided because a VS Code user reads the open *folder* as their "project," and that folder is a **Worktree** in Deck.
