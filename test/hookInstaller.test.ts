@@ -245,6 +245,23 @@ describe('HookInstaller', () => {
     await expect(installer.isInstalled('claude')).resolves.toBe(false);
   });
 
+  it('removes hooks for only the requested agent', async () => {
+    const root = tempRoot();
+    const installer = new HookInstaller({
+      claudeSettingsPath: join(root, '.claude', 'settings.json'),
+      codexHooksPath: join(root, '.codex', 'hooks.json'),
+      hookScriptPath: join(root, '.local', 'share', 'deck', 'bin', 'deck-claude-hook.sh'),
+      codexHookScriptPath: join(root, '.local', 'share', 'deck', 'bin', 'deck-codex-hook.sh'),
+      sidecarDir: join(root, '.local', 'share', 'deck', 'hooks'),
+    });
+    await installer.install(['claude', 'codex']);
+
+    await expect(installer.remove(['codex'])).resolves.toEqual(['codex']);
+
+    await expect(installer.isInstalled('claude')).resolves.toBe(true);
+    await expect(installer.isInstalled('codex')).resolves.toBe(false);
+  });
+
   it('removes only Deck hooks from Claude and Codex config files', async () => {
     const root = tempRoot();
     const claudeSettingsPath = join(root, '.claude', 'settings.json');

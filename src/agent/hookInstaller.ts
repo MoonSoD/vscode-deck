@@ -65,10 +65,13 @@ export class HookInstaller {
     return previews;
   }
 
-  async remove(): Promise<AgentName[]> {
+  async remove(agents: readonly AgentName[] = ['claude', 'codex']): Promise<AgentName[]> {
     const removed: AgentName[] = [];
-    if (await this.removeDeckHooksFrom(this.paths.claudeSettingsPath)) removed.push('claude');
-    if (this.paths.codexHooksPath && await this.removeDeckHooksFrom(this.paths.codexHooksPath)) {
+    if (agents.includes('claude') && await this.removeDeckHooksFrom(this.paths.claudeSettingsPath)) {
+      removed.push('claude');
+    }
+    if (agents.includes('codex') && this.paths.codexHooksPath
+        && await this.removeDeckHooksFrom(this.paths.codexHooksPath)) {
       removed.push('codex');
     }
     return removed;

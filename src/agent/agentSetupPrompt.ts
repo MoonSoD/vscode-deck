@@ -3,6 +3,8 @@ import { NotificationGate } from './notificationGate';
 
 export const AGENT_HOOK_SETUP_DISMISSED_KEY = 'deck.agentHooks.setup.dismissed';
 
+const ALL_AGENTS: readonly AgentName[] = ['claude', 'codex'];
+
 interface GlobalState {
   get<T>(key: string, defaultValue: T): T;
   update(key: string, value: unknown): Thenable<void>;
@@ -15,6 +17,7 @@ interface AgentDetector {
 interface AgentHookInstaller {
   isInstalled(agent: AgentName): Promise<boolean>;
   install(agents: readonly AgentName[]): Promise<void>;
+  remove(agents: readonly AgentName[]): Promise<AgentName[]>;
 }
 
 interface AgentPick {
@@ -51,11 +54,13 @@ export class AgentSetupPrompt {
 
   // `explicit` = the user ran the "Install agent hooks" command. They've already
   // expressed intent, so we skip the offer notification (and its "Don't ask
-  // again") and go straight to agent selection; we also report empty states
-  // rather than silently doing nothing. The passive activation nudge (`run()`)
-  // keeps the offer.
+  // again"), report empty states rather than doing nothing, and clear any prior
+  // dismissal so the activation offer can resurface for agents added later. The
+  // passive activation nudge (`run()`) keeps the offer.
   async run(options: { explicit?: boolean } = {}): Promise<void> {
     const explicit = options.explicit ?? false;
+    if (explicit) await this.deps.globalState.update(AGENT_HOOK_SETUP_DISMISSED_KEY, false);
+
     const detected = await this.deps.detector.detect();
     const installed = await this.installedAgents(detected);
     const agents = NotificationGate.shouldPrompt({
@@ -71,18 +76,43 @@ export class AgentSetupPrompt {
 
     if (!explicit && !(await this.offerSetup(agents))) return;
 
-    const selected = await this.selectAgentsToInstall(agents);
+    const selected = await this.pickAgents(agents, 'Select agents for Deck resume hooks');
     if (selected.length === 0) return;
 
     await this.deps.installer.install(selected);
     await this.offerReview(selected, detected);
   }
 
+  // Mirrors install: offer the *installed* agents (quick-pick when more than one),
+  // remove the selected ones, report what changed. Removing the last installed
+  // agent is a full opt-out (stay quiet); removing some while others remain leaves
+  // the activation offer free to resurface the removed agent.
+  async uninstall(): Promise<void> {
+    const installed = await this.installedAgentList();
+    if (installed.length === 0) {
+      await this.deps.notifications.showInformationMessage('No Deck agent hooks are installed.');
+      return;
+    }
+
+    const selected = await this.pickAgents(installed, 'Select agents to remove Deck resume hooks from');
+    if (selected.length === 0) return;
+
+    const removed = await this.deps.installer.remove(selected);
+    if (removed.length > 0 && installed.every((agent) => removed.includes(agent))) {
+      await this.deps.globalState.update(AGENT_HOOK_SETUP_DISMISSED_KEY, true);
+    }
+    await this.deps.notifications.showInformationMessage(
+      removed.length > 0
+        ? `Removed Deck agent hooks for ${formatAgentList(removed)}. Your other hooks are untouched.`
+        : 'No Deck agent hooks were removed.',
+    );
+  }
+
   private async offerSetup(agents: readonly AgentName[]): Promise<boolean> {
     const setupAction = `Set Up ${formatAgentList(agents)}`;
     const dontAskAgain = "Don't ask again";
     const action = await this.deps.notifications.showInformationMessage(
-      `Deck can restore ${formatAgentList(agents)} agent sessions after reboot. Each config is backed up first; undo anytime with "Deck: Remove agent hooks".`,
+      `Deck can restore ${formatAgentList(agents)} agent sessions after reboot. Each config is backed up first; undo anytime with "Deck: Uninstall agent hooks".`,
       setupAction,
       dontAskAgain,
     );
@@ -127,12 +157,15 @@ export class AgentSetupPrompt {
     });
   }
 
-  private async selectAgentsToInstall(agents: readonly AgentName[]): Promise<readonly AgentName[]> {
+  private async pickAgents(
+    agents: readonly AgentName[],
+    placeHolder: string,
+  ): Promise<readonly AgentName[]> {
     if (agents.length === 1) return agents;
 
     const selected = await this.deps.notifications.showQuickPick(
       agents.map((agent) => ({ label: agentLabel(agent), agent, picked: true })),
-      { canPickMany: true, placeHolder: 'Select agents for Deck resume hooks' },
+      { canPickMany: true, placeHolder },
     );
     return selected?.map((item) => item.agent) ?? [];
   }
@@ -142,6 +175,14 @@ export class AgentSetupPrompt {
     await Promise.all(detected.map(async ({ agent }) => {
       if (await this.deps.installer.isInstalled(agent)) installed.add(agent);
     }));
+    return installed;
+  }
+
+  private async installedAgentList(): Promise<AgentName[]> {
+    const installed: AgentName[] = [];
+    for (const agent of ALL_AGENTS) {
+      if (await this.deps.installer.isInstalled(agent)) installed.push(agent);
+    }
     return installed;
   }
 }

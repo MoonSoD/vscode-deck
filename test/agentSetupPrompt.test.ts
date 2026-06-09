@@ -143,6 +143,66 @@ describe('AgentSetupPrompt', () => {
     expect(prompt.installer.install).not.toHaveBeenCalled();
     expect(prompt.notifications.showInformationMessage).toHaveBeenCalledOnce();
   });
+
+  it('clears a prior dismissal when install is invoked explicitly', async () => {
+    const prompt = createPrompt({
+      detected: [{ agent: 'claude', configPath: '/home/me/.claude/settings.json' }],
+      installed: new Set(['claude']),
+      dismissed: true,
+    });
+
+    await prompt.run({ explicit: true });
+
+    expect(prompt.values[AGENT_HOOK_SETUP_DISMISSED_KEY]).toBe(false);
+  });
+
+  it('uninstall reports when no agent hooks are installed', async () => {
+    const prompt = createPrompt({ detected: [], installed: new Set() });
+
+    await prompt.uninstall();
+
+    expect(prompt.installer.remove).not.toHaveBeenCalled();
+    expect(prompt.notifications.showInformationMessage).toHaveBeenCalledOnce();
+  });
+
+  it('uninstall removes a single installed agent and dismisses (full opt-out)', async () => {
+    const prompt = createPrompt({ detected: [], installed: new Set(['claude']) });
+
+    await prompt.uninstall();
+
+    expect(prompt.notifications.showQuickPick).not.toHaveBeenCalled();
+    expect(prompt.installer.remove).toHaveBeenCalledWith(['claude']);
+    expect(prompt.values[AGENT_HOOK_SETUP_DISMISSED_KEY]).toBe(true);
+  });
+
+  it('uninstall quick-picks multiple installed agents and removes the selection', async () => {
+    const prompt = createPrompt({ detected: [], installed: new Set(['claude', 'codex']) });
+
+    await prompt.uninstall();
+
+    expect(prompt.notifications.showQuickPick).toHaveBeenCalledWith(
+      [
+        { label: 'Claude', agent: 'claude', picked: true },
+        { label: 'Codex', agent: 'codex', picked: true },
+      ],
+      expect.objectContaining({ canPickMany: true }),
+    );
+    expect(prompt.installer.remove).toHaveBeenCalledWith(['claude', 'codex']);
+    expect(prompt.values[AGENT_HOOK_SETUP_DISMISSED_KEY]).toBe(true);
+  });
+
+  it('uninstall removes only the selected agent and stays active when one remains', async () => {
+    const prompt = createPrompt({
+      detected: [],
+      installed: new Set(['claude', 'codex']),
+      pick: ['codex'],
+    });
+
+    await prompt.uninstall();
+
+    expect(prompt.installer.remove).toHaveBeenCalledWith(['codex']);
+    expect(prompt.values[AGENT_HOOK_SETUP_DISMISSED_KEY]).toBeUndefined();
+  });
 });
 
 function createPrompt(input: {
@@ -150,21 +210,23 @@ function createPrompt(input: {
   installed?: ReadonlySet<AgentName>;
   infoChoice?: string;
   infoChoices?: Array<string | undefined>;
+  dismissed?: boolean;
+  pick?: AgentName[];
 }) {
   const values: Record<string, unknown> = {};
+  if (input.dismissed !== undefined) values[AGENT_HOOK_SETUP_DISMISSED_KEY] = input.dismissed;
   const infoChoices = [...(input.infoChoices ?? [input.infoChoice])];
-  const quickPickChoice = input.detected.map((agent) => ({
-    label: agent.agent === 'claude' ? 'Claude' : 'Codex',
-    agent: agent.agent,
-    picked: true,
-  }));
   const notifications = {
     showInformationMessage: vi.fn(async () => infoChoices.shift()),
-    showQuickPick: vi.fn(async () => quickPickChoice),
+    // Selecting all pre-ticked items echoes them back; `pick` narrows the selection.
+    showQuickPick: vi.fn(async (items: Array<{ agent: AgentName }>) =>
+      input.pick ? items.filter((item) => input.pick!.includes(item.agent)) : items,
+    ),
   };
   const installer = {
     isInstalled: vi.fn(async (agent: AgentName) => input.installed?.has(agent) ?? false),
     install: vi.fn(async () => undefined),
+    remove: vi.fn(async (agents: readonly AgentName[]) => [...agents]),
   };
   const reviewer = {
     showChanges: vi.fn(async () => undefined),

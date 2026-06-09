@@ -168,7 +168,7 @@
       },
       {
         "command": "deck.removeAgentHooks",
-        "title": "Deck: Remove Agent Hooks"
+        "title": "Deck: Uninstall Agent Hooks"
       },
       {
         "command": "deck.refresh",

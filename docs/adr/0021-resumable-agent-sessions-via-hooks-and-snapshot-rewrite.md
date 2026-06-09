@@ -112,7 +112,9 @@ by id. Two findings shaped the design:
    side and a safety net for a bad merge; the surgical remove command stays the
    primary undo.)* Writes target the **user-global** config, **merge** into
    existing hooks (never clobber foreign entries), and are **tagged** for
-   surgical removal (`Deck: Remove agent hooks`). Deck sets the expectation that
+   surgical removal. **`Deck: Uninstall agent hooks`** mirrors install: it
+   quick-picks the *installed* agents (when more than one) and removes only the
+   selected ones, leaving foreign hooks intact. Deck sets the expectation that
    **already-running agents must be restarted** to be tracked (a hook only binds
    sessions started after install). *(An automatic "arm-and-verify" — a post-install
    timer that confirmed the first captured sidecar — was tried and dropped: it
@@ -129,11 +131,14 @@ by id. Two findings shaped the design:
    footprint, not the user-facing contract.
 
 8. **No feature flag. State lives in two places only.** The **hooks on disk are
-   the on/off** (`Install`/`Remove` commands toggle them); a **`globalState`
-   dismissal flag** suppresses the setup nag (set by "Don't ask again" *or* by an
-   explicit Remove). The *only* settings.json entries are the two resume-command
-   templates from §5 — config, not flags. "Installed?" is always read from disk,
-   never cached as a preference.
+   the on/off** (the install/uninstall commands toggle them, per agent); a
+   **`globalState` dismissal flag** suppresses the setup nag. It is set by "Don't
+   ask again" *or* by uninstalling the **last** installed agent (a full opt-out);
+   it is **cleared** when the install command is invoked (an explicit opt-in).
+   Uninstalling one agent while another remains does *not* dismiss — so the
+   activation offer can resurface the removed agent. The *only* settings.json
+   entries are the two resume-command templates from §5 — config, not flags.
+   "Installed?" is always read from disk, never cached as a preference.
 
 9. **The setup-notification gate is evaluated per detected agent; dismissal is
    global.**
