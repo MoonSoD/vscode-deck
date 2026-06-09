@@ -154,6 +154,34 @@ and we verified both against the plugin source and a working reference
   macOS/Linux/WSL; fails soft where absent.
 - **Snapshot disk use** grows with pane count × scrollback depth; resurrect
   prunes snapshots older than 30 days (keeping ≥5).
+- **Restore is gated, not just run at activation.** Because a terminal tab
+  reattach issues `new-session -A` (create-or-attach), it can resurrect a
+  session blank ahead of restore — on reopen *and* if the DeckSocket dies while
+  VS Code stays open. So reattach (and `+`-create) await a restore gate
+  (`restoreGate.ts`): if the server is dead, restore runs first; concurrent
+  reattaches share one restore. This is what makes restore robust against the
+  active tab (resolved eagerly on reopen) and against a live crash, not just a
+  clean reboot.
+
+## Known limitation: a tab closes when the DeckSocket dies *while VS Code is open*
+
+If the server dies with the window open (a real tmux crash, or a manual
+`tmux -L deck kill-server`), the open tab's control client exits, the webview
+shows `[process exited]` and asks to dispose, and the **focused tab closes**
+(ADR-0017 §3's shell-`exit`-dismisses-the-tab path, which also fires here). The
+**session and scrollback are not lost** — the restore gate brings them back, the
+sidebar row reappears, and reopening is one click; only the *tab* closes.
+
+A seamless in-place reconnect was considered and rejected as not correctly
+achievable: a control client emits an identical bare `%exit` for a shell `exit`
+and a `kill-server` (verified), and `isServerRunning` afterward is ambiguous for
+the last/only terminal (its shell-`exit` also stops the server). So any
+"reconnect on death" heuristic would misclassify intentionally exiting the last
+terminal as a crash and resurrect it — worse than the close-and-reopen. This
+path is rare in practice: a real reboot closes VS Code, so there is no live
+client to exit and tabs restore cleanly (the common case). Revisit only if
+crashes-with-window-open prove common; the least-bad approach there is
+correlating near-simultaneous exits across tabs, and it is still imperfect.
 
 ## Refines
 
