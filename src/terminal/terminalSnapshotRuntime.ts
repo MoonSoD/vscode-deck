@@ -13,6 +13,8 @@ export interface RestoreOutcome {
   restored: boolean;
 }
 
+const ANCHOR_SESSION = '__deck_anchor';
+
 export class TerminalSnapshotRuntime {
   constructor(
     private readonly tmux: TerminalSnapshotTmuxCli,
@@ -29,7 +31,7 @@ export class TerminalSnapshotRuntime {
     try {
       if (await this.tmux.isServerRunning()) return { restored: false };
 
-      await this.tmux.newAnchorSession('__deck_anchor', this.anchorCwd());
+      await this.tmux.newAnchorSession(ANCHOR_SESSION, this.anchorCwd());
       let restored = false;
       try {
         await this.tmux.runShell(this.restoreScriptPath());
@@ -38,7 +40,7 @@ export class TerminalSnapshotRuntime {
         console.warn('Deck: restoring TerminalSnapshot failed', error);
       } finally {
         try {
-          await this.tmux.killSession('__deck_anchor');
+          await this.tmux.killSession(ANCHOR_SESSION);
         } catch (error) {
           console.warn('Deck: removing TerminalSnapshot anchor failed', error);
         }

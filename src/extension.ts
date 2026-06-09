@@ -225,13 +225,7 @@ async function writeDeckConf(context: vscode.ExtensionContext): Promise<string> 
   const templatePath = join(context.extensionPath, 'resources', 'deck.conf');
   const generatedPath = join(context.globalStorageUri.fsPath, 'deck.conf');
   const resurrectDir = join(context.globalStorageUri.fsPath, 'resurrect');
-  const pluginPath = join(
-    context.extensionPath,
-    'resources',
-    'plugins',
-    'tmux-resurrect',
-    'resurrect.tmux',
-  );
+  const pluginPath = tmuxResurrectPath(context, 'resurrect.tmux');
 
   const template = await readFile(templatePath, 'utf8');
   await mkdir(resurrectDir, { recursive: true });
@@ -240,25 +234,15 @@ async function writeDeckConf(context: vscode.ExtensionContext): Promise<string> 
 }
 
 function terminalSnapshotSaveScriptPath(context: vscode.ExtensionContext): string {
-  return join(
-    context.extensionPath,
-    'resources',
-    'plugins',
-    'tmux-resurrect',
-    'scripts',
-    'save.sh',
-  );
+  return tmuxResurrectPath(context, 'scripts', 'save.sh');
 }
 
 function terminalSnapshotRestoreScriptPath(context: vscode.ExtensionContext): string {
-  return join(
-    context.extensionPath,
-    'resources',
-    'plugins',
-    'tmux-resurrect',
-    'scripts',
-    'restore.sh',
-  );
+  return tmuxResurrectPath(context, 'scripts', 'restore.sh');
+}
+
+function tmuxResurrectPath(context: vscode.ExtensionContext, ...parts: string[]): string {
+  return join(context.extensionPath, 'resources', 'plugins', 'tmux-resurrect', ...parts);
 }
 
 // Mirrors the Explorer's delete confirmation (a modal warning gated by a
