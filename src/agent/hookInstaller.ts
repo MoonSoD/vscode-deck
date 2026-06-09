@@ -7,6 +7,7 @@ const CLAUDE_EVENTS = ['SessionStart', 'UserPromptSubmit'] as const;
 
 export interface HookInstallerPaths {
   claudeSettingsPath: string;
+  codexHooksPath?: string;
   hookScriptPath: string;
   sidecarDir: string;
 }
@@ -48,6 +49,13 @@ export class HookInstaller {
     await writeFile(this.paths.claudeSettingsPath, `${JSON.stringify(settings, null, 2)}\n`, 'utf8');
   }
 
+  async remove(): Promise<void> {
+    await this.removeDeckHooksFrom(this.paths.claudeSettingsPath);
+    if (this.paths.codexHooksPath) {
+      await this.removeDeckHooksFrom(this.paths.codexHooksPath);
+    }
+  }
+
   private async writeHookScript(): Promise<void> {
     await mkdir(dirname(this.paths.hookScriptPath), { recursive: true });
     await writeFile(this.paths.hookScriptPath, renderAgentHookScript(this.paths.sidecarDir), 'utf8');
@@ -55,12 +63,35 @@ export class HookInstaller {
   }
 
   private async readClaudeSettings(): Promise<ClaudeSettings> {
+    return this.readHookConfig(this.paths.claudeSettingsPath);
+  }
+
+  private async readHookConfig(path: string): Promise<ClaudeSettings> {
     try {
-      return JSON.parse(await readFile(this.paths.claudeSettingsPath, 'utf8')) as ClaudeSettings;
+      return JSON.parse(await readFile(path, 'utf8')) as ClaudeSettings;
     } catch (error) {
       if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return {};
       throw error;
     }
+  }
+
+  private async removeDeckHooksFrom(path: string): Promise<void> {
+    const settings = await this.readHookConfig(path);
+    if (!settings.hooks) return;
+
+    const hooks: Record<string, HookGroup[]> = {};
+    for (const [event, groups] of Object.entries(settings.hooks)) {
+      const remainingGroups = removeDeckHookGroups(groups);
+      if (remainingGroups.length > 0) hooks[event] = remainingGroups;
+    }
+
+    if (Object.keys(hooks).length > 0) {
+      settings.hooks = hooks;
+    } else {
+      delete settings.hooks;
+    }
+
+    await writeFile(path, `${JSON.stringify(settings, null, 2)}\n`, 'utf8');
   }
 }
 

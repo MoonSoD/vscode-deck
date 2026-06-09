@@ -71,6 +71,99 @@ describe('HookInstaller', () => {
       },
     });
   });
+
+  it('removes only Deck hooks from Claude and Codex config files', async () => {
+    const root = tempRoot();
+    const claudeSettingsPath = join(root, '.claude', 'settings.json');
+    const codexHooksPath = join(root, '.codex', 'hooks.json');
+    const scriptPath = join(root, '.local', 'share', 'deck', 'bin', 'deck-agent-hook.sh');
+    mkdirSync(join(root, '.claude'), { recursive: true });
+    mkdirSync(join(root, '.codex'), { recursive: true });
+    writeFileSync(claudeSettingsPath, JSON.stringify({
+      hooks: {
+        SessionStart: [
+          deckHookGroup(scriptPath),
+          {
+            matcher: 'startup',
+            hooks: [{ type: 'command', command: '/other/claude-session-start.sh' }],
+          },
+        ],
+        UserPromptSubmit: [deckHookGroup(scriptPath)],
+      },
+    }), 'utf8');
+    writeFileSync(codexHooksPath, JSON.stringify({
+      hooks: {
+        SessionStart: [
+          deckHookGroup(scriptPath),
+          {
+            matcher: 'startup|resume',
+            hooks: [{ type: 'command', command: '/other/codex-session-start.sh' }],
+          },
+        ],
+        UserPromptSubmit: [deckHookGroup(scriptPath)],
+      },
+    }), 'utf8');
+    const installer = new HookInstaller({
+      claudeSettingsPath,
+      codexHooksPath,
+      hookScriptPath: scriptPath,
+      sidecarDir: join(root, '.local', 'share', 'deck', 'hooks'),
+    });
+
+    await installer.remove();
+
+    expect(JSON.parse(readFileSync(claudeSettingsPath, 'utf8'))).toEqual({
+      hooks: {
+        SessionStart: [{
+          matcher: 'startup',
+          hooks: [{ type: 'command', command: '/other/claude-session-start.sh' }],
+        }],
+      },
+    });
+    expect(JSON.parse(readFileSync(codexHooksPath, 'utf8'))).toEqual({
+      hooks: {
+        SessionStart: [{
+          matcher: 'startup|resume',
+          hooks: [{ type: 'command', command: '/other/codex-session-start.sh' }],
+        }],
+      },
+    });
+  });
+
+  it('treats absent Deck hook entries as a remove no-op', async () => {
+    const root = tempRoot();
+    const claudeSettingsPath = join(root, '.claude', 'settings.json');
+    const codexHooksPath = join(root, '.codex', 'hooks.json');
+    mkdirSync(join(root, '.claude'), { recursive: true });
+    writeFileSync(claudeSettingsPath, JSON.stringify({
+      theme: 'dark',
+      hooks: {
+        SessionStart: [{
+          matcher: 'startup',
+          hooks: [{ type: 'command', command: '/other/session-start.sh' }],
+        }],
+      },
+    }), 'utf8');
+    const installer = new HookInstaller({
+      claudeSettingsPath,
+      codexHooksPath,
+      hookScriptPath: join(root, '.local', 'share', 'deck', 'bin', 'deck-agent-hook.sh'),
+      sidecarDir: join(root, '.local', 'share', 'deck', 'hooks'),
+    });
+
+    await installer.remove();
+
+    expect(JSON.parse(readFileSync(claudeSettingsPath, 'utf8'))).toEqual({
+      theme: 'dark',
+      hooks: {
+        SessionStart: [{
+          matcher: 'startup',
+          hooks: [{ type: 'command', command: '/other/session-start.sh' }],
+        }],
+      },
+    });
+    expect(existsSync(codexHooksPath)).toBe(false);
+  });
 });
 
 function tempRoot(): string {

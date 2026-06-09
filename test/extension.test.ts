@@ -12,6 +12,7 @@ const vscodeState = vi.hoisted(() => ({
   addTerminalRun: vi.fn(),
   hookInstallerArgs: undefined as unknown[] | undefined,
   hookInstallerInstallClaude: vi.fn(),
+  hookInstallerRemove: vi.fn(),
   configUpdate: vi.fn(),
   externalWatchDisposables: [] as Array<{ dispose: ReturnType<typeof vi.fn> }>,
   tabGroups: [] as Array<{ viewColumn: number; tabs: Array<{ input?: unknown }> }>,
@@ -237,6 +238,7 @@ vi.mock('../src/agent/hookInstaller', () => ({
     }
 
     installClaude = vscodeState.hookInstallerInstallClaude;
+    remove = vscodeState.hookInstallerRemove;
   },
 }));
 
@@ -288,6 +290,7 @@ describe('activate', () => {
     vscodeState.addTerminalArgs = undefined;
     vscodeState.hookInstallerArgs = undefined;
     vscodeState.hookInstallerInstallClaude.mockResolvedValue(undefined);
+    vscodeState.hookInstallerRemove.mockResolvedValue(undefined);
     vscodeState.externalWatchDisposables = [];
     vscodeState.terminalRemovalArgs = undefined;
     vscodeState.activeTab = undefined;
@@ -535,6 +538,20 @@ describe('activate', () => {
     await registration[1]();
 
     expect(vscodeState.hookInstallerInstallClaude).toHaveBeenCalledOnce();
+  });
+
+  it('registers deck.removeAgentHooks through HookInstaller and dismisses setup prompts', async () => {
+    const context = createContext();
+
+    await activate(context as never);
+    const registration = vscodeState.registerCommand.mock.calls.find(
+      ([command]) => command === 'deck.removeAgentHooks',
+    );
+    if (!registration) throw new Error('missing deck.removeAgentHooks registration');
+    await registration[1]();
+
+    expect(vscodeState.hookInstallerRemove).toHaveBeenCalledOnce();
+    expect(context.values['deck.agentHooksSetupDismissed']).toBe(true);
   });
 
   it('registers deck.openTerminal and refreshes on workspace/view visibility events', async () => {
