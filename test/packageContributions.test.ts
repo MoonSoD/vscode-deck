@@ -240,27 +240,13 @@ describe('package contributions', () => {
       command: 'deck.killTerminal',
       when: 'false',
     });
-    // cmd+backspace is bound to the shared deck.deleteSelected dispatcher, not
-    // to deck.killTerminal directly (see the dispatcher contribution test).
-    expect(
-      pkg.contributes.keybindings.filter((k: { command: string }) => k.command === 'deck.killTerminal'),
-    ).toEqual([]);
-  });
-
-  it('binds cmd+backspace to the deck.deleteSelected dispatcher for focused tree rows', () => {
-    expect(pkg.contributes.commands).toContainEqual({
-      command: 'deck.deleteSelected',
-      title: 'Deck: Delete Selected',
-    });
+    // cmd+backspace deletes the selected Terminal (Worktree delete is right-click
+    // only — VS Code can't pass the keyboard-focused row, microsoft/vscode#130880).
     expect(pkg.contributes.keybindings).toContainEqual({
-      command: 'deck.deleteSelected',
+      command: 'deck.killTerminal',
       key: 'ctrl+backspace',
       mac: 'cmd+backspace',
-      when: "focusedView == 'deck.repositories'",
-    });
-    expect(pkg.contributes.menus.commandPalette).toContainEqual({
-      command: 'deck.deleteSelected',
-      when: 'false',
+      when: "focusedView == 'deck.repositories' && deck.tmuxAvailable",
     });
   });
 
