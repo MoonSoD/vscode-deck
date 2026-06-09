@@ -89,11 +89,30 @@ describe('TerminalSnapshotRuntime', () => {
     await expect(runtime.restoreOnActivation()).resolves.toEqual({ restored: true });
 
     expect(tmux.calls).toEqual([
+      'killSession:__deck_anchor',
       'isServerRunning',
       'newAnchorSession:__deck_anchor:/deck/global-storage',
       'runShell:/ext/resources/plugins/tmux-resurrect/scripts/restore.sh',
       'killSession:__deck_anchor',
     ]);
+  });
+
+  it('clears a stale anchor before deciding whether the server is running', async () => {
+    const tmux = new FakeTmux();
+    const runtime = new TerminalSnapshotRuntime(
+      tmux,
+      () => '/ext/resources/plugins/tmux-resurrect/scripts/save.sh',
+      () => '/ext/resources/plugins/tmux-resurrect/scripts/restore.sh',
+      () => '/deck/global-storage',
+    );
+
+    await runtime.restoreOnActivation();
+
+    // A crashed prior restore can leave an anchor that keeps an empty server
+    // alive; killing it first stops it masquerading as a live server.
+    expect(tmux.calls.indexOf('killSession:__deck_anchor')).toBeLessThan(
+      tmux.calls.indexOf('isServerRunning'),
+    );
   });
 
   it('does not restore when the Deck socket is already running', async () => {
@@ -108,7 +127,7 @@ describe('TerminalSnapshotRuntime', () => {
 
     await expect(runtime.restoreOnActivation()).resolves.toEqual({ restored: false });
 
-    expect(tmux.calls).toEqual(['isServerRunning']);
+    expect(tmux.calls).toEqual(['killSession:__deck_anchor', 'isServerRunning']);
   });
 
   it('kills the anchor and does not throw when restore fails', async () => {
@@ -124,6 +143,7 @@ describe('TerminalSnapshotRuntime', () => {
     await expect(runtime.restoreOnActivation()).resolves.toEqual({ restored: false });
 
     expect(tmux.calls).toEqual([
+      'killSession:__deck_anchor',
       'isServerRunning',
       'newAnchorSession:__deck_anchor:/deck/global-storage',
       'runShell:/ext/resources/plugins/tmux-resurrect/scripts/restore.sh',

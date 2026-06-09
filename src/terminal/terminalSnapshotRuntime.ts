@@ -29,6 +29,13 @@ export class TerminalSnapshotRuntime {
 
   async restoreOnActivation(): Promise<RestoreOutcome> {
     try {
+      // A prior activation that died between anchoring and cleanup leaves the
+      // anchor behind; with `destroy-unattached off` it keeps an otherwise
+      // empty server alive, so `isServerRunning` would report true and every
+      // future activation would skip restore. Clear it first so a stale anchor
+      // can't masquerade as a live server.
+      await this.killAnchor();
+
       if (await this.tmux.isServerRunning()) return { restored: false };
 
       await this.tmux.newAnchorSession(ANCHOR_SESSION, this.anchorCwd());
@@ -39,16 +46,20 @@ export class TerminalSnapshotRuntime {
       } catch (error) {
         console.warn('Deck: restoring TerminalSnapshot failed', error);
       } finally {
-        try {
-          await this.tmux.killSession(ANCHOR_SESSION);
-        } catch (error) {
-          console.warn('Deck: removing TerminalSnapshot anchor failed', error);
-        }
+        await this.killAnchor();
       }
       return { restored };
     } catch (error) {
       console.warn('Deck: restoring TerminalSnapshot failed', error);
       return { restored: false };
+    }
+  }
+
+  private async killAnchor(): Promise<void> {
+    try {
+      await this.tmux.killSession(ANCHOR_SESSION);
+    } catch (error) {
+      console.warn('Deck: removing TerminalSnapshot anchor failed', error);
     }
   }
 
