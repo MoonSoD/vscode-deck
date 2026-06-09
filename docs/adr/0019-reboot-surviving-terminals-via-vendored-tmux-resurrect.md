@@ -26,7 +26,10 @@ and we verified both against the plugin source and a working reference
 ## Decision
 
 1. **Scope: reboot survival of shells only — cwd + scrollback, no relaunched
-   programs.** `@resurrect-processes 'false'`. A restored pane gets its prior
+   programs.** `@resurrect-processes 'false'`. *(Superseded by ADR-0021: this is
+   now `:all:`, with the agent snapshot rewriter clamping non-agent panes back to
+   shells, so this "shells only" scope still holds for everything except resumed
+   AgentSessions.)* A restored pane gets its prior
    scrollback and working directory, then a fresh shell prompt. Restoring
    running programs (resurrect re-executes them) is a riskier, different
    feature and is out of scope; it does not match the Terminal model ("a

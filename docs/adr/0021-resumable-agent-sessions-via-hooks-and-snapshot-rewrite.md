@@ -139,6 +139,21 @@ by id. Two findings shaped the design:
     automatic-rename (ADR-0014 live read). No modal, no Deck banner, no dedicated
     "agent-backed" tree decoration in v1.
 
+11. **`@resurrect-processes` is `:all:`, clamped by the rewriter — superseding
+    ADR-0019 §1.** Snapshot-rewrite resume only works if resurrect actually
+    restores a pane's command, so `deck.conf` sets `@resurrect-processes ':all:'`
+    (ADR-0019 had `'false'`). To preserve ADR-0019's "shells only" guarantee for
+    everything that is *not* a resumed AgentSession, the rewriter sets every
+    non-agent pane's full-command column to `:` (bare shell), which resurrect's
+    restore then skips (`$11 !~ "^:$"`). Net: agents resume, everything else
+    returns as a shell — ADR-0019's scope preserved by construction. This makes
+    the rewrite **load-bearing**: it runs on every restore (wired into
+    `restoreOnActivation` before `restore.sh`) and is **best-effort**, so a
+    failure degrades to shells rather than aborting restore. A narrower
+    `~`-sentinel allowlist (matching only Deck's injected wrapper) was considered
+    as defense-in-depth against a buggy rewrite leaving a stray program; deferred
+    as optional, since the clamp plus best-effort cover the real paths.
+
 ## Considered Options
 
 - **Passive session-store reading (cwd-keyed)** — rejected: cwd isn't unique per
@@ -182,9 +197,13 @@ by id. Two findings shaped the design:
 - **ADR-0019.** TerminalSnapshot gains the AgentSession; the `snapshotRewriter`
   runs inside `restoreOnActivation()` *before* `restore.sh`. The 5-min save
   cadence is unchanged (a sidecar captured between saves still resumes — the
-  rewrite reads sidecars at restore time, not save time).
+  rewrite reads sidecars at restore time, not save time). **Supersedes §1's
+  `@resurrect-processes 'false'` → `:all:`** (see Decision 11); the rewriter's
+  shell-clamp keeps §1's "shells only" scope for non-agent panes.
 - **ADR-0008.** Each Terminal's tmux session is created with a `DECK_SESSION`
-  env var.
+  env var — on the `+`-create path (`ensureSession`), the control client's
+  create-or-attach, and resurrect's restore (vendored `new_session` patched), so
+  the var survives reboots.
 - **ADR-0014.** Reinforced: the row label still comes from live tmux
   (automatic-rename surfaces `claude`/`codex`); no persisted agent state in the
   tree.

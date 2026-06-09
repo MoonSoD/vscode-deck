@@ -42,7 +42,11 @@ export class TerminalSnapshotRuntime {
       await this.tmux.newAnchorSession(ANCHOR_SESSION, this.anchorCwd());
       let restored = false;
       try {
-        await this.beforeRestore();
+        // Best-effort: a failed agent-session rewrite must never abort terminal
+        // restore (ADR-0019). Log and restore regardless.
+        await this.beforeRestore().catch((error) => {
+          console.warn('Deck: agent-session snapshot rewrite failed; restoring without resume', error);
+        });
         await this.tmux.runShell(this.restoreScriptPath());
         restored = true;
       } catch (error) {

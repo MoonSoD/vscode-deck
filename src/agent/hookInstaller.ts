@@ -3,7 +3,7 @@ import { dirname } from 'node:path';
 import { renderAgentHookScript } from './agentHookScript';
 import type { AgentName } from './agentTypes';
 
-const DECK_HOOK_ARGS = ['--deck-agent-session-hook'];
+const DECK_HOOK_TOKEN = '--deck-agent-session-hook';
 const HOOK_EVENTS = ['SessionStart', 'UserPromptSubmit'] as const;
 
 export interface HookInstallerPaths {
@@ -169,23 +169,15 @@ export class HookInstaller {
 }
 
 function deckHookGroup(scriptPath: string, agent: AgentName): HookGroup {
-  if (agent === 'codex') return deckCodexHookGroup(scriptPath);
+  // A single-quoted command string (rather than a separate `args` array) so the
+  // hook is robust to spaces in scriptPath and uniform across agents, instead of
+  // depending on whether the agent honors an `args` field. The agent name is
+  // passed positionally so one script can serve both.
   return {
     matcher: '',
     hooks: [{
       type: 'command',
-      command: scriptPath,
-      args: DECK_HOOK_ARGS,
-    }],
-  };
-}
-
-function deckCodexHookGroup(scriptPath: string): HookGroup {
-  return {
-    matcher: '',
-    hooks: [{
-      type: 'command',
-      command: `'${quoteForSingleQuotedShell(scriptPath)}' ${DECK_HOOK_ARGS[0]} codex`,
+      command: `'${quoteForSingleQuotedShell(scriptPath)}' ${DECK_HOOK_TOKEN} ${agent}`,
     }],
   };
 }
@@ -216,16 +208,9 @@ function removeDeckHookGroups(groups: HookGroup[]): HookGroupRemoval {
 
 function isDeckHook(hook: HookHandler): boolean {
   return (
-    hook.type === 'command' && (
-      (
-        Array.isArray(hook.args) &&
-        hook.args[0] === DECK_HOOK_ARGS[0]
-      ) ||
-      (
-        typeof hook.command === 'string' &&
-        hook.command.includes(DECK_HOOK_ARGS[0])
-      )
-    )
+    hook.type === 'command' &&
+    typeof hook.command === 'string' &&
+    hook.command.includes(DECK_HOOK_TOKEN)
   );
 }
 

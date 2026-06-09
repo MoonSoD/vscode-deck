@@ -350,8 +350,7 @@ function deckHookGroup(scriptPath: string) {
     matcher: '',
     hooks: [{
       type: 'command',
-      command: scriptPath,
-      args: ['--deck-agent-session-hook'],
+      command: `'${scriptPath}' --deck-agent-session-hook claude`,
     }],
   };
 }

@@ -588,8 +588,9 @@ describe('activate', () => {
     expect(vscodeState.onDidCloseTerminal).not.toHaveBeenCalled();
     expect(vscodeState.onDidChangeActiveTerminal).not.toHaveBeenCalled();
     // Tab restoration is now VS Code's native custom-editor restore — Deck no
-    // longer replays a snapshot, so only the pending-intent step runs here.
-    expect(vscodeState.lifecycleOrder).toEqual(['pending-list']);
+    // longer replays a snapshot. Two list-sessions run here: the pending-intent
+    // open, then the agent-sidecar prune.
+    expect(vscodeState.lifecycleOrder).toEqual(['pending-list', 'pending-list']);
   });
 
   it('registers deck.addTerminal through AddTerminalCommand', async () => {

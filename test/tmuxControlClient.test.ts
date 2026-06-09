@@ -29,6 +29,8 @@ describe('TmuxControlClient', () => {
       '-A',
       '-s',
       'wt-_work_repo__term-1',
+      '-e',
+      'DECK_SESSION=wt-_work_repo__term-1',
       '-c',
       '/work/repo',
     ], { cwd: '/work/repo', stdio: 'pipe' });

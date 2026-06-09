@@ -288,8 +288,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   if (terminalSnapshotRuntime) {
     context.subscriptions.push(terminalSnapshotRuntime.startPeriodicSave(5 * 60 * 1000));
     await openPendingTerminalForCurrentWorktree(pendingTerminalOpens, tmux);
+    try {
+      const liveSessions = new Set((await tmux.listSessions()).map((session) => session.sessionName));
+      await agentSidecars.prune(liveSessions);
+    } catch (error) {
+      console.warn('Deck: pruning agent sidecars failed', error);
+    }
+    // Agent resume rides on the tmux-backed snapshot machinery, so only offer
+    // setup when that's available.
+    void agentSetupPrompt.run();
   }
-  void agentSetupPrompt.run();
 }
 
 export function deactivate(): Promise<void> | undefined {

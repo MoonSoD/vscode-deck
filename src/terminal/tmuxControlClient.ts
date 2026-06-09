@@ -75,6 +75,11 @@ export class TmuxControlClient {
       '-A',
       '-s',
       sessionName,
+      // Set DECK_SESSION on the create-or-attach path too, so a session this
+      // client creates (e.g. reopening after a mid-window server death) still
+      // carries the env var the agent hook keys on. Ignored by tmux on attach.
+      '-e',
+      `DECK_SESSION=${sessionName}`,
       '-c',
       cwd,
     ], { cwd, stdio: 'pipe' });

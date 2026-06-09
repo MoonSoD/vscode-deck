@@ -146,9 +146,12 @@ new_session() {
 	local pane_id="${session_name}:${window_number}.${pane_index}"
 	if is_restoring_pane_contents && pane_contents_file_exists "$pane_id"; then
 		local pane_creation_command="$(pane_creation_command "$session_name" "$window_number" "$pane_index")"
-		TMUX="" tmux -S "$(tmux_socket)" new-session -d -s "$session_name" -c "$dir" "$pane_creation_command"
+		# Deck modification: pass DECK_SESSION so restored sessions keep the env
+		# var the agent hook keys on; without it, agent-session capture would
+		# silently stop working after the first DeckSocket death.
+		TMUX="" tmux -S "$(tmux_socket)" new-session -d -s "$session_name" -e "DECK_SESSION=$session_name" -c "$dir" "$pane_creation_command"
 	else
-		TMUX="" tmux -S "$(tmux_socket)" new-session -d -s "$session_name" -c "$dir"
+		TMUX="" tmux -S "$(tmux_socket)" new-session -d -s "$session_name" -e "DECK_SESSION=$session_name" -c "$dir"
 	fi
 	# change first window number if necessary
 	local created_window_num="$(first_window_num)"
