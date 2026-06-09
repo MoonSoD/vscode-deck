@@ -71,7 +71,7 @@ describe('watchGitCommonDir', () => {
     expect(vscodeState.patterns).toEqual([
       { baseUri: { fsPath: '/git/alpha' }, pattern: 'HEAD' },
       { baseUri: { fsPath: '/git/alpha' }, pattern: 'worktrees/**/HEAD' },
-      { baseUri: { fsPath: '/git/alpha' }, pattern: 'worktrees' },
+      { baseUri: { fsPath: '/git/alpha' }, pattern: 'worktrees/*' },
     ]);
     expect(refresh).toHaveBeenCalledOnce();
 
