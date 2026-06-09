@@ -110,6 +110,40 @@ describe('HookInstaller', () => {
       },
     });
   });
+
+  it('preserves foreign Codex hook groups without handlers', async () => {
+    const root = tempRoot();
+    const hooksPath = join(root, '.codex', 'hooks.json');
+    const scriptPath = join(root, '.local', 'share', 'deck', 'bin', 'deck-agent-hook.sh');
+    mkdirSync(join(root, '.codex'), { recursive: true });
+    writeFileSync(hooksPath, JSON.stringify({
+      hooks: {
+        SessionStart: [
+          { matcher: 'startup', hooks: [] },
+          { matcher: 'resume' },
+        ],
+      },
+    }), 'utf8');
+    const installer = new HookInstaller({
+      claudeSettingsPath: join(root, '.claude', 'settings.json'),
+      codexHooksPath: hooksPath,
+      hookScriptPath: scriptPath,
+      sidecarDir: join(root, '.local', 'share', 'deck', 'hooks'),
+    });
+
+    await installer.installCodex();
+
+    expect(JSON.parse(readFileSync(hooksPath, 'utf8'))).toEqual({
+      hooks: {
+        SessionStart: [
+          { matcher: 'startup', hooks: [] },
+          { matcher: 'resume' },
+          codexDeckHookGroup(scriptPath),
+        ],
+        UserPromptSubmit: [codexDeckHookGroup(scriptPath)],
+      },
+    });
+  });
 });
 
 function tempRoot(): string {

@@ -103,11 +103,16 @@ function deckCodexHookGroup(scriptPath: string): HookGroup {
 
 function removeDeckHookGroups(groups: HookGroup[]): HookGroup[] {
   return groups
-    .map((group) => ({
-      ...group,
-      hooks: (group.hooks ?? []).filter((hook) => !isDeckHook(hook)),
-    }))
-    .filter((group) => (group.hooks ?? []).length > 0);
+    .map(removeDeckHooksFromGroup)
+    .filter((group): group is HookGroup => group !== undefined);
+}
+
+function removeDeckHooksFromGroup(group: HookGroup): HookGroup | undefined {
+  if (!group.hooks) return group;
+
+  const hooks = group.hooks.filter((hook) => !isDeckHook(hook));
+  if (hooks.length === 0 && group.hooks.length > 0) return undefined;
+  return { ...group, hooks };
 }
 
 function isDeckHook(hook: HookHandler): boolean {
