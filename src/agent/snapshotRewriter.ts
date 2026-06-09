@@ -1,4 +1,5 @@
 import type { AgentName } from './agentTypes';
+import { ResumeTemplate } from './resumeTemplate';
 
 export interface AgentSidecar {
   agent: AgentName;
@@ -6,6 +7,8 @@ export interface AgentSidecar {
 }
 
 export class SnapshotRewriter {
+  constructor(private readonly resumeTemplate = new ResumeTemplate()) {}
+
   rewrite(snapshotText: string, sidecars: ReadonlyMap<string, AgentSidecar>): string {
     return snapshotText
       .split('\n')
@@ -33,9 +36,7 @@ export class SnapshotRewriter {
   }
 
   private wrappedResume(agent: AgentSidecar['agent'], sessionId: string): string {
-    const resumeCommand = agent === 'claude'
-      ? `claude --resume ${sessionId}`
-      : `codex resume ${sessionId}`;
+    const resumeCommand = this.resumeTemplate.render(agent, sessionId);
     return `sh -lc '${shellQuote(`${resumeCommand}; exec "$SHELL"`)}'`;
   }
 }

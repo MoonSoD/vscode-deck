@@ -51,6 +51,7 @@ const vscodeState = vi.hoisted(() => ({
   registerCustomEditorProvider: vi.fn(() => ({ dispose: vi.fn() })),
   removeWorktreeArgs: undefined as unknown[] | undefined,
   settingsRepositories: ['/settings/repo'],
+  settingsAgentResumeTemplates: {} as Record<string, string | undefined>,
   tmuxInstances: [] as Array<{
     configPath: string;
     killSession: ReturnType<typeof vi.fn>;
@@ -59,6 +60,7 @@ const vscodeState = vi.hoisted(() => ({
   terminalSnapshotRuntimeInstances: [] as Array<{
     tmux: unknown;
     saveScriptPath: () => string;
+    beforeRestore: () => Promise<void>;
     save: ReturnType<typeof vi.fn>;
     restoreOnActivation: ReturnType<typeof vi.fn>;
     startPeriodicSave: ReturnType<typeof vi.fn>;
@@ -67,6 +69,7 @@ const vscodeState = vi.hoisted(() => ({
   watchGitCommonDir: vi.fn(),
   workspaceFolders: [{ uri: { fsPath: '/work/alpha-main' } }],
   tmuxPreflight: vi.fn(async () => ({ available: true })),
+  rewriteTerminalSnapshotAgentSessions: vi.fn(async () => undefined),
   treeViewSelection: [] as unknown[],
 }));
 
@@ -109,8 +112,16 @@ vi.mock('vscode', () => ({
   },
   workspace: {
     getConfiguration: () => ({
-      get: <T>(key: string, defaultValue: T) =>
-        key === 'repositories' ? ((vscodeState.settingsRepositories as T | undefined) ?? defaultValue) : defaultValue,
+      get: <T>(key: string, defaultValue?: T) => {
+        if (key === 'repositories') return (vscodeState.settingsRepositories as T | undefined) ?? defaultValue;
+        if (key === 'agentResumeTemplates.claude') {
+          return (vscodeState.settingsAgentResumeTemplates.claude as T | undefined) ?? defaultValue;
+        }
+        if (key === 'agentResumeTemplates.codex') {
+          return (vscodeState.settingsAgentResumeTemplates.codex as T | undefined) ?? defaultValue;
+        }
+        return defaultValue;
+      },
       update: vscodeState.configUpdate,
     }),
     onDidChangeConfiguration: vscodeState.onDidChangeConfiguration,
@@ -227,10 +238,17 @@ vi.mock('../src/terminal/terminalSnapshotRuntime', () => ({
     constructor(
       public readonly tmux: unknown,
       public readonly saveScriptPath: () => string,
+      public readonly restoreScriptPath: () => string,
+      public readonly anchorCwd: () => string,
+      public readonly beforeRestore: () => Promise<void>,
     ) {
       vscodeState.terminalSnapshotRuntimeInstances.push(this);
     }
   },
+}));
+
+vi.mock('../src/agent/terminalSnapshotAgentSessions', () => ({
+  rewriteTerminalSnapshotAgentSessions: vscodeState.rewriteTerminalSnapshotAgentSessions,
 }));
 
 vi.mock('../src/agent/hookInstaller', () => ({
@@ -322,8 +340,10 @@ describe('activate', () => {
     vscodeState.repositoryTreeInstances = [];
     vscodeState.removeWorktreeArgs = undefined;
     vscodeState.settingsRepositories = ['/settings/repo'];
+    vscodeState.settingsAgentResumeTemplates = {};
     vscodeState.tmuxInstances = [];
     vscodeState.terminalSnapshotRuntimeInstances = [];
+    vscodeState.rewriteTerminalSnapshotAgentSessions.mockClear();
     vscodeState.watchGitCommonDir.mockImplementation(() => {
       const disposable = { dispose: vi.fn() };
       vscodeState.externalWatchDisposables.push(disposable);
@@ -480,6 +500,32 @@ describe('activate', () => {
 
     const runtime = vscodeState.terminalSnapshotRuntimeInstances[0];
     expect(runtime.restoreOnActivation).toHaveBeenCalledOnce();
+  });
+
+  it('uses agent resume template settings when rewriting the TerminalSnapshot', async () => {
+    vscodeState.settingsAgentResumeTemplates.codex = 'codex --dangerously-bypass-approvals-and-sandbox resume {id}';
+    const context = createContext();
+
+    await activate(context as never);
+    const runtime = vscodeState.terminalSnapshotRuntimeInstances[0];
+    await runtime.beforeRestore();
+
+    const rewriter = vscodeState.rewriteTerminalSnapshotAgentSessions.mock.calls[0]?.[2];
+    if (!rewriter || typeof rewriter !== 'object' || !('rewrite' in rewriter)) {
+      throw new Error('missing SnapshotRewriter');
+    }
+
+    const rewritten = (rewriter as { rewrite(snapshotText: string, sidecars: ReadonlyMap<string, unknown>): string })
+      .rewrite(
+        'pane\twt-_work_repo__term-1\t0\t1\t:*\t0\t%0\t:/work/repo\t1\tcodex\t:codex',
+        new Map([
+          ['wt-_work_repo__term-1', { agent: 'codex', session_id: 'codex-123' }],
+        ]),
+      );
+
+    expect(rewritten.split('\t')[10]).toBe(
+      ':sh -lc \'codex --dangerously-bypass-approvals-and-sandbox resume codex-123; exec "$SHELL"\'',
+    );
   });
 
   it('syncs one ExternalGitWatch per registered Repository common dir', async () => {

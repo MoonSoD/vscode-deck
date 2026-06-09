@@ -41,6 +41,8 @@ import { AgentDetection } from './agent/agentDetection';
 import { AGENT_HOOK_SETUP_DISMISSED_KEY, AgentSetupPrompt } from './agent/agentSetupPrompt';
 import { HookInstaller } from './agent/hookInstaller';
 import { rewriteTerminalSnapshotAgentSessions } from './agent/terminalSnapshotAgentSessions';
+import { ResumeTemplate } from './agent/resumeTemplate';
+import { SnapshotRewriter } from './agent/snapshotRewriter';
 
 let terminalSnapshotRuntime: TerminalSnapshotRuntime | undefined;
 
@@ -74,6 +76,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         () => rewriteTerminalSnapshotAgentSessions(
           join(deckDir, 'resurrect', 'last'),
           agentSidecars,
+          new SnapshotRewriter(resumeTemplateFromSettings()),
         ),
       )
     : undefined;
@@ -331,6 +334,14 @@ function tmuxResurrectPath(context: vscode.ExtensionContext, ...parts: string[])
 function deckDataDir(): string {
   const dataHome = process.env.XDG_DATA_HOME || join(homedir(), '.local', 'share');
   return join(dataHome, 'deck');
+}
+
+function resumeTemplateFromSettings(): ResumeTemplate {
+  const config = vscode.workspace.getConfiguration('deck');
+  return new ResumeTemplate({
+    claude: config.get<string>('agentResumeTemplates.claude'),
+    codex: config.get<string>('agentResumeTemplates.codex'),
+  });
 }
 
 interface RepositoryRegistryReader {

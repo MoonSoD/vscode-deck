@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { ResumeTemplate } from '../src/agent/resumeTemplate';
 import { SnapshotRewriter, type AgentSidecar } from '../src/agent/snapshotRewriter';
 
 describe('SnapshotRewriter', () => {
@@ -119,6 +120,24 @@ describe('SnapshotRewriter', () => {
     ]));
 
     expect(rewritten.split('\t')[10]).toBe(':sh -lc \'codex resume codex-123; exec "$SHELL"\'');
+  });
+
+  it('uses the Codex resume template when rewriting a pane', () => {
+    const snapshot = paneLine({
+      session: 'wt-_work_repo__term-1',
+      currentCommand: 'codex',
+      fullCommand: ':codex',
+    });
+
+    const rewritten = new SnapshotRewriter(new ResumeTemplate({
+      codex: 'codex --dangerously-bypass-approvals-and-sandbox resume {id}',
+    })).rewrite(snapshot, new Map([
+      ['wt-_work_repo__term-1', { agent: 'codex', session_id: 'codex-123' }],
+    ]));
+
+    expect(rewritten.split('\t')[10]).toBe(
+      ':sh -lc \'codex --dangerously-bypass-approvals-and-sandbox resume codex-123; exec "$SHELL"\'',
+    );
   });
 
   it('keeps the wrapped command inside the resurrect tab-delimited command column', () => {
