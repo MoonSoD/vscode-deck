@@ -71,17 +71,28 @@ and we verified both against the plugin source and a working reference
    short, and a crash never calls it. Worst case: ≤5 min of scrollback lost on
    a hard crash. No per-create/kill saves; no manual save button (descoped).
 
-6. **The conf becomes generated; storage lives in `globalStorage`.**
-   `resources/deck.conf` becomes a template with `__DECK_RESURRECT_PLUGIN__` /
-   `__DECK_RESURRECT_DIR__` placeholders; Deck substitutes the resolved paths,
-   writes the result to `<globalStorageUri>/deck.conf`, and spawns
-   `tmux -L deck -f <globalStorageUri>/deck.conf`. The snapshot dir is
-   `<globalStorageUri>/resurrect/`. `globalStorage` is the VS Code-recommended
-   home for cross-workspace extension data and is shared across windows —
-   correct for one machine-global server with one snapshot. A user-facing
-   XDG path (`~/.local/share/deck`) and resurrect's default
-   (`~/.local/share/tmux/resurrect`, which would collide with the user's own
-   resurrect) were both rejected.
+6. **The conf becomes generated (in `globalStorage`); the snapshot dir is a
+   space-free XDG path.** `resources/deck.conf` becomes a template with
+   `__DECK_RESURRECT_PLUGIN__` / `__DECK_RESURRECT_DIR__` placeholders; Deck
+   substitutes the resolved paths, writes the result to
+   `<globalStorageUri>/deck.conf`, and spawns
+   `tmux -L deck -f <globalStorageUri>/deck.conf` (tmux opens `-f` via argv, so
+   the space in macOS's globalStorage path is harmless there).
+
+   The **snapshot dir**, however, must **not** live under `globalStorage`.
+   `tmux-resurrect`'s `restore.sh` silently restores nothing when
+   `@resurrect-dir` contains a space (verified — see Validation), and on macOS
+   `globalStorageUri` is always under `~/Library/Application Support/…`. So the
+   snapshot dir is **`${XDG_DATA_HOME:-~/.local/share}/deck/resurrect`** — a
+   space-free, Deck-namespaced location. It is still isolated from the user's
+   own resurrect (`tmux/resurrect`), satisfying the original requirement.
+
+   > **Supersedes this ADR's own earlier decision** to keep the snapshot dir at
+   > `<globalStorageUri>/resurrect/`. That was evidence-backed (globalStorage is
+   > VS Code's recommended store) but defeated by resurrect's space-in-path bug
+   > on the primary platform. The trade-off lost: the snapshot dir is no longer
+   > auto-cleaned on uninstall. Accepted — correctness over tidiness; the
+   > snapshot is disposable regenerable state anyway.
 
 7. **New conf lines** (added to the ADR-0008 §11 set, unchanged otherwise):
 
@@ -162,6 +173,12 @@ and we verified both against the plugin source and a working reference
 - Anchor → restore → kill-anchor pattern and 5-min/exit save cadence:
   `~/code/sanctel` `src-tauri/src/restore_runtime.rs` (`ANCHOR_SESSION`,
   `restore_on_launch`, `start_periodic_save(300)`, `save_on_exit`).
+- **Space-in-`@resurrect-dir` breaks restore (QA, macOS).** With
+  `@resurrect-dir` under `~/Library/Application Support/…`, `save.sh` wrote a
+  snapshot but `restore.sh` (exit 0) restored **zero** sessions; the same
+  snapshot copied to a space-free dir restored the session *and* its scrollback.
+  `resurrect_dir()` (`helpers.sh`) echoes the option verbatim, so the breakage
+  is downstream unquoted use. Fix: §6's space-free XDG snapshot dir.
 - Open verification item: stress-test a save fired mid-flood (the F6
   `seq 1 1000` style) confirms no output/keystroke loss while `save.sh` runs.
 

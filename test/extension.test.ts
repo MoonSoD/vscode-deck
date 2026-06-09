@@ -300,6 +300,7 @@ describe('activate', () => {
   });
 
   afterEach(() => {
+    delete process.env.XDG_DATA_HOME;
     for (const root of tempRoots.splice(0)) {
       rmSync(root, { recursive: true, force: true });
     }
@@ -309,7 +310,11 @@ describe('activate', () => {
     const values: Record<string, unknown> = { 'deck.repositoryRegistry': globalRepositories };
     const globalStoragePath = mkdtempSync(join(tmpdir(), 'deck-test-global-'));
     tempRoots.push(globalStoragePath);
+    const xdgDataHome = mkdtempSync(join(tmpdir(), 'deck-test-xdg-'));
+    tempRoots.push(xdgDataHome);
+    process.env.XDG_DATA_HOME = xdgDataHome;
     return {
+      xdgDataHome,
       globalState: {
         get: <T>(key: string, defaultValue: T) => (values[key] as T | undefined) ?? defaultValue,
         update: vi.fn(async (key: string, value: unknown) => {
@@ -389,7 +394,10 @@ describe('activate', () => {
     await activate(context as never);
 
     const generatedConf = join(context.globalStorageUri.fsPath, 'deck.conf');
-    const resurrectDir = join(context.globalStorageUri.fsPath, 'resurrect');
+    // The snapshot dir lives at a space-free XDG path, NOT under globalStorage:
+    // tmux-resurrect's restore.sh mishandles the space in macOS's
+    // "Application Support" globalStorage path.
+    const resurrectDir = join(context.xdgDataHome, 'deck', 'resurrect');
     const generatedConfContents = readFileSync(generatedConf, 'utf8');
     expect(existsSync(resurrectDir)).toBe(true);
     expect(generatedConfContents).toContain(

@@ -1,4 +1,5 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { homedir } from 'node:os';
 import { join } from 'node:path';
 import * as vscode from 'vscode';
 import { RepositoryTreeProvider, type RepositoryTreeNode } from './tree/repositoryTree';
@@ -247,10 +248,11 @@ export function deactivate(): Promise<void> | undefined {
 async function writeDeckConf(context: vscode.ExtensionContext): Promise<string> {
   const templatePath = join(context.extensionPath, 'resources', 'deck.conf');
   const generatedPath = join(context.globalStorageUri.fsPath, 'deck.conf');
-  const resurrectDir = join(context.globalStorageUri.fsPath, 'resurrect');
+  const resurrectDir = terminalSnapshotDir();
   const pluginPath = tmuxResurrectPath(context, 'resurrect.tmux');
 
   const template = await readFile(templatePath, 'utf8');
+  await mkdir(context.globalStorageUri.fsPath, { recursive: true });
   await mkdir(resurrectDir, { recursive: true });
   await writeFile(generatedPath, renderDeckConf(template, { pluginPath, resurrectDir }), 'utf8');
   return generatedPath;
@@ -266,6 +268,16 @@ function terminalSnapshotRestoreScriptPath(context: vscode.ExtensionContext): st
 
 function tmuxResurrectPath(context: vscode.ExtensionContext, ...parts: string[]): string {
   return join(context.extensionPath, 'resources', 'plugins', 'tmux-resurrect', ...parts);
+}
+
+// tmux-resurrect's restore.sh mishandles a space in @resurrect-dir, and macOS's
+// globalStorage path lives under "Application Support". Keep the generated conf
+// in globalStorage but point the TerminalSnapshot dir at a space-free,
+// Deck-namespaced XDG location — isolated from the user's own
+// ~/.local/share/tmux/resurrect.
+function terminalSnapshotDir(): string {
+  const dataHome = process.env.XDG_DATA_HOME || join(homedir(), '.local', 'share');
+  return join(dataHome, 'deck', 'resurrect');
 }
 
 interface RepositoryRegistryReader {
