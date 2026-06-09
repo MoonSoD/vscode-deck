@@ -67,6 +67,22 @@ describe('SnapshotRewriter', () => {
     ]);
   });
 
+  it('resumes a Claude pane whose current command is the version string, not "claude"', () => {
+    // Claude Code reports its version (e.g. "2.1.168") as pane_current_command;
+    // the resumable command is recognized via the full-command column instead.
+    const snapshot = paneLine({
+      session: 'wt-_work_repo__term-1',
+      currentCommand: '2.1.168',
+      fullCommand: ':claude',
+    });
+
+    const rewritten = new SnapshotRewriter().rewrite(snapshot, new Map([
+      ['wt-_work_repo__term-1', { agent: 'claude', session_id: 'abc-123' }],
+    ]));
+
+    expect(rewritten.split('\t')[10]).toBe(':sh -lc \'claude --resume abc-123; exec "$SHELL"\'');
+  });
+
   it('rewrites Codex panes, including truncated command names, to wrapped resume commands', () => {
     const snapshot = [
       paneLine({
@@ -95,7 +111,7 @@ describe('SnapshotRewriter', () => {
 
   it('restores exited-agent and no-sidecar panes as plain shells', () => {
     const snapshot = [
-      paneLine({ session: 'wt-_work_repo__term-1', currentCommand: 'zsh', fullCommand: ':claude' }),
+      paneLine({ session: 'wt-_work_repo__term-1', currentCommand: 'zsh', fullCommand: ':zsh' }),
       paneLine({ session: 'wt-_work_repo__term-2', currentCommand: 'claude', fullCommand: ':claude' }),
     ].join('\n');
 

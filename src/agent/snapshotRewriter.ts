@@ -27,24 +27,38 @@ export class SnapshotRewriter {
     const columns = line.split('\t');
     if (columns[LINE_TYPE_COLUMN] !== 'pane' || columns.length < MIN_PANE_COLUMNS) return line;
 
-    const sessionName = columns[SESSION_NAME_COLUMN];
-    const currentCommand = columns[CURRENT_COMMAND_COLUMN];
-    const sidecar = sidecars.get(sessionName);
-
-    columns[FULL_COMMAND_COLUMN] = this.fullCommandFor(currentCommand, sidecar);
+    const sidecar = sidecars.get(columns[SESSION_NAME_COLUMN]);
+    columns[FULL_COMMAND_COLUMN] = this.fullCommandFor(
+      columns[CURRENT_COMMAND_COLUMN],
+      columns[FULL_COMMAND_COLUMN],
+      sidecar,
+    );
     return columns.join('\t');
   }
 
-  private fullCommandFor(currentCommand: string, sidecar: AgentSidecar | undefined): string {
-    if (sidecar && this.isRunningAgent(sidecar.agent, currentCommand)) {
+  private fullCommandFor(
+    currentCommand: string,
+    fullCommand: string,
+    sidecar: AgentSidecar | undefined,
+  ): string {
+    if (sidecar && this.isRunningAgent(sidecar.agent, currentCommand, fullCommand)) {
       return `:${this.wrappedResume(sidecar.agent, sidecar.session_id)}`;
     }
     return SHELL_COMMAND;
   }
 
-  private isRunningAgent(agent: AgentSidecar['agent'], currentCommand: string): boolean {
-    if (agent === 'claude') return currentCommand === 'claude';
-    return currentCommand === 'codex' || currentCommand.startsWith('codex-');
+  // Claude Code reports its version (e.g. "2.1.168") as pane_current_command, not
+  // "claude" — so we also inspect the ps-derived full command (column 10), which
+  // reads "claude". Either column naming the agent means it's still running; a
+  // shell in both means the user exited it.
+  private isRunningAgent(
+    agent: AgentSidecar['agent'],
+    currentCommand: string,
+    fullCommand: string,
+  ): boolean {
+    const names = [currentCommand, commandBasename(fullCommand)];
+    if (agent === 'claude') return names.includes('claude');
+    return names.some((name) => name === 'codex' || name.startsWith('codex-'));
   }
 
   private wrappedResume(agent: AgentSidecar['agent'], sessionId: string): string {
@@ -55,4 +69,11 @@ export class SnapshotRewriter {
 
 function shellQuote(value: string): string {
   return value.replaceAll("'", "'\"'\"'");
+}
+
+function commandBasename(fullCommand: string): string {
+  const command = fullCommand.startsWith(':') ? fullCommand.slice(1) : fullCommand;
+  const firstToken = command.trim().split(/\s+/)[0] ?? '';
+  const slash = firstToken.lastIndexOf('/');
+  return slash >= 0 ? firstToken.slice(slash + 1) : firstToken;
 }

@@ -236,6 +236,11 @@ by id. Two findings shaped the design:
   expose `${CLAUDE_PLUGIN_ROOT}`; enabling writes a small `enabledPlugins` entry;
   an in-place `@skills-dir` plugin needs no install step and is removed by
   deleting its folder (code.claude.com/docs/en/plugins-reference).
+- **`pane_current_command` is unreliable for Claude** (QA, macOS): Claude Code
+  reports its **version** (e.g. `2.1.168`) as `#{pane_current_command}` (snapshot
+  column 9), not `claude`. The rewriter therefore matches the agent against the
+  ps-derived **full-command** column (10, which reads `claude`) as well as column
+  9 — matching only column 9 silently failed to resume.
 - **Open verification items:**
   - The §6 wrap (`<resume>; exec $SHELL`) must survive resurrect's tab-delimited
     snapshot column parsing (`;`, spaces) on restore.
