@@ -1,6 +1,13 @@
 import type { AgentName } from './agentTypes';
 import { ResumeTemplate } from './resumeTemplate';
 
+const LINE_TYPE_COLUMN = 0;
+const SESSION_NAME_COLUMN = 1;
+const CURRENT_COMMAND_COLUMN = 9;
+const FULL_COMMAND_COLUMN = 10;
+const MIN_PANE_COLUMNS = FULL_COMMAND_COLUMN + 1;
+const SHELL_COMMAND = ':';
+
 export interface AgentSidecar {
   agent: AgentName;
   session_id: string;
@@ -18,16 +25,21 @@ export class SnapshotRewriter {
 
   private rewriteLine(line: string, sidecars: ReadonlyMap<string, AgentSidecar>): string {
     const columns = line.split('\t');
-    if (columns[0] !== 'pane' || columns.length < 11) return line;
+    if (columns[LINE_TYPE_COLUMN] !== 'pane' || columns.length < MIN_PANE_COLUMNS) return line;
 
-    const sessionName = columns[1];
-    const currentCommand = columns[9];
+    const sessionName = columns[SESSION_NAME_COLUMN];
+    const currentCommand = columns[CURRENT_COMMAND_COLUMN];
     const sidecar = sidecars.get(sessionName);
-    columns[10] = ':';
-    if (sidecar && this.isRunningAgent(sidecar.agent, currentCommand)) {
-      columns[10] = `:${this.wrappedResume(sidecar.agent, sidecar.session_id)}`;
-    }
+
+    columns[FULL_COMMAND_COLUMN] = this.fullCommandFor(currentCommand, sidecar);
     return columns.join('\t');
+  }
+
+  private fullCommandFor(currentCommand: string, sidecar: AgentSidecar | undefined): string {
+    if (sidecar && this.isRunningAgent(sidecar.agent, currentCommand)) {
+      return `:${this.wrappedResume(sidecar.agent, sidecar.session_id)}`;
+    }
+    return SHELL_COMMAND;
   }
 
   private isRunningAgent(agent: AgentSidecar['agent'], currentCommand: string): boolean {
