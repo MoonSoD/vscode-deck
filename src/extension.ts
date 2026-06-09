@@ -44,6 +44,24 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const tmuxConfigPath = await writeDeckConf(context);
   const tmux = new TmuxCli(tmuxConfigPath);
 
+  // Kick off TerminalSnapshot restore before the terminal editor provider is
+  // wired up, and expose it as a barrier. Terminal tab reattaches (which issue
+  // `new-session -A`) await this barrier, so a reattach can never resurrect a
+  // blank session ahead of restore on reopen — see TerminalEditorProvider's
+  // beforeReattach. Not awaited inline: activation stays responsive; the gate is
+  // on the reattach, not on activate.
+  terminalSnapshotRuntime = tmuxAvailability.available
+    ? new TerminalSnapshotRuntime(
+        tmux,
+        () => terminalSnapshotSaveScriptPath(context),
+        () => terminalSnapshotRestoreScriptPath(context),
+        () => deckDataDir(),
+      )
+    : undefined;
+  const terminalSnapshotRestored: Promise<void> = terminalSnapshotRuntime
+    ? terminalSnapshotRuntime.restoreOnActivation().then(() => undefined)
+    : Promise.resolve();
+
   const repositoryRegistry = new RepositoryRegistryStore(context.globalState);
 
   const activeWorktrees = new ActiveWorktreeStore(context.globalState);
@@ -98,6 +116,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // live (automatic-rename tracks the foreground command); event-driven, no poll.
     refreshTree,
     (sessionName) => tmux.windowName(sessionName),
+    () => terminalSnapshotRestored,
   );
   const openTerminal = new OpenTerminalCommand({
     terminalPanels: terminalEditorProvider,
@@ -219,18 +238,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       if (event.visible) refreshTree();
     }),
   );
-  if (tmuxAvailability.available) {
-    terminalSnapshotRuntime = new TerminalSnapshotRuntime(
-      tmux,
-      () => terminalSnapshotSaveScriptPath(context),
-      () => terminalSnapshotRestoreScriptPath(context),
-      () => deckDataDir(),
-    );
-    await terminalSnapshotRuntime.restoreOnActivation();
+  if (terminalSnapshotRuntime) {
     context.subscriptions.push(terminalSnapshotRuntime.startPeriodicSave(5 * 60 * 1000));
     await openPendingTerminalForCurrentWorktree(pendingTerminalOpens, tmux);
-  } else {
-    terminalSnapshotRuntime = undefined;
   }
 }
 

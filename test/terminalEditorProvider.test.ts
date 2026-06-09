@@ -164,6 +164,45 @@ describe('TerminalEditorProvider', () => {
     expect(terminalPanel.dispose).toHaveBeenCalledOnce();
   });
 
+  it('waits for the restore barrier before reattaching, so it never beats restore with a blank session', async () => {
+    let receiveMessage: ((message: { type: string; cols?: number; rows?: number }) => void) | undefined;
+    const terminalPanel = panel();
+    terminalPanel.webview.onDidReceiveMessage.mockImplementation(
+      (handler: (message: { type: string }) => void) => {
+        receiveMessage = handler;
+        return { dispose: vi.fn() };
+      },
+    );
+    const terminalBridge = bridge();
+    let releaseRestore!: () => void;
+    const restoreBarrier = new Promise<void>((resolve) => {
+      releaseRestore = resolve;
+    });
+    const provider = new TerminalEditorProvider(
+      { fsPath: '/extension' } as never,
+      '/extension/resources/deck.conf',
+      undefined,
+      () => terminalBridge,
+      undefined,
+      undefined,
+      undefined,
+      () => restoreBarrier,
+    );
+    const document = provider.openCustomDocument({
+      scheme: 'deck-terminal',
+      path: '/work/alpha-main/term-1',
+    } as never);
+
+    provider.resolveCustomEditor(document, terminalPanel as never);
+    receiveMessage?.({ type: 'ready', cols: 80, rows: 24 });
+    await flush();
+    expect(terminalBridge.start).not.toHaveBeenCalled();
+
+    releaseRestore();
+    await flush();
+    expect(terminalBridge.start).toHaveBeenCalledOnce();
+  });
+
   it('posts terminal font config when resolving an editor (editor font when terminal font unset)', () => {
     const terminalPanel = panel();
     const { provider, document } = providerDocument();

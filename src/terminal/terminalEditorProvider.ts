@@ -86,6 +86,12 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
     private readonly onTitleChange: () => void = () => undefined,
     private readonly resolveWindowName: (sessionName: string) => Promise<string | undefined> = async () =>
       undefined,
+    // Awaited before a reattach issues `new-session -A`. On reopen after the
+    // DeckSocket died, VS Code resolves the active editor eagerly; without this
+    // gate its reattach would `new-session -A` a blank session and beat the
+    // TerminalSnapshot restore, losing scrollback. Gating it makes the reattach
+    // bind to the restored session instead.
+    private readonly beforeReattach: () => Promise<void> = () => Promise.resolve(),
   ) {
     this.configChangeSubscription = vscode.workspace.onDidChangeConfiguration((event) => {
       const fontKeys = [
@@ -171,12 +177,10 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
       }),
       panel.webview.onDidReceiveMessage((message: TerminalWebviewMessage) => {
         if (message.type === 'ready') {
-          transport.start(
-            document.sessionName,
-            document.cwd,
-            message.cols ?? 80,
-            message.rows ?? 24,
-          );
+          const { cols = 80, rows = 24 } = message;
+          void this.beforeReattach().then(() => {
+            transport.start(document.sessionName, document.cwd, cols, rows);
+          });
           return;
         }
 
