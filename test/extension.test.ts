@@ -50,6 +50,13 @@ const vscodeState = vi.hoisted(() => ({
     killSession: ReturnType<typeof vi.fn>;
     listSessions: ReturnType<typeof vi.fn>;
   }>,
+  terminalSnapshotRuntimeInstances: [] as Array<{
+    tmux: unknown;
+    saveScriptPath: () => string;
+    save: ReturnType<typeof vi.fn>;
+    startPeriodicSave: ReturnType<typeof vi.fn>;
+    periodicSave: { dispose: ReturnType<typeof vi.fn> };
+  }>,
   workspaceFolders: [{ uri: { fsPath: '/work/alpha-main' } }],
   tmuxPreflight: vi.fn(async () => ({ available: true })),
   treeViewSelection: [] as unknown[],
@@ -196,6 +203,21 @@ vi.mock('../src/terminal/tmuxCli', () => ({
   },
 }));
 
+vi.mock('../src/terminal/terminalSnapshotRuntime', () => ({
+  TerminalSnapshotRuntime: class {
+    save = vi.fn(async () => undefined);
+    periodicSave = { dispose: vi.fn() };
+    startPeriodicSave = vi.fn(() => this.periodicSave);
+
+    constructor(
+      public readonly tmux: unknown,
+      public readonly saveScriptPath: () => string,
+    ) {
+      vscodeState.terminalSnapshotRuntimeInstances.push(this);
+    }
+  },
+}));
+
 vi.mock('../src/terminal/addTerminalCommand', () => ({
   AddTerminalCommand: class {
     constructor(...args: unknown[]) {
@@ -233,7 +255,7 @@ vi.mock('../src/terminal/killTerminalCommand', () => ({
 }));
 
 import * as vscode from 'vscode';
-import { activate, openPendingTerminalForCurrentWorktree } from '../src/extension';
+import { activate, deactivate, openPendingTerminalForCurrentWorktree } from '../src/extension';
 import { PendingTerminalOpenStore } from '../src/terminal/pendingTerminalOpenStore';
 
 describe('activate', () => {
@@ -250,6 +272,7 @@ describe('activate', () => {
     vscodeState.removeWorktreeArgs = undefined;
     vscodeState.settingsRepositories = ['/settings/repo'];
     vscodeState.tmuxInstances = [];
+    vscodeState.terminalSnapshotRuntimeInstances = [];
     vscodeState.onDidChangeTabGroups.mockClear();
     vscodeState.onDidChangeTabs.mockClear();
     vscodeState.tabGroups = [];
@@ -358,6 +381,24 @@ describe('activate', () => {
       `run-shell '${join(process.cwd(), 'resources', 'plugins', 'tmux-resurrect', 'resurrect.tmux')}'`,
     );
     expect(vscodeState.tmuxInstances[0].configPath).toBe(generatedConf);
+  });
+
+  it('starts TerminalSnapshot periodic saves and fires one best-effort save on deactivate', async () => {
+    const context = createContext();
+
+    await activate(context as never);
+
+    const runtime = vscodeState.terminalSnapshotRuntimeInstances[0];
+    expect(runtime.tmux).toBe(vscodeState.tmuxInstances[0]);
+    expect(runtime.saveScriptPath()).toBe(
+      join(process.cwd(), 'resources', 'plugins', 'tmux-resurrect', 'scripts', 'save.sh'),
+    );
+    expect(runtime.startPeriodicSave).toHaveBeenCalledWith(5 * 60 * 1000);
+    expect(context.subscriptions).toContain(runtime.periodicSave);
+
+    deactivate();
+
+    expect(runtime.save).toHaveBeenCalledOnce();
   });
 
   it('shares pending WorktreeRemoval state between the command and tree', async () => {

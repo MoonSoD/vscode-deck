@@ -138,6 +138,16 @@ export class TmuxCli {
     return [...this.baseArgs(), 'attach-session', '-t', exactTarget(session)];
   }
 
+  async runShell(scriptPath: string): Promise<void> {
+    const result = await this.runner.run('tmux', [
+      ...this.baseArgs(),
+      'run-shell',
+      scriptPath,
+    ]);
+    if (result.code === 0) return;
+    throw new Error(result.stderr || result.stdout || `tmux run-shell failed: ${result.code}`);
+  }
+
   private baseArgs(): string[] {
     return ['-L', 'deck', '-f', this.configPath];
   }

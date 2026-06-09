@@ -31,6 +31,9 @@ import { terminalSessionNumber, terminalSessionPrefix } from './terminal/tmuxSaf
 import { tmuxPreflight } from './terminal/tmuxPreflight';
 import { SessionUriCodec } from './terminal/sessionUriCodec';
 import { renderDeckConf } from './terminal/deckConf';
+import { TerminalSnapshotRuntime } from './terminal/terminalSnapshotRuntime';
+
+let terminalSnapshotRuntime: TerminalSnapshotRuntime | undefined;
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const tmuxAvailability = await tmuxPreflight();
@@ -195,11 +198,19 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }),
   );
   if (tmuxAvailability.available) {
+    terminalSnapshotRuntime = new TerminalSnapshotRuntime(tmux, () => terminalSnapshotSaveScriptPath(context));
+    context.subscriptions.push(terminalSnapshotRuntime.startPeriodicSave(5 * 60 * 1000));
     await openPendingTerminalForCurrentWorktree(pendingTerminalOpens, tmux);
+  } else {
+    terminalSnapshotRuntime = undefined;
   }
 }
 
-export function deactivate(): void {}
+export function deactivate(): void {
+  void terminalSnapshotRuntime?.save().catch((error) => {
+    console.warn('Deck: saving TerminalSnapshot during deactivate failed', error);
+  });
+}
 
 async function writeDeckConf(context: vscode.ExtensionContext): Promise<string> {
   const templatePath = join(context.extensionPath, 'resources', 'deck.conf');
@@ -217,6 +228,17 @@ async function writeDeckConf(context: vscode.ExtensionContext): Promise<string> 
   await mkdir(resurrectDir, { recursive: true });
   await writeFile(generatedPath, renderDeckConf(template, { pluginPath, resurrectDir }), 'utf8');
   return generatedPath;
+}
+
+function terminalSnapshotSaveScriptPath(context: vscode.ExtensionContext): string {
+  return join(
+    context.extensionPath,
+    'resources',
+    'plugins',
+    'tmux-resurrect',
+    'scripts',
+    'save.sh',
+  );
 }
 
 // Mirrors the Explorer's delete confirmation (a modal warning gated by a

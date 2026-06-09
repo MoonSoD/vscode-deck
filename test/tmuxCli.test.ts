@@ -85,6 +85,26 @@ describe('TmuxCli', () => {
     ]);
   });
 
+  it('runs a script on the Deck socket', async () => {
+    const runner = new MockRunner([{ code: 0, stdout: '', stderr: '' }]);
+    const tmux = new TmuxCli('/ext/resources/deck.conf', runner);
+
+    await tmux.runShell('/ext/resources/plugins/tmux-resurrect/scripts/save.sh');
+
+    expect(runner.calls).toEqual([{
+      command: 'tmux',
+      args: [
+        '-L',
+        'deck',
+        '-f',
+        '/ext/resources/deck.conf',
+        'run-shell',
+        '/ext/resources/plugins/tmux-resurrect/scripts/save.sh',
+      ],
+      cwd: undefined,
+    }]);
+  });
+
   it('lists Deck sessions with window names', async () => {
     const runner = new MockRunner([
       {
