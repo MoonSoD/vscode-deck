@@ -14,11 +14,6 @@ interface AgentDetector {
 
 interface AgentHookInstaller {
   isInstalled(agent: AgentName): Promise<boolean>;
-  preview(agents: readonly AgentName[]): Promise<Array<{
-    agent: AgentName;
-    configPath: string;
-    contents: string;
-  }>>;
   install(agents: readonly AgentName[]): Promise<void>;
 }
 
@@ -30,11 +25,6 @@ interface AgentPick {
 
 interface Notifications {
   showInformationMessage(message: string, ...items: string[]): Thenable<string | undefined>;
-  showInformationMessage(
-    message: string,
-    options: { modal: true; detail: string },
-    ...items: string[]
-  ): Thenable<string | undefined>;
   showQuickPick(
     items: readonly AgentPick[],
     options: { canPickMany: true; placeHolder: string },
@@ -45,6 +35,15 @@ interface AgentSetupVerifier {
   arm(): void;
 }
 
+export interface AgentConfigChange {
+  agent: AgentName;
+  configPath: string;
+}
+
+interface AgentSetupReviewer {
+  showChanges(configs: readonly AgentConfigChange[]): Promise<void>;
+}
+
 export class AgentSetupPrompt {
   constructor(private readonly deps: {
     detector: AgentDetector;
@@ -52,6 +51,7 @@ export class AgentSetupPrompt {
     globalState: GlobalState;
     notifications: Notifications;
     verifier?: AgentSetupVerifier;
+    reviewer?: AgentSetupReviewer;
   }) {}
 
   async run(options: { ignoreDismissal?: boolean } = {}): Promise<void> {
@@ -67,7 +67,7 @@ export class AgentSetupPrompt {
     const setupAction = `Set Up ${formatAgentList(agents)}`;
     const dontAskAgain = "Don't ask again";
     const action = await this.deps.notifications.showInformationMessage(
-      `Deck can restore ${formatAgentList(agents)} agent sessions after reboot.`,
+      `Deck can restore ${formatAgentList(agents)} agent sessions after reboot. Each config is backed up first; undo anytime with "Deck: Remove agent hooks".`,
       setupAction,
       dontAskAgain,
     );
@@ -79,20 +79,31 @@ export class AgentSetupPrompt {
 
     const selected = await this.selectAgentsToInstall(agents);
     if (selected.length === 0) return;
-    if (!await this.confirmPreview(selected)) return;
+
     await this.deps.installer.install(selected);
     this.deps.verifier?.arm();
+
+    // Review happens *after* the (backed-up, one-command-undoable) write: a
+    // native diff of the backup against the modified file, instead of a modal
+    // that can't scroll and would echo the user's secrets back at them.
+    const reviewChanges = 'Review changes';
+    const choice = await this.deps.notifications.showInformationMessage(
+      `Resume hooks installed for ${formatAgentList(selected)}. Already-running agents must be restarted before Deck can track them.`,
+      reviewChanges,
+    );
+    if (choice === reviewChanges) {
+      await this.deps.reviewer?.showChanges(this.changesFor(selected, detected));
+    }
   }
 
-  private async confirmPreview(agents: readonly AgentName[]): Promise<boolean> {
-    const previews = await this.deps.installer.preview(agents);
-    const action = await this.deps.notifications.showInformationMessage(
-      'Review Deck agent hook setup',
-      { modal: true, detail: previewMessage(previews) },
-      'Install Hooks',
-      'Cancel',
-    );
-    return action === 'Install Hooks';
+  private changesFor(
+    selected: readonly AgentName[],
+    detected: readonly DetectedAgent[],
+  ): AgentConfigChange[] {
+    return selected.flatMap((agent) => {
+      const match = detected.find((candidate) => candidate.agent === agent);
+      return match ? [{ agent, configPath: match.configPath }] : [];
+    });
   }
 
   private async selectAgentsToInstall(agents: readonly AgentName[]): Promise<readonly AgentName[]> {
@@ -122,23 +133,4 @@ function formatAgentList(agents: readonly AgentName[]): string {
 
 function agentLabel(agent: AgentName): string {
   return agent === 'claude' ? 'Claude' : 'Codex';
-}
-
-function previewMessage(previews: ReadonlyArray<{
-  agent: AgentName;
-  configPath: string;
-  contents: string;
-}>): string {
-  const lines = [
-    previews.length === 1
-      ? 'Deck will write this agent hook config change:'
-      : 'Deck will write these agent hook config changes:',
-    '',
-  ];
-  for (const preview of previews) {
-    lines.push(`${agentLabel(preview.agent)}: ${preview.configPath}`);
-    lines.push(preview.contents);
-  }
-  lines.push('Agents already running must be restarted before Deck can track them.');
-  return lines.join('\n');
 }

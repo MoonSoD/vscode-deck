@@ -11,14 +11,14 @@ describe('AgentSetupPrompt', () => {
     expect(prompt.notifications.showInformationMessage).not.toHaveBeenCalled();
   });
 
-  it('offers only detected uninstalled agents pre-ticked and installs selected agents', async () => {
+  it('offers only detected uninstalled agents and installs them', async () => {
     const prompt = createPrompt({
       detected: [
         { agent: 'claude', configPath: '/home/me/.claude/settings.json' },
         { agent: 'codex', configPath: '/home/me/.codex/hooks.json' },
       ],
       installed: new Set(['claude']),
-      infoChoices: ['Set Up Codex', 'Install Hooks'],
+      infoChoices: ['Set Up Codex'],
     });
 
     await prompt.run();
@@ -27,51 +27,36 @@ describe('AgentSetupPrompt', () => {
     expect(prompt.installer.install).toHaveBeenCalledWith(['codex']);
   });
 
-  it('renders the installer preview and restart expectation before writing', async () => {
-    const previewContents = '{\n  "hooks": {}\n}\n';
+  it('installs without a blocking modal preview and arms verification', async () => {
     const prompt = createPrompt({
       detected: [{ agent: 'claude', configPath: '/home/me/.claude/settings.json' }],
-      infoChoices: ['Set Up Claude', 'Install Hooks'],
-      preview: [{
-        agent: 'claude',
-        configPath: '/home/me/.claude/settings.json',
-        contents: previewContents,
-      }],
+      infoChoices: ['Set Up Claude'],
     });
 
     await prompt.run();
 
-    expect(prompt.installer.preview).toHaveBeenCalledWith(['claude']);
-    expect(prompt.notifications.showInformationMessage).toHaveBeenLastCalledWith(
-      'Review Deck agent hook setup',
-      {
-        modal: true,
-        detail: [
-          'Deck will write this agent hook config change:',
-          '',
-          'Claude: /home/me/.claude/settings.json',
-          previewContents,
-          'Agents already running must be restarted before Deck can track them.',
-        ].join('\n'),
-      },
-      'Install Hooks',
-      'Cancel',
-    );
     expect(prompt.installer.install).toHaveBeenCalledWith(['claude']);
+    expect(prompt.verifier.arm).toHaveBeenCalledOnce();
+    // No modal dialog is ever shown — that is the bug we removed.
+    for (const call of prompt.notifications.showInformationMessage.mock.calls) {
+      expect(call[1]).not.toMatchObject({ modal: true });
+    }
   });
 
-  it('arms verification after installing hooks', async () => {
+  it('opens a diff of the affected config when the user reviews changes', async () => {
     const prompt = createPrompt({
       detected: [{ agent: 'claude', configPath: '/home/me/.claude/settings.json' }],
-      infoChoices: ['Set Up Claude', 'Install Hooks'],
+      infoChoices: ['Set Up Claude', 'Review changes'],
     });
 
     await prompt.run();
 
-    expect(prompt.verifier.arm).toHaveBeenCalledOnce();
+    expect(prompt.reviewer.showChanges).toHaveBeenCalledWith([
+      { agent: 'claude', configPath: '/home/me/.claude/settings.json' },
+    ]);
   });
 
-  it('writes nothing when the setup preview is cancelled', async () => {
+  it('installs without opening a diff when review is skipped', async () => {
     const prompt = createPrompt({
       detected: [{ agent: 'claude', configPath: '/home/me/.claude/settings.json' }],
       infoChoices: ['Set Up Claude', undefined],
@@ -79,7 +64,18 @@ describe('AgentSetupPrompt', () => {
 
     await prompt.run();
 
-    expect(prompt.installer.preview).toHaveBeenCalledWith(['claude']);
+    expect(prompt.installer.install).toHaveBeenCalledWith(['claude']);
+    expect(prompt.reviewer.showChanges).not.toHaveBeenCalled();
+  });
+
+  it('writes nothing when the setup notification is dismissed', async () => {
+    const prompt = createPrompt({
+      detected: [{ agent: 'claude', configPath: '/home/me/.claude/settings.json' }],
+      infoChoices: [undefined],
+    });
+
+    await prompt.run();
+
     expect(prompt.installer.install).not.toHaveBeenCalled();
   });
 
@@ -89,7 +85,7 @@ describe('AgentSetupPrompt', () => {
         { agent: 'claude', configPath: '/home/me/.claude/settings.json' },
         { agent: 'codex', configPath: '/home/me/.codex/hooks.json' },
       ],
-      infoChoices: ['Set Up Claude and Codex', 'Install Hooks'],
+      infoChoices: ['Set Up Claude and Codex'],
     });
 
     await prompt.run();
@@ -117,7 +113,6 @@ function createPrompt(input: {
   installed?: ReadonlySet<AgentName>;
   infoChoice?: string;
   infoChoices?: Array<string | undefined>;
-  preview?: Array<{ agent: AgentName; configPath: string; contents: string }>;
 }) {
   const values: Record<string, unknown> = {};
   const infoChoices = [...(input.infoChoices ?? [input.infoChoice])];
@@ -132,11 +127,13 @@ function createPrompt(input: {
   };
   const installer = {
     isInstalled: vi.fn(async (agent: AgentName) => input.installed?.has(agent) ?? false),
-    preview: vi.fn(async () => input.preview ?? []),
     install: vi.fn(async () => undefined),
   };
   const verifier = {
     arm: vi.fn(),
+  };
+  const reviewer = {
+    showChanges: vi.fn(async () => undefined),
   };
   const prompt = new AgentSetupPrompt({
     detector: { detect: vi.fn(async () => input.detected) },
@@ -149,6 +146,7 @@ function createPrompt(input: {
     },
     notifications,
     verifier,
+    reviewer,
   });
-  return Object.assign(prompt, { notifications, installer, values, verifier });
+  return Object.assign(prompt, { notifications, installer, values, verifier, reviewer });
 }

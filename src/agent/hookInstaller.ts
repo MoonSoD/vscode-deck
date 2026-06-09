@@ -1,4 +1,4 @@
-import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { chmod, copyFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { renderAgentHookScript } from './agentHookScript';
 import type { AgentName } from './agentTypes';
@@ -88,6 +88,7 @@ export class HookInstaller {
     const contents = await this.renderSettingsWithDeckHooks(config.configPath, config.scriptPath, agent);
 
     await mkdir(dirname(config.configPath), { recursive: true });
+    await backupConfig(config.configPath);
     await writeFile(config.configPath, contents, 'utf8');
   }
 
@@ -165,6 +166,18 @@ export class HookInstaller {
       configPath: this.paths.codexHooksPath,
       scriptPath: this.paths.codexHookScriptPath,
     };
+  }
+}
+
+async function backupConfig(configPath: string): Promise<void> {
+  try {
+    // Snapshot the file as it was right before this write, so a bad merge is
+    // recoverable and "Review changes" can diff before ↔ after.
+    await copyFile(configPath, `${configPath}.deck.bak`);
+  } catch (error) {
+    // Nothing to back up on a first install (the config file is absent yet).
+    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return;
+    throw error;
   }
 }
 

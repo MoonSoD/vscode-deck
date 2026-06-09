@@ -75,6 +75,22 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     globalState: context.globalState,
     notifications: vscode.window,
     verifier: agentSetupVerifier,
+    reviewer: {
+      async showChanges(configs) {
+        for (const { agent, configPath } of configs) {
+          const current = vscode.Uri.file(configPath);
+          const backup = vscode.Uri.file(`${configPath}.deck.bak`);
+          const title = `Deck ${agent === 'claude' ? 'Claude' : 'Codex'} hooks (before ↔ after)`;
+          try {
+            await vscode.workspace.fs.stat(backup);
+            await vscode.commands.executeCommand('vscode.diff', backup, current, title);
+          } catch {
+            // No backup (config was absent before) — just open the new file.
+            await vscode.window.showTextDocument(current);
+          }
+        }
+      },
+    },
   });
 
   terminalSnapshotRuntime = tmuxAvailability.available

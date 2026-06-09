@@ -94,11 +94,17 @@ by id. Two findings shaped the design:
 7. **Install is consented, transparent, and reversible.** On activation Deck
    shows a notification for **detected** agents (binary on PATH or config dir
    present, honoring `CLAUDE_CONFIG_DIR`/`CODEX_HOME`); none detected → nothing
-   shown. The setup panel lists only detected-and-not-yet-installed agents,
-   pre-ticked, and **previews the exact change before writing it** (the trust
-   linchpin from the shell-rc-injection norm — starship/atuin/direnv print/show
-   rather than silently edit). Writes target the **user-global** config, **merge**
-   into existing hooks (never clobber foreign entries), and are **tagged** for
+   shown. For multiple detected agents a quick-pick offers them pre-ticked.
+   Before each write Deck **backs the config up to `<file>.deck.bak`**; after
+   writing, a **Review changes** action opens a native diff (backup ↔ modified
+   file) in the editor. *(A modal preview was tried first and rejected: VS Code
+   modals don't scroll — microsoft/vscode#87266 — and rendering the merged file
+   echoes the user's own secrets back at them. So we show the **change** in the
+   editor's diff, not the **file** in a dialog — the shell-rc-norm trust
+   linchpin, adapted to the right surface. The backup is also the diff's "before"
+   side and a safety net for a bad merge; the surgical remove command stays the
+   primary undo.)* Writes target the **user-global** config, **merge** into
+   existing hooks (never clobber foreign entries), and are **tagged** for
    surgical removal (`Deck: Remove agent hooks`). After install, Deck **arms and
    verifies**: it watches for the first sidecar to appear and confirms capture
    worked in-context — turning an unverified promise into an observed fact, and

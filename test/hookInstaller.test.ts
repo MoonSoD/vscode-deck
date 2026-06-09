@@ -337,6 +337,40 @@ describe('HookInstaller', () => {
     expect(readFileSync(claudeSettingsPath, 'utf8')).toBe(originalSettings);
     expect(existsSync(codexHooksPath)).toBe(false);
   });
+
+  it('backs up an existing config to <file>.deck.bak before writing', async () => {
+    const root = tempRoot();
+    const settingsPath = join(root, '.claude', 'settings.json');
+    mkdirSync(join(root, '.claude'), { recursive: true });
+    const original = JSON.stringify({ theme: 'dark' });
+    writeFileSync(settingsPath, original, 'utf8');
+    const installer = new HookInstaller({
+      claudeSettingsPath: settingsPath,
+      codexHooksPath: join(root, '.codex', 'hooks.json'),
+      hookScriptPath: join(root, '.local', 'share', 'deck', 'bin', 'deck-claude-hook.sh'),
+      sidecarDir: join(root, '.local', 'share', 'deck', 'hooks'),
+    });
+
+    await installer.install(['claude']);
+
+    expect(readFileSync(`${settingsPath}.deck.bak`, 'utf8')).toBe(original);
+  });
+
+  it('writes no backup when the config file did not exist', async () => {
+    const root = tempRoot();
+    const codexHooksPath = join(root, '.codex', 'hooks.json');
+    const installer = new HookInstaller({
+      claudeSettingsPath: join(root, '.claude', 'settings.json'),
+      codexHooksPath,
+      hookScriptPath: join(root, '.local', 'share', 'deck', 'bin', 'deck-claude-hook.sh'),
+      codexHookScriptPath: join(root, '.local', 'share', 'deck', 'bin', 'deck-codex-hook.sh'),
+      sidecarDir: join(root, '.local', 'share', 'deck', 'hooks'),
+    });
+
+    await installer.install(['codex']);
+
+    expect(existsSync(`${codexHooksPath}.deck.bak`)).toBe(false);
+  });
 });
 
 function tempRoot(): string {
