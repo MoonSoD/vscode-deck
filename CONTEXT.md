@@ -21,6 +21,12 @@ _Avoid_: branch (a Worktree has a branch but is not one)
 The path recorded when a Repository is registered — whichever Worktree was checked out then — used to rediscover the repo, not the Repository's identity.
 _Avoid_: repository path
 
+**ExternalGitWatch**:
+The per-Repository file watch on a git common dir that refreshes the Deck tree
+when git state changes outside Deck, such as `git checkout` or `git worktree
+add/remove`.
+_Avoid_: poller, git extension integration
+
 ### Selection
 
 **ActiveWorktree**:
@@ -87,6 +93,7 @@ _Avoid_: file watcher, watcher controller (implementation); polling (it is event
 ## Relationships
 
 - A **Repository** has many **Worktrees**.
+- A **Repository** has one **ExternalGitWatch** keyed by its git common dir.
 - A **Repository** has one **ActiveWorktree**; the mounted folder has one **ActiveRepository** (or none).
 - A **Worktree** hosts zero or more **Terminals**.
 - A **Terminal** belongs to exactly one **Worktree** and lives on the one **DeckSocket**.
