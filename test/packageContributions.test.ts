@@ -89,6 +89,21 @@ describe('package contributions', () => {
     });
   });
 
+  it('contributes curated safe tmux settings', () => {
+    expect(pkg.contributes.configuration?.properties?.['deck.tmux.automaticRenameFormat']).toMatchObject({
+      type: 'string',
+      default: '',
+    });
+    expect(pkg.contributes.configuration?.properties?.['deck.tmux.historyLimit']).toMatchObject({
+      type: 'integer',
+      default: 50000,
+    });
+    expect(
+      pkg.contributes.configuration?.properties?.['deck.tmux.historyLimit'].description,
+    ).toContain('newly opened Terminals');
+    expect(pkg.contributes.configuration?.properties?.['deck.tmuxConfig']).toBeUndefined();
+  });
+
   it('does not ship node-pty or its postinstall workaround', () => {
     expect(pkg.dependencies?.['node-pty']).toBeUndefined();
     expect(pkg.devDependencies?.['node-pty']).toBeUndefined();

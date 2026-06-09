@@ -164,6 +164,29 @@ export class TmuxCli {
     throw new Error(result.stderr || result.stdout || `tmux new-session failed: ${result.code}`);
   }
 
+  async setOption(name: string, value: string): Promise<void> {
+    const result = await this.runner.run('tmux', [
+      ...this.baseArgs(),
+      'set',
+      '-g',
+      name,
+      value,
+    ]);
+    if (result.code === 0) return;
+    throw new Error(result.stderr || result.stdout || `tmux set failed: ${result.code}`);
+  }
+
+  async unsetOption(name: string): Promise<void> {
+    const result = await this.runner.run('tmux', [
+      ...this.baseArgs(),
+      'set',
+      '-gu',
+      name,
+    ]);
+    if (result.code === 0) return;
+    throw new Error(result.stderr || result.stdout || `tmux set -gu failed: ${result.code}`);
+  }
+
   async isServerRunning(): Promise<boolean> {
     const result = await this.runner.run('tmux', [
       ...this.baseArgs(),

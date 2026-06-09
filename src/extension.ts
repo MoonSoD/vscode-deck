@@ -34,6 +34,7 @@ import { terminalSessionNumber, terminalSessionPrefix } from './terminal/tmuxSaf
 import { tmuxPreflight } from './terminal/tmuxPreflight';
 import { SessionUriCodec } from './terminal/sessionUriCodec';
 import { renderDeckConf } from './terminal/deckConf';
+import { resolveDeckTmuxOptions, type DeckTmuxOptions } from './terminal/deckTmuxOptions';
 import { TerminalSnapshotRuntime } from './terminal/terminalSnapshotRuntime';
 import { createRestoreGate } from './terminal/restoreGate';
 import { AgentSidecarStore } from './agent/agentSidecarStore';
@@ -50,8 +51,11 @@ let terminalSnapshotRuntime: TerminalSnapshotRuntime | undefined;
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const tmuxAvailability = await tmuxPreflight();
   await vscode.commands.executeCommand('setContext', 'deck.tmuxAvailable', tmuxAvailability.available);
-  const tmuxConfigPath = await writeDeckConf(context);
+  const initialTmuxOptions = deckTmuxOptionsFromSettings();
+  showDeckTmuxOptionWarnings(initialTmuxOptions);
+  const tmuxConfigPath = await writeDeckConf(context, initialTmuxOptions);
   const tmux = new TmuxCli(tmuxConfigPath);
+  await applyDeckTmuxOptionsIfServerRunning(tmux, initialTmuxOptions, tmuxAvailability.available);
   const deckDir = deckDataDir();
   const agentSidecars = new AgentSidecarStore(join(deckDir, 'hooks'));
   const hookInstaller = new HookInstaller({
@@ -275,6 +279,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       refreshTree();
     }),
     vscode.workspace.onDidChangeWorkspaceFolders(refreshTree),
+    vscode.workspace.onDidChangeConfiguration(async (event) => {
+      if (!event.affectsConfiguration('deck.tmux')) return;
+      const tmuxOptions = deckTmuxOptionsFromSettings();
+      showDeckTmuxOptionWarnings(tmuxOptions);
+      await writeDeckConf(context, tmuxOptions);
+      await applyDeckTmuxOptionsIfServerRunning(tmux, tmuxOptions, tmuxAvailability.available);
+    }),
     vscode.window.tabGroups.onDidChangeTabs(async () => {
       await revealActiveTerminalInTree(tree, treeView);
     }),
@@ -311,7 +322,10 @@ export function deactivate(): Promise<void> | undefined {
   });
 }
 
-async function writeDeckConf(context: vscode.ExtensionContext): Promise<string> {
+async function writeDeckConf(
+  context: vscode.ExtensionContext,
+  tmuxOptions: DeckTmuxOptions = deckTmuxOptionsFromSettings(),
+): Promise<string> {
   const templatePath = join(context.extensionPath, 'resources', 'deck.conf');
   const dataDir = deckDataDir();
   const generatedPath = join(dataDir, 'deck.conf');
@@ -321,8 +335,39 @@ async function writeDeckConf(context: vscode.ExtensionContext): Promise<string> 
   const template = await readFile(templatePath, 'utf8');
   // resurrectDir is under dataDir, so this creates both.
   await mkdir(resurrectDir, { recursive: true });
-  await writeFile(generatedPath, renderDeckConf(template, { pluginPath, resurrectDir }), 'utf8');
+  await writeFile(generatedPath, renderDeckConf(template, { pluginPath, resurrectDir }, tmuxOptions), 'utf8');
   return generatedPath;
+}
+
+function deckTmuxOptionsFromSettings(): DeckTmuxOptions {
+  const config = vscode.workspace.getConfiguration('deck.tmux');
+  return resolveDeckTmuxOptions({
+    automaticRenameFormat: config.get<string>('automaticRenameFormat'),
+    historyLimit: config.get<number>('historyLimit'),
+  });
+}
+
+function showDeckTmuxOptionWarnings(tmuxOptions: DeckTmuxOptions): void {
+  for (const warning of tmuxOptions.warnings) {
+    void vscode.window.showWarningMessage(warning);
+  }
+}
+
+async function applyDeckTmuxOptionsIfServerRunning(
+  tmux: TmuxCli,
+  tmuxOptions: DeckTmuxOptions,
+  tmuxAvailable: boolean,
+): Promise<void> {
+  try {
+    if (!tmuxAvailable || !(await tmux.isServerRunning())) return;
+
+    for (const option of tmuxOptions.options) {
+      if (option.value === null) await tmux.unsetOption(option.option);
+      else await tmux.setOption(option.option, option.value);
+    }
+  } catch (error) {
+    console.warn('Deck: applying tmux options failed', error);
+  }
 }
 
 function terminalSnapshotSaveScriptPath(context: vscode.ExtensionContext): string {

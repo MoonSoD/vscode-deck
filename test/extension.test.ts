@@ -53,10 +53,18 @@ const vscodeState = vi.hoisted(() => ({
   removeWorktreeArgs: undefined as unknown[] | undefined,
   settingsRepositories: ['/settings/repo'],
   settingsAgentResumeTemplates: {} as Record<string, string | undefined>,
+  settingsDeckTmux: {} as {
+    automaticRenameFormat?: string;
+    historyLimit?: number;
+  },
+  tmuxServerRunning: false,
   tmuxInstances: [] as Array<{
     configPath: string;
+    isServerRunning: ReturnType<typeof vi.fn>;
     killSession: ReturnType<typeof vi.fn>;
     listSessions: ReturnType<typeof vi.fn>;
+    setOption: ReturnType<typeof vi.fn>;
+    unsetOption: ReturnType<typeof vi.fn>;
   }>,
   terminalSnapshotRuntimeInstances: [] as Array<{
     tmux: unknown;
@@ -70,7 +78,9 @@ const vscodeState = vi.hoisted(() => ({
   watchGitCommonDir: vi.fn(),
   workspaceFolders: [{ uri: { fsPath: '/work/alpha-main' } }],
   tmuxPreflight: vi.fn(async () => ({ available: true })),
+  configListeners: [] as Array<(event: { affectsConfiguration(section: string): boolean }) => unknown>,
   rewriteTerminalSnapshotAgentSessions: vi.fn(async () => undefined),
+  showWarningMessage: vi.fn(),
   treeViewSelection: [] as unknown[],
 }));
 
@@ -99,6 +109,7 @@ vi.mock('vscode', () => ({
     activeColorTheme: { kind: 2 },
     createTreeView: vscodeState.createTreeView,
     registerCustomEditorProvider: vscodeState.registerCustomEditorProvider,
+    showWarningMessage: vscodeState.showWarningMessage,
     onDidCloseTerminal: vscodeState.onDidCloseTerminal,
     onDidChangeActiveTerminal: vscodeState.onDidChangeActiveTerminal,
     onDidOpenTerminal: vscodeState.onDidOpenTerminal,
@@ -112,8 +123,16 @@ vi.mock('vscode', () => ({
     },
   },
   workspace: {
-    getConfiguration: () => ({
+    getConfiguration: (section?: string) => ({
       get: <T>(key: string, defaultValue?: T) => {
+        if (section === 'deck.tmux') {
+          if (key === 'automaticRenameFormat') {
+            return (vscodeState.settingsDeckTmux.automaticRenameFormat as T | undefined) ?? defaultValue;
+          }
+          if (key === 'historyLimit') {
+            return (vscodeState.settingsDeckTmux.historyLimit as T | undefined) ?? defaultValue;
+          }
+        }
         if (key === 'repositories') return (vscodeState.settingsRepositories as T | undefined) ?? defaultValue;
         if (key === 'agentResumeTemplates.claude') {
           return (vscodeState.settingsAgentResumeTemplates.claude as T | undefined) ?? defaultValue;
@@ -125,7 +144,11 @@ vi.mock('vscode', () => ({
       },
       update: vscodeState.configUpdate,
     }),
-    onDidChangeConfiguration: vscodeState.onDidChangeConfiguration,
+    onDidChangeConfiguration: (listener: (event: { affectsConfiguration(section: string): boolean }) => unknown) => {
+      vscodeState.onDidChangeConfiguration(listener);
+      vscodeState.configListeners.push(listener);
+      return { dispose: vi.fn() };
+    },
     onDidChangeWorkspaceFolders: vscodeState.onDidChangeWorkspaceFolders,
     get workspaceFolders() {
       return vscodeState.workspaceFolders;
@@ -216,11 +239,13 @@ vi.mock('../src/terminal/tmuxCli', () => ({
     configPath: string;
     killSession = vi.fn(async () => undefined);
     windowName = vi.fn(async () => 'zsh');
-    isServerRunning = vi.fn(async () => false);
+    isServerRunning = vi.fn(async () => vscodeState.tmuxServerRunning);
     listSessions = vi.fn(async () => {
       vscodeState.lifecycleOrder.push('pending-list');
       return [{ sessionName: 'wt-_work_alpha-main__term-1', windowName: 'zsh' }];
     });
+    setOption = vi.fn(async () => undefined);
+    unsetOption = vi.fn(async () => undefined);
 
     constructor(configPath: string) {
       this.configPath = configPath;
@@ -351,6 +376,8 @@ describe('activate', () => {
     vscodeState.removeWorktreeArgs = undefined;
     vscodeState.settingsRepositories = ['/settings/repo'];
     vscodeState.settingsAgentResumeTemplates = {};
+    vscodeState.settingsDeckTmux = {};
+    vscodeState.tmuxServerRunning = false;
     vscodeState.tmuxInstances = [];
     vscodeState.terminalSnapshotRuntimeInstances = [];
     vscodeState.rewriteTerminalSnapshotAgentSessions.mockClear();
@@ -366,6 +393,8 @@ describe('activate', () => {
     vscodeState.workspaceFolders = [{ uri: { fsPath: '/work/alpha-main' } }];
     vscodeState.configUpdate.mockResolvedValue(undefined);
     vscodeState.tmuxPreflight.mockResolvedValue({ available: true });
+    vscodeState.configListeners = [];
+    vscodeState.showWarningMessage.mockClear();
     vi.mocked(resolveCommonDirSafe).mockResolvedValue(null);
   });
 
@@ -482,6 +511,47 @@ describe('activate', () => {
       `run-shell '${join(process.cwd(), 'resources', 'plugins', 'tmux-resurrect', 'resurrect.tmux')}'`,
     );
     expect(vscodeState.tmuxInstances[0].configPath).toBe(generatedConf);
+  });
+
+  it('writes and live-applies safe tmux settings when the DeckSocket is running', async () => {
+    vscodeState.tmuxServerRunning = true;
+    vscodeState.settingsDeckTmux = {
+      automaticRenameFormat: '#{pane_current_command}:#{pane_current_path}',
+      historyLimit: 120000,
+    };
+    const context = createContext();
+
+    await activate(context as never);
+
+    const deckDir = join(context.xdgDataHome, 'deck');
+    const generatedConf = join(deckDir, 'deck.conf');
+    expect(readFileSync(generatedConf, 'utf8')).toContain(
+      "set -g automatic-rename-format '#{pane_current_command}:#{pane_current_path}'\nset -g history-limit 120000",
+    );
+    expect(vscodeState.tmuxInstances[0].setOption).toHaveBeenCalledWith(
+      'automatic-rename-format',
+      '#{pane_current_command}:#{pane_current_path}',
+    );
+    expect(vscodeState.tmuxInstances[0].setOption).toHaveBeenCalledWith('history-limit', '120000');
+  });
+
+  it('rewrites deck.conf and unsets automatic rename format when the tmux setting is cleared', async () => {
+    vscodeState.tmuxServerRunning = true;
+    vscodeState.settingsDeckTmux = {
+      automaticRenameFormat: '#{pane_current_command}',
+      historyLimit: 120000,
+    };
+    const context = createContext();
+
+    await activate(context as never);
+    vscodeState.settingsDeckTmux.automaticRenameFormat = '';
+    await Promise.all(vscodeState.configListeners.map((listener) => listener({
+      affectsConfiguration: (section) => section === 'deck.tmux',
+    })));
+
+    const generatedConf = join(context.xdgDataHome, 'deck', 'deck.conf');
+    expect(readFileSync(generatedConf, 'utf8')).not.toContain('automatic-rename-format');
+    expect(vscodeState.tmuxInstances[0].unsetOption).toHaveBeenCalledWith('automatic-rename-format');
   });
 
   it('starts TerminalSnapshot periodic saves and fires one best-effort save on deactivate', async () => {

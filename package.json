@@ -50,6 +50,17 @@
           "type": "string",
           "default": "codex resume {id}",
           "description": "Codex command template Deck uses to resume an AgentSession. Include {id} for the session id."
+        },
+        "deck.tmux.automaticRenameFormat": {
+          "type": "string",
+          "default": "",
+          "description": "tmux automatic-rename-format value for Deck Terminals. Empty uses tmux's default foreground-command naming."
+        },
+        "deck.tmux.historyLimit": {
+          "type": "integer",
+          "default": 50000,
+          "minimum": 1,
+          "description": "tmux history-limit for Deck Terminals. Changes apply to newly opened Terminals only."
         }
       }
     },

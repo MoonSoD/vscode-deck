@@ -172,6 +172,49 @@ describe('TmuxCli', () => {
     }]);
   });
 
+  it('sets a global tmux option on the Deck socket', async () => {
+    const runner = new MockRunner([{ code: 0, stdout: '', stderr: '' }]);
+    const tmux = new TmuxCli('/ext/resources/deck.conf', runner);
+
+    await tmux.setOption('automatic-rename-format', '#{pane_current_command}');
+
+    expect(runner.calls).toEqual([{
+      command: 'tmux',
+      args: [
+        '-L',
+        'deck',
+        '-f',
+        '/ext/resources/deck.conf',
+        'set',
+        '-g',
+        'automatic-rename-format',
+        '#{pane_current_command}',
+      ],
+      cwd: undefined,
+    }]);
+  });
+
+  it('unsets a global tmux option on the Deck socket', async () => {
+    const runner = new MockRunner([{ code: 0, stdout: '', stderr: '' }]);
+    const tmux = new TmuxCli('/ext/resources/deck.conf', runner);
+
+    await tmux.unsetOption('automatic-rename-format');
+
+    expect(runner.calls).toEqual([{
+      command: 'tmux',
+      args: [
+        '-L',
+        'deck',
+        '-f',
+        '/ext/resources/deck.conf',
+        'set',
+        '-gu',
+        'automatic-rename-format',
+      ],
+      cwd: undefined,
+    }]);
+  });
+
   it('lists Deck sessions with window names', async () => {
     const runner = new MockRunner([
       {
