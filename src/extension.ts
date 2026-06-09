@@ -44,23 +44,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const tmuxConfigPath = await writeDeckConf(context);
   const tmux = new TmuxCli(tmuxConfigPath);
 
-  // Restore TerminalSnapshots BEFORE anything can reattach a terminal tab. VS
-  // Code reattaches restored terminal editors via `new-session -A`, which starts
-  // the DeckSocket with blank sessions; if that wins the race, restoreOnActivation's
-  // "server already running" guard skips the restore and tabs bind to empty
-  // shells (and a later save then overwrites the good snapshot). Restoring here,
-  // before the custom editor provider is registered below, makes those reattaches
-  // bind to the resurrect-restored sessions instead.
-  terminalSnapshotRuntime = tmuxAvailability.available
-    ? new TerminalSnapshotRuntime(
-        tmux,
-        () => terminalSnapshotSaveScriptPath(context),
-        () => terminalSnapshotRestoreScriptPath(context),
-        () => deckDataDir(),
-      )
-    : undefined;
-  await terminalSnapshotRuntime?.restoreOnActivation();
-
   const repositoryRegistry = new RepositoryRegistryStore(context.globalState);
 
   const activeWorktrees = new ActiveWorktreeStore(context.globalState);
@@ -236,9 +219,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       if (event.visible) refreshTree();
     }),
   );
-  if (terminalSnapshotRuntime) {
+  if (tmuxAvailability.available) {
+    terminalSnapshotRuntime = new TerminalSnapshotRuntime(
+      tmux,
+      () => terminalSnapshotSaveScriptPath(context),
+      () => terminalSnapshotRestoreScriptPath(context),
+      () => deckDataDir(),
+    );
+    await terminalSnapshotRuntime.restoreOnActivation();
     context.subscriptions.push(terminalSnapshotRuntime.startPeriodicSave(5 * 60 * 1000));
     await openPendingTerminalForCurrentWorktree(pendingTerminalOpens, tmux);
+  } else {
+    terminalSnapshotRuntime = undefined;
   }
 }
 
