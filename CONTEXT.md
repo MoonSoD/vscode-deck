@@ -78,6 +78,12 @@ _Avoid_: backup, session dump
 A persistent shell owned by Deck — one tmux session on the DeckSocket — shown as a row under a Worktree and opened as an xterm.js editor tab addressed by `deck-terminal:/<worktree>/term-N`. Like a file, the Terminal is the durable thing and its tab is just a view onto it: closing the tab leaves the Terminal running, and any Terminal can be opened from any mounted Worktree without a Switch.
 _Avoid_: tmux session, tmux window, pane (the backing mechanism); tab (a disposable view, not the Terminal itself)
 
+### External changes
+
+**ExternalGitWatch**:
+Watches a Repository's git common dir for changes made **outside** Deck (e.g. a terminal `git checkout`, or `git worktree add/remove` from the CLI) and tells the tree to reconcile. One per Repository, keyed by common dir. Deck's own operations already refresh, so this exists solely to catch out-of-Deck drift.
+_Avoid_: file watcher, watcher controller (implementation); polling (it is event-driven, not polled)
+
 ## Relationships
 
 - A **Repository** has many **Worktrees**.
@@ -86,6 +92,7 @@ _Avoid_: tmux session, tmux window, pane (the backing mechanism); tab (a disposa
 - A **Terminal** belongs to exactly one **Worktree** and lives on the one **DeckSocket**.
 - A **TerminalSnapshot** captures every **Terminal** on the **DeckSocket**.
 - A **Switch** changes which **Worktree** is mounted; a **DetachedOpen** does not.
+- A **Repository** has one **ExternalGitWatch** over its git common dir.
 
 ## Example dialogue
 
