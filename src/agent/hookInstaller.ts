@@ -25,9 +25,14 @@ interface HookGroup {
   [key: string]: unknown;
 }
 
-interface ClaudeSettings {
+interface AgentHookConfig {
   hooks?: Record<string, HookGroup[]>;
   [key: string]: unknown;
+}
+
+interface HookGroupRemoval {
+  groups: HookGroup[];
+  removed: boolean;
 }
 
 export class HookInstaller {
@@ -36,11 +41,11 @@ export class HookInstaller {
   async installClaude(): Promise<void> {
     await this.writeHookScript();
 
-    const settings = await this.readClaudeSettings();
+    const settings = await this.readHookConfig(this.paths.claudeSettingsPath);
     settings.hooks = settings.hooks ?? {};
     for (const event of CLAUDE_EVENTS) {
       settings.hooks[event] = [
-        ...removeDeckHookGroups(settings.hooks[event] ?? []),
+        ...removeDeckHookGroups(settings.hooks[event] ?? []).groups,
         deckHookGroup(this.paths.hookScriptPath),
       ];
     }
@@ -62,13 +67,9 @@ export class HookInstaller {
     await chmod(this.paths.hookScriptPath, 0o755);
   }
 
-  private async readClaudeSettings(): Promise<ClaudeSettings> {
-    return this.readHookConfig(this.paths.claudeSettingsPath);
-  }
-
-  private async readHookConfig(path: string): Promise<ClaudeSettings> {
+  private async readHookConfig(path: string): Promise<AgentHookConfig> {
     try {
-      return JSON.parse(await readFile(path, 'utf8')) as ClaudeSettings;
+      return JSON.parse(await readFile(path, 'utf8')) as AgentHookConfig;
     } catch (error) {
       if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return {};
       throw error;
@@ -79,11 +80,20 @@ export class HookInstaller {
     const settings = await this.readHookConfig(path);
     if (!settings.hooks) return;
 
-    const hooks: Record<string, HookGroup[]> = {};
+    const hooks = { ...settings.hooks };
+    let removed = false;
     for (const [event, groups] of Object.entries(settings.hooks)) {
-      const remainingGroups = removeDeckHookGroups(groups);
-      if (remainingGroups.length > 0) hooks[event] = remainingGroups;
+      const result = removeDeckHookGroups(groups);
+      if (!result.removed) continue;
+      removed = true;
+      if (result.groups.length > 0) {
+        hooks[event] = result.groups;
+      } else {
+        delete hooks[event];
+      }
     }
+
+    if (!removed) return;
 
     if (Object.keys(hooks).length > 0) {
       settings.hooks = hooks;
@@ -106,13 +116,28 @@ function deckHookGroup(scriptPath: string): HookGroup {
   };
 }
 
-function removeDeckHookGroups(groups: HookGroup[]): HookGroup[] {
-  return groups
-    .map((group) => ({
-      ...group,
-      hooks: (group.hooks ?? []).filter((hook) => !isDeckHook(hook)),
-    }))
-    .filter((group) => (group.hooks ?? []).length > 0);
+function removeDeckHookGroups(groups: HookGroup[]): HookGroupRemoval {
+  let removed = false;
+  const remainingGroups: HookGroup[] = [];
+  for (const group of groups) {
+    if (!group.hooks) {
+      remainingGroups.push(group);
+      continue;
+    }
+
+    const hooks = group.hooks.filter((hook) => !isDeckHook(hook));
+    if (hooks.length === group.hooks.length) {
+      remainingGroups.push(group);
+      continue;
+    }
+
+    removed = true;
+    if (hooks.length > 0) {
+      remainingGroups.push({ ...group, hooks });
+    }
+  }
+
+  return { groups: remainingGroups, removed };
 }
 
 function isDeckHook(hook: HookHandler): boolean {

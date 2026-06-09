@@ -83,6 +83,7 @@ describe('HookInstaller', () => {
       hooks: {
         SessionStart: [
           deckHookGroup(scriptPath),
+          { matcher: 'foreign-without-handlers' },
           {
             matcher: 'startup',
             hooks: [{ type: 'command', command: '/other/claude-session-start.sh' }],
@@ -114,10 +115,13 @@ describe('HookInstaller', () => {
 
     expect(JSON.parse(readFileSync(claudeSettingsPath, 'utf8'))).toEqual({
       hooks: {
-        SessionStart: [{
-          matcher: 'startup',
-          hooks: [{ type: 'command', command: '/other/claude-session-start.sh' }],
-        }],
+        SessionStart: [
+          { matcher: 'foreign-without-handlers' },
+          {
+            matcher: 'startup',
+            hooks: [{ type: 'command', command: '/other/claude-session-start.sh' }],
+          },
+        ],
       },
     });
     expect(JSON.parse(readFileSync(codexHooksPath, 'utf8'))).toEqual({
@@ -135,7 +139,7 @@ describe('HookInstaller', () => {
     const claudeSettingsPath = join(root, '.claude', 'settings.json');
     const codexHooksPath = join(root, '.codex', 'hooks.json');
     mkdirSync(join(root, '.claude'), { recursive: true });
-    writeFileSync(claudeSettingsPath, JSON.stringify({
+    const originalSettings = JSON.stringify({
       theme: 'dark',
       hooks: {
         SessionStart: [{
@@ -143,7 +147,8 @@ describe('HookInstaller', () => {
           hooks: [{ type: 'command', command: '/other/session-start.sh' }],
         }],
       },
-    }), 'utf8');
+    }, null, 2);
+    writeFileSync(claudeSettingsPath, originalSettings, 'utf8');
     const installer = new HookInstaller({
       claudeSettingsPath,
       codexHooksPath,
@@ -153,15 +158,7 @@ describe('HookInstaller', () => {
 
     await installer.remove();
 
-    expect(JSON.parse(readFileSync(claudeSettingsPath, 'utf8'))).toEqual({
-      theme: 'dark',
-      hooks: {
-        SessionStart: [{
-          matcher: 'startup',
-          hooks: [{ type: 'command', command: '/other/session-start.sh' }],
-        }],
-      },
-    });
+    expect(readFileSync(claudeSettingsPath, 'utf8')).toBe(originalSettings);
     expect(existsSync(codexHooksPath)).toBe(false);
   });
 });
