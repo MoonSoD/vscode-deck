@@ -65,14 +65,6 @@ export class HookInstaller {
     return previews;
   }
 
-  async installClaude(): Promise<void> {
-    await this.install(['claude']);
-  }
-
-  async installCodex(): Promise<void> {
-    await this.install(['codex']);
-  }
-
   async remove(): Promise<void> {
     await this.removeDeckHooksFrom(this.paths.claudeSettingsPath);
     if (this.paths.codexHooksPath) {

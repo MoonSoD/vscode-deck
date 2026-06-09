@@ -22,7 +22,7 @@ describe('HookInstaller', () => {
       sidecarDir: join(root, '.local', 'share', 'deck', 'hooks'),
     });
 
-    await installer.installClaude();
+    await installer.install(['claude']);
 
     const scriptPath = join(root, '.local', 'share', 'deck', 'bin', 'deck-claude-hook.sh');
     expect(existsSync(scriptPath)).toBe(true);
@@ -129,8 +129,8 @@ describe('HookInstaller', () => {
       sidecarDir: join(root, '.local', 'share', 'deck', 'hooks'),
     });
 
-    await installer.installClaude();
-    await installer.installClaude();
+    await installer.install(['claude']);
+    await installer.install(['claude']);
 
     expect(JSON.parse(readFileSync(settingsPath, 'utf8'))).toEqual({
       theme: 'dark',
