@@ -116,7 +116,7 @@ describe('package contributions', () => {
   it('contributes add worktree as a repository-only inline tree action', () => {
     expect(pkg.contributes.commands).toContainEqual({
       command: 'deck.addWorktree',
-      title: 'Deck: Add Worktree',
+      title: 'Add Worktree',
       icon: '$(add)',
     });
 
@@ -134,7 +134,7 @@ describe('package contributions', () => {
   it('contributes delete worktree only via the right-click context menu', () => {
     expect(pkg.contributes.commands).toContainEqual({
       command: 'deck.removeWorktree',
-      title: 'Deck: Delete Worktree…',
+      title: 'Delete Worktree…',
       icon: '$(trash)',
     });
 
@@ -158,7 +158,7 @@ describe('package contributions', () => {
   it('contributes add terminal as the inline `+` action on Worktree rows', () => {
     expect(pkg.contributes.commands).toContainEqual({
       command: 'deck.addTerminal',
-      title: 'Deck: Add Terminal',
+      title: 'Add Terminal',
       icon: '$(add)',
     });
 
@@ -181,7 +181,7 @@ describe('package contributions', () => {
   it('contributes remove repository only as a Repository context action', () => {
     expect(pkg.contributes.commands).toContainEqual({
       command: 'deck.removeRepository',
-      title: 'Deck: Remove from Deck…',
+      title: 'Remove from Deck…',
     });
 
     expect(pkg.contributes.menus['view/item/context']).toContainEqual({
@@ -198,7 +198,7 @@ describe('package contributions', () => {
   it('contributes open Worktree in new window as a Worktree context-only action', () => {
     expect(pkg.contributes.commands).toContainEqual({
       command: 'deck.openWorktreeInNewWindow',
-      title: 'Deck: Open Worktree in New Window',
+      title: 'Open Worktree in New Window',
     });
 
     expect(
@@ -253,7 +253,7 @@ describe('package contributions', () => {
   it('contributes open Terminal in new window as a Terminal context-only action', () => {
     expect(pkg.contributes.commands).toContainEqual({
       command: 'deck.openTerminalInNewWindow',
-      title: 'Deck: Open Terminal in New Window',
+      title: 'Open Terminal in New Window',
     });
 
     expect(

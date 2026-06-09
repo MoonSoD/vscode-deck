@@ -106,38 +106,38 @@
       },
       {
         "command": "deck.addWorktree",
-        "title": "Deck: Add Worktree",
+        "title": "Add Worktree",
         "icon": "$(add)"
       },
       {
         "command": "deck.removeWorktree",
-        "title": "Deck: Delete Worktree…",
+        "title": "Delete Worktree…",
         "icon": "$(trash)"
       },
       {
         "command": "deck.removeRepository",
-        "title": "Deck: Remove from Deck…"
+        "title": "Remove from Deck…"
       },
       {
         "command": "deck.switchWorktree",
-        "title": "Deck: Switch to Worktree"
+        "title": "Switch to Worktree"
       },
       {
         "command": "deck.openWorktreeInNewWindow",
-        "title": "Deck: Open Worktree in New Window"
+        "title": "Open Worktree in New Window"
       },
       {
         "command": "deck.addTerminal",
-        "title": "Deck: Add Terminal",
+        "title": "Add Terminal",
         "icon": "$(add)"
       },
       {
         "command": "deck.openTerminal",
-        "title": "Deck: Open Terminal"
+        "title": "Open Terminal"
       },
       {
         "command": "deck.openTerminalInNewWindow",
-        "title": "Deck: Open Terminal in New Window"
+        "title": "Open Terminal in New Window"
       },
       {
         "command": "deck.killTerminal",
