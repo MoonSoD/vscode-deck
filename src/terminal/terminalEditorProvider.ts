@@ -471,20 +471,14 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
       // tree-focused Delete Terminal keybinding.
       const isMac = navigator.userAgent.includes('Mac');
       terminal.attachCustomKeyEventHandler((event) => {
-        // Let VS Code own editor-tab navigation instead of xterm swallowing it.
-        // These are the Ctrl-modified chords xterm would otherwise send to the
-        // shell (Tab -> \\t etc.); returning false lets them bubble to VS Code's
-        // keybinding service (Cmd/Meta chords already bubble via xterm's default,
-        // so they're not listed). A webview can't resolve keybindings, so this is
-        // a fixed slice of VS Code's commandsToSkipShell, not the full set.
-        // Before the isMac guard so it applies on every platform.
-        if (
-          event.type === 'keydown' &&
-          event.ctrlKey &&
-          (event.key === 'Tab' || event.key === 'PageUp' || event.key === 'PageDown')
-        ) {
-          return false;
-        }
+        // Let VS Code own editor-tab navigation (Ctrl+Tab / Ctrl+Shift+Tab)
+        // instead of xterm swallowing it: Tab is sent to the shell as \\t, so
+        // returning true breaks tab switching while a terminal is focused.
+        // Returning false lets it bubble to VS Code's keybinding service. Cmd/Meta
+        // chords already bubble via xterm's default, so they're not listed; a
+        // webview can't resolve keybindings, so we don't try to mirror the full
+        // commandsToSkipShell set. Before the isMac guard so it's all-platform.
+        if (event.type === 'keydown' && event.ctrlKey && event.key === 'Tab') return false;
         if (!isMac || event.type !== 'keydown' || event.ctrlKey || event.shiftKey) return true;
         let seq;
         if (event.metaKey && !event.altKey) {
