@@ -146,7 +146,7 @@ describe('package contributions', () => {
       ),
     ).toEqual([{
       command: 'deck.removeWorktree',
-      when: 'view == deck.repositories && viewItem == deck.worktree',
+      when: 'view == deck.repositories && (viewItem == deck.worktree || viewItem == deck.worktree.active || viewItem == deck.worktree.main)',
       group: 'navigation@3',
     }]);
     expect(pkg.contributes.menus.commandPalette).toContainEqual({
