@@ -471,6 +471,10 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
       // tree-focused Delete Terminal keybinding.
       const isMac = navigator.userAgent.includes('Mac');
       terminal.attachCustomKeyEventHandler((event) => {
+        // Let VS Code own editor-tab navigation (Ctrl+Tab / Ctrl+Shift+Tab);
+        // returning true here lets xterm swallow it, which breaks tab switching
+        // while a terminal is focused. Before the isMac guard so it's all-platform.
+        if (event.type === 'keydown' && event.ctrlKey && event.key === 'Tab') return false;
         if (!isMac || event.type !== 'keydown' || event.ctrlKey || event.shiftKey) return true;
         let seq;
         if (event.metaKey && !event.altKey) {
