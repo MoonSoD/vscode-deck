@@ -18,10 +18,10 @@ export class SnapshotRewriter {
     const sessionName = columns[1];
     const currentCommand = columns[9];
     const sidecar = sidecars.get(sessionName);
-    columns[10] =
-      sidecar?.agent === 'claude' && currentCommand === 'claude'
-        ? `:${this.wrappedClaudeResume(sidecar.session_id)}`
-        : ':';
+    columns[10] = ':';
+    if (sidecar?.agent === 'claude' && currentCommand === 'claude') {
+      columns[10] = `:${this.wrappedClaudeResume(sidecar.session_id)}`;
+    }
     return columns.join('\t');
   }
 
