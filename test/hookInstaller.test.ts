@@ -71,6 +71,31 @@ describe('HookInstaller', () => {
       },
     });
   });
+
+  it('installs selected Codex hooks and reports per-agent installation', async () => {
+    const root = tempRoot();
+    const installer = new HookInstaller({
+      claudeSettingsPath: join(root, '.claude', 'settings.json'),
+      codexHooksPath: join(root, '.codex', 'hooks.json'),
+      hookScriptPath: join(root, '.local', 'share', 'deck', 'bin', 'deck-claude-hook.sh'),
+      codexHookScriptPath: join(root, '.local', 'share', 'deck', 'bin', 'deck-codex-hook.sh'),
+      sidecarDir: join(root, '.local', 'share', 'deck', 'hooks'),
+    });
+
+    await installer.install(['codex']);
+
+    const codexScriptPath = join(root, '.local', 'share', 'deck', 'bin', 'deck-codex-hook.sh');
+    expect(existsSync(codexScriptPath)).toBe(true);
+    expect(statSync(codexScriptPath).mode & 0o111).not.toBe(0);
+    expect(JSON.parse(readFileSync(join(root, '.codex', 'hooks.json'), 'utf8'))).toEqual({
+      hooks: {
+        SessionStart: [deckHookGroup(codexScriptPath)],
+        UserPromptSubmit: [deckHookGroup(codexScriptPath)],
+      },
+    });
+    await expect(installer.isInstalled('codex')).resolves.toBe(true);
+    await expect(installer.isInstalled('claude')).resolves.toBe(false);
+  });
 });
 
 function tempRoot(): string {

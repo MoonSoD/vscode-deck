@@ -57,7 +57,7 @@ function parseSidecar(text: string): AgentSidecar | undefined {
   if (
     typeof value === 'object' &&
     value !== null &&
-    (value as { agent?: unknown }).agent === 'claude' &&
+    ((value as { agent?: unknown }).agent === 'claude' || (value as { agent?: unknown }).agent === 'codex') &&
     typeof (value as { session_id?: unknown }).session_id === 'string'
   ) {
     return value as AgentSidecar;

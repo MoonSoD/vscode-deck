@@ -1,4 +1,6 @@
-export function renderAgentHookScript(sidecarDir: string): string {
+import type { AgentName } from './agentTypes';
+
+export function renderAgentHookScript(sidecarDir: string, agent: AgentName = 'claude'): string {
   return [
     '#!/bin/sh',
     'set -eu',
@@ -15,7 +17,7 @@ export function renderAgentHookScript(sidecarDir: string): string {
     '',
     `sidecar_dir='${quoteForSingleQuotedShell(sidecarDir)}'`,
     'mkdir -p "$sidecar_dir"',
-    'printf \'{"agent":"claude","session_id":"%s"}\\n\' "$session_id" > "$sidecar_dir/$DECK_SESSION.json"',
+    `printf '{"agent":"${agent}","session_id":"%s"}\\n' "$session_id" > "$sidecar_dir/$DECK_SESSION.json"`,
     '',
   ].join('\n');
 }

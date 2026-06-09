@@ -1,5 +1,7 @@
+import type { AgentName } from './agentTypes';
+
 export interface AgentSidecar {
-  agent: 'claude';
+  agent: AgentName;
   session_id: string;
 }
 
@@ -20,13 +22,16 @@ export class SnapshotRewriter {
     const sidecar = sidecars.get(sessionName);
     columns[10] = ':';
     if (sidecar?.agent === 'claude' && currentCommand === 'claude') {
-      columns[10] = `:${this.wrappedClaudeResume(sidecar.session_id)}`;
+      columns[10] = `:${this.wrappedResume(`claude --resume ${sidecar.session_id}`)}`;
+    }
+    if (sidecar?.agent === 'codex' && currentCommand.startsWith('codex')) {
+      columns[10] = `:${this.wrappedResume(`codex resume ${sidecar.session_id}`)}`;
     }
     return columns.join('\t');
   }
 
-  private wrappedClaudeResume(sessionId: string): string {
-    return `sh -lc '${shellQuote(`claude --resume ${sessionId}; exec "$SHELL"`)}'`;
+  private wrappedResume(command: string): string {
+    return `sh -lc '${shellQuote(`${command}; exec "$SHELL"`)}'`;
   }
 }
 

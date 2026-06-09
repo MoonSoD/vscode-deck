@@ -1,13 +1,16 @@
 import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { renderAgentHookScript } from './agentHookScript';
+import type { AgentName } from './agentTypes';
 
 const DECK_HOOK_ARGS = ['--deck-agent-session-hook'];
-const CLAUDE_EVENTS = ['SessionStart', 'UserPromptSubmit'] as const;
+const HOOK_EVENTS = ['SessionStart', 'UserPromptSubmit'] as const;
 
 export interface HookInstallerPaths {
   claudeSettingsPath: string;
+  codexHooksPath?: string;
   hookScriptPath: string;
+  codexHookScriptPath?: string;
   sidecarDir: string;
 }
 
@@ -24,7 +27,7 @@ interface HookGroup {
   [key: string]: unknown;
 }
 
-interface ClaudeSettings {
+interface HookSettings {
   hooks?: Record<string, HookGroup[]>;
   [key: string]: unknown;
 }
@@ -32,35 +35,72 @@ interface ClaudeSettings {
 export class HookInstaller {
   constructor(private readonly paths: HookInstallerPaths) {}
 
-  async installClaude(): Promise<void> {
-    await this.writeHookScript();
+  async install(agents: readonly AgentName[]): Promise<void> {
+    for (const agent of agents) {
+      await this.installAgent(agent);
+    }
+  }
 
-    const settings = await this.readClaudeSettings();
+  async installClaude(): Promise<void> {
+    await this.install(['claude']);
+  }
+
+  async isInstalled(agent: AgentName): Promise<boolean> {
+    const config = this.configFor(agent);
+    const settings = await this.readSettings(config.configPath);
+    return HOOK_EVENTS.every((event) =>
+      (settings.hooks?.[event] ?? []).some((group) =>
+        (group.hooks ?? []).some(isDeckHook),
+      ),
+    );
+  }
+
+  private async installAgent(agent: AgentName): Promise<void> {
+    const config = this.configFor(agent);
+    await this.writeHookScript(config.scriptPath, agent);
+
+    const settings = await this.readSettings(config.configPath);
     settings.hooks = settings.hooks ?? {};
-    for (const event of CLAUDE_EVENTS) {
+    for (const event of HOOK_EVENTS) {
       settings.hooks[event] = [
         ...removeDeckHookGroups(settings.hooks[event] ?? []),
-        deckHookGroup(this.paths.hookScriptPath),
+        deckHookGroup(config.scriptPath),
       ];
     }
 
-    await mkdir(dirname(this.paths.claudeSettingsPath), { recursive: true });
-    await writeFile(this.paths.claudeSettingsPath, `${JSON.stringify(settings, null, 2)}\n`, 'utf8');
+    await mkdir(dirname(config.configPath), { recursive: true });
+    await writeFile(config.configPath, `${JSON.stringify(settings, null, 2)}\n`, 'utf8');
   }
 
-  private async writeHookScript(): Promise<void> {
-    await mkdir(dirname(this.paths.hookScriptPath), { recursive: true });
-    await writeFile(this.paths.hookScriptPath, renderAgentHookScript(this.paths.sidecarDir), 'utf8');
-    await chmod(this.paths.hookScriptPath, 0o755);
+  private async writeHookScript(scriptPath: string, agent: AgentName): Promise<void> {
+    await mkdir(dirname(scriptPath), { recursive: true });
+    await writeFile(scriptPath, renderAgentHookScript(this.paths.sidecarDir, agent), 'utf8');
+    await chmod(scriptPath, 0o755);
   }
 
-  private async readClaudeSettings(): Promise<ClaudeSettings> {
+  private async readSettings(configPath: string): Promise<HookSettings> {
     try {
-      return JSON.parse(await readFile(this.paths.claudeSettingsPath, 'utf8')) as ClaudeSettings;
+      return JSON.parse(await readFile(configPath, 'utf8')) as HookSettings;
     } catch (error) {
       if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return {};
       throw error;
     }
+  }
+
+  private configFor(agent: AgentName): { configPath: string; scriptPath: string } {
+    if (agent === 'claude') {
+      return {
+        configPath: this.paths.claudeSettingsPath,
+        scriptPath: this.paths.hookScriptPath,
+      };
+    }
+    if (!this.paths.codexHooksPath || !this.paths.codexHookScriptPath) {
+      throw new Error('Codex hook installer paths are not configured');
+    }
+    return {
+      configPath: this.paths.codexHooksPath,
+      scriptPath: this.paths.codexHookScriptPath,
+    };
   }
 }
 
