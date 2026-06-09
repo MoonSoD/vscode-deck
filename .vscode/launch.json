@@ -22,6 +22,12 @@
     // If tmux/claude/codex move, re-check with `which -a tmux claude codex` and adjust.
     // Run: pick this config in Run & Debug, F5. Expect no notification, and
     // "Deck: Install agent hooks" -> "No Claude or Codex installation detected."
+    //
+    // ⚠️ DO NOT run claude/codex in this profile. CLAUDE_CONFIG_DIR/CODEX_HOME are
+    // redirected, so a real agent run would init a fresh config there (no creds ->
+    // re-auth prompt) AND create the dir, which then breaks detection. This profile
+    // is for the *detection* test only. If you slipped: `rm -rf /tmp/deck-qa/none-*`
+    // and run agents from the normal "Run Extension" profile (your ~/.claude is fine).
     {
       "name": "Run Extension (no agents)",
       "type": "extensionHost",
