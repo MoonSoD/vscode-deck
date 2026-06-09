@@ -89,18 +89,11 @@ describe('package contributions', () => {
     });
   });
 
-  it('contributes curated safe tmux settings', () => {
+  it('contributes the curated safe automatic-rename-format setting only', () => {
     expect(pkg.contributes.configuration?.properties?.['deck.tmux.automaticRenameFormat']).toMatchObject({
       type: 'string',
       default: '',
     });
-    expect(pkg.contributes.configuration?.properties?.['deck.tmux.historyLimit']).toMatchObject({
-      type: 'integer',
-      default: 50000,
-    });
-    expect(
-      pkg.contributes.configuration?.properties?.['deck.tmux.historyLimit'].description,
-    ).toContain('newly opened Terminals');
     expect(pkg.contributes.configuration?.properties?.['deck.tmuxConfig']).toBeUndefined();
   });
 

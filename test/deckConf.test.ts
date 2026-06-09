@@ -30,7 +30,7 @@ describe('renderDeckConf', () => {
     );
   });
 
-  it('renders safe user tmux options into the DeckSocket template', () => {
+  it('renders a safe user automatic-rename-format into the DeckSocket template', () => {
     const template = readFileSync(join(process.cwd(), 'resources', 'deck.conf'), 'utf8');
 
     expect(renderDeckConf(template, {
@@ -38,12 +38,11 @@ describe('renderDeckConf', () => {
       resurrectDir: '/global/resurrect',
     }, resolveDeckTmuxOptions({
       automaticRenameFormat: "cmd '#{pane_current_command}'",
-      historyLimit: 120000,
     }))).toBe(
       [
         'set -g automatic-rename on',
         "set -g automatic-rename-format 'cmd '\\''#{pane_current_command}'\\'''",
-        'set -g history-limit 120000',
+        'set -g history-limit 50000',
         'set -g destroy-unattached off',
         'set -g status off',
         'set -g prefix None',

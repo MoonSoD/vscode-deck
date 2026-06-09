@@ -32,13 +32,12 @@ Alternatives considered:
    safe get a setting. No free-form passthrough, no sourcing the user's
    `~/.tmux.conf`. Load-bearing options remain Deck-owned and unreachable.
 
-2. **v1 fields.**
+2. **v1 field — `automatic-rename-format` only.**
    - `deck.tmux.automaticRenameFormat` → `automatic-rename-format`. Default
      `""` — empty emits no line, preserving tmux's built-in default (today's
      behavior). Non-empty is rendered and live-applied.
-   - `deck.tmux.historyLimit` → `history-limit`. Default `50000`, lifted from
-     the value hardcoded in `deck.conf` (ADR-0008 decision 11) so the setting
-     becomes its single source of truth.
+   - `history-limit` was scoped in but **dropped before shipping** — see the
+     Consequences note. `deck.conf` keeps its hardcoded `50000`.
 
 3. **Render + live-apply, running server is source of truth.** Values are
    rendered into `deck.conf` (so a fresh server — reboot/`kill-server` restore —
@@ -55,19 +54,29 @@ Alternatives considered:
 
 ## Consequences
 
-- The two v1 fields differ on live-apply. `automatic-rename-format` is
-  retroactive — one `set -g` re-titles every window on the next tick.
-  `history-limit` is **not** — tmux applies it only to newly created
-  windows/panes, so existing Terminals keep their old scrollback until
-  recreated. Documented on the setting; no live-resize workaround.
-- Adding a future safe field (e.g. another cosmetic option) is a small,
-  pattern-following change: a new `deck.tmux.*` setting plus its render +
-  live-apply wiring. The deliberate *no* — free-form passthrough — stays closed.
-
-## Refines
-
-- ADR-0008 decision 11: `deck.conf`'s `history-limit` is no longer a hardcoded
-  literal; it is rendered from `deck.tmux.historyLimit` (default 50000).
+- `automatic-rename-format` is retroactive *per window*: a `set -g` re-titles a
+  window the next time tmux recomputes its name — which happens on pane
+  **activity** (output) or a foreground-command change, not on a global tick.
+  Idle windows keep their old name until their next activity. There is no clean
+  tmux command to force-recompute all names without injecting keystrokes, so
+  this lazy refresh is accepted, not worked around.
+- **`history-limit` was dropped before shipping.** Under control mode
+  (ADR-0012) the *visible* scrollback is xterm.js's buffer (hardcoded `5000`,
+  with the reattach seed capped to match); tmux's `history-limit` governs only
+  tmux's internal pane history, which Deck reads via `capture-pane` for the
+  reload/reboot seed. So a `historyLimit` setting could not raise visible
+  scrollback (xterm caps it), its proposed `50000` default already exceeded the
+  `5000` cap (inert), and lowering it would only *shrink* restored scrollback —
+  a knob that is inert at its default and harmful when changed. Exposing it
+  would not satisfy "tune my scrollback." Genuine scrollback control would have
+  to drive xterm's `scrollback` + the seed + tmux `history-limit` together (a
+  larger change with a real per-terminal memory tradeoff); deferred to its own
+  feature rather than shipped as a misleading tmux passthrough.
+- Adding a future safe field is a small, pattern-following change: a new
+  `deck.tmux.*` setting plus its render + live-apply wiring. The deliberate
+  *no* — free-form passthrough — stays closed. The `history-limit` episode is
+  the reminder that "safe to set on tmux" is not the same as "meaningful given
+  Deck's control-mode rendering" — vet the *observable effect*, not just safety.
 
 ## Status
 

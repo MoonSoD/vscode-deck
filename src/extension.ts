@@ -359,7 +359,6 @@ function deckTmuxOptionsFromSettings(): DeckTmuxOptions {
   const config = vscode.workspace.getConfiguration('deck.tmux');
   return resolveDeckTmuxOptions({
     automaticRenameFormat: config.get<string>('automaticRenameFormat'),
-    historyLimit: config.get<number>('historyLimit'),
   });
 }
 

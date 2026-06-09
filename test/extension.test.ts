@@ -55,7 +55,6 @@ const vscodeState = vi.hoisted(() => ({
   settingsAgentResumeTemplates: {} as Record<string, string | undefined>,
   settingsDeckTmux: {} as {
     automaticRenameFormat?: string;
-    historyLimit?: number;
   },
   tmuxServerRunning: false,
   tmuxInstances: [] as Array<{
@@ -125,13 +124,8 @@ vi.mock('vscode', () => ({
   workspace: {
     getConfiguration: (section?: string) => ({
       get: <T>(key: string, defaultValue?: T) => {
-        if (section === 'deck.tmux') {
-          if (key === 'automaticRenameFormat') {
-            return (vscodeState.settingsDeckTmux.automaticRenameFormat as T | undefined) ?? defaultValue;
-          }
-          if (key === 'historyLimit') {
-            return (vscodeState.settingsDeckTmux.historyLimit as T | undefined) ?? defaultValue;
-          }
+        if (section === 'deck.tmux' && key === 'automaticRenameFormat') {
+          return (vscodeState.settingsDeckTmux.automaticRenameFormat as T | undefined) ?? defaultValue;
         }
         if (key === 'repositories') return (vscodeState.settingsRepositories as T | undefined) ?? defaultValue;
         if (key === 'agentResumeTemplates.claude') {
@@ -513,11 +507,10 @@ describe('activate', () => {
     expect(vscodeState.tmuxInstances[0].configPath).toBe(generatedConf);
   });
 
-  it('writes and live-applies safe tmux settings when the DeckSocket is running', async () => {
+  it('writes and live-applies the automatic-rename-format when the DeckSocket is running', async () => {
     vscodeState.tmuxServerRunning = true;
     vscodeState.settingsDeckTmux = {
       automaticRenameFormat: '#{pane_current_command}:#{pane_current_path}',
-      historyLimit: 120000,
     };
     const context = createContext();
 
@@ -526,20 +519,18 @@ describe('activate', () => {
     const deckDir = join(context.xdgDataHome, 'deck');
     const generatedConf = join(deckDir, 'deck.conf');
     expect(readFileSync(generatedConf, 'utf8')).toContain(
-      "set -g automatic-rename-format '#{pane_current_command}:#{pane_current_path}'\nset -g history-limit 120000",
+      "set -g automatic-rename-format '#{pane_current_command}:#{pane_current_path}'\nset -g history-limit 50000",
     );
     expect(vscodeState.tmuxInstances[0].setOption).toHaveBeenCalledWith(
       'automatic-rename-format',
       '#{pane_current_command}:#{pane_current_path}',
     );
-    expect(vscodeState.tmuxInstances[0].setOption).toHaveBeenCalledWith('history-limit', '120000');
   });
 
   it('rewrites deck.conf and unsets automatic rename format when the tmux setting is cleared', async () => {
     vscodeState.tmuxServerRunning = true;
     vscodeState.settingsDeckTmux = {
       automaticRenameFormat: '#{pane_current_command}',
-      historyLimit: 120000,
     };
     const context = createContext();
 
