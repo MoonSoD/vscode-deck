@@ -70,6 +70,10 @@ _Avoid_: sort order
 Deck's own isolated tmux server, separate from the user's personal tmux.
 _Avoid_: tmux (the user's own tmux is a distinct thing)
 
+**TerminalSnapshot**:
+The capture of every Terminal on the DeckSocket — each one's working directory and scrollback — that lets Terminals survive death of the DeckSocket (reboot, crash, `kill-server`). Saved periodically and restored when Deck next starts.
+_Avoid_: backup, session dump
+
 **Terminal**:
 A persistent shell owned by Deck — one tmux session on the DeckSocket — shown as a row under a Worktree and opened as an xterm.js editor tab addressed by `deck-terminal:/<worktree>/term-N`. Like a file, the Terminal is the durable thing and its tab is just a view onto it: closing the tab leaves the Terminal running, and any Terminal can be opened from any mounted Worktree without a Switch.
 _Avoid_: tmux session, tmux window, pane (the backing mechanism); tab (a disposable view, not the Terminal itself)
@@ -80,6 +84,7 @@ _Avoid_: tmux session, tmux window, pane (the backing mechanism); tab (a disposa
 - A **Repository** has one **ActiveWorktree**; the mounted folder has one **ActiveRepository** (or none).
 - A **Worktree** hosts zero or more **Terminals**.
 - A **Terminal** belongs to exactly one **Worktree** and lives on the one **DeckSocket**.
+- A **TerminalSnapshot** captures every **Terminal** on the **DeckSocket**.
 - A **Switch** changes which **Worktree** is mounted; a **DetachedOpen** does not.
 
 ## Example dialogue
@@ -92,6 +97,9 @@ _Avoid_: tmux session, tmux window, pane (the backing mechanism); tab (a disposa
 >
 > **Dev:** "Do my **Terminals** die when I **Switch** away?"
 > **Domain expert:** "No — they live on the **DeckSocket** and reattach when you return. They die only on **TerminalRemoval** (Delete), shell `exit`, or when their **Worktree** or **Repository** is removed."
+>
+> **Dev:** "And if I reboot my machine — the **DeckSocket** is gone then, right?"
+> **Domain expert:** "It dies, but your **Terminals** come back. Deck saves a **TerminalSnapshot** as you work and restores it when it next starts, so each **Terminal** returns at its working directory with its scrollback — picking up a fresh shell prompt. Whatever was *running* is not relaunched."
 >
 > **Dev:** "So if I close a **Terminal**'s editor tab, is it gone?"
 > **Domain expert:** "No — the tab is just a view, like an editor over a file. The **Terminal** keeps running; reopen its row anytime. Destroying it is **TerminalRemoval**."

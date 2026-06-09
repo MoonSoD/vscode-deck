@@ -16,6 +16,7 @@ Reference repos live as **siblings** in `~/code/`. Local paths are tracked in `.
 | **sanctel** | Tauri + tmux Arc-shaped workspace. Reference for per-worktree PTY/tmux persistence patterns and multi-context workspace UX (profiles / spaces / tabs / agent flows). |
 | **iterm2** | The canonical tmux control-mode (`-C`) client. Reference for the protocol handling behind ADR-0012: reply correlation, %output decoding, history seeding, flow control. |
 | **tmux** | The server side of ADR-0012's transport. Ground truth for what the control-mode protocol actually emits and accepts — read this instead of guessing from client behavior. |
+| **tmux-resurrect** | The save/restore engine vendored for ADR-0019. Ground truth for what `save.sh`/`restore.sh` actually do — the `cat <file>; exec <shell>` content-restore mechanism, the `@resurrect-processes` / `@resurrect-capture-pane-contents` knobs — read this instead of guessing from plugin docs. |
 
 ## By subsystem
 
@@ -55,6 +56,18 @@ tree hierarchy. |
 | `sanctel:src-tauri/src/` | tmux-backed PTY persistence wired to a workspace shell. Lighter-weight alternative to `superset`'s pty-daemon. |
 | `sanctel:src/` | Profiles / spaces / tabs UX over a workspace surface — adjacent UX for multi-worktree agent flows. |
 
+### Reboot-surviving terminals (ADR-0019)
+
+| File | What it teaches |
+|---|---|
+| `sanctel:src-tauri/src/restore_runtime.rs` | The `anchor → restore.sh → kill-anchor` launch sequence, periodic-save timer (`start_periodic_save(300)`), and save-on-exit — the working implementation ADR-0019 mirrors. |
+| `sanctel:docs/design/spikes/restore-feasibility.md` | Why continuum is dropped (the `another_tmux_server_running` short-circuit) and resurrect's `save.sh`/`restore.sh` are driven directly; measured save/restore timings. |
+| `sanctel:app-bundle/sanctel.tmux.conf` | The templated-conf shape (`__…__` placeholders) and resurrect knobs Deck adapts for `globalStorage/deck.conf`. |
+| `tmux-resurrect:scripts/save.sh` | What a save touches — `list-panes`/`list-windows` metadata plus one `capture-pane -epJ` per pane (why a save never freezes panes). |
+| `tmux-resurrect:scripts/restore.sh` | Content restore via `cat <file>; exec <default-command>` (line ~123) — the sequential pipeline that composes cleanly with ADR-0012 §5's seed. |
+| `tmux-resurrect:resurrect.tmux` | The `run-shell` entry point and the `@resurrect-*-script-path` options Deck deliberately bypasses (it calls the scripts with the current path). |
+| `tmux-resurrect:docs/restoring_programs.md` | `@resurrect-processes 'false'` = restore no programs (Deck's "shells only"). |
+
 ### tmux control mode (ADR-0012 transport)
 
 | File | What it teaches |
@@ -83,4 +96,5 @@ git clone --depth 1 https://github.com/microsoft/vscode
 git clone --depth 1 git@github.com:sanctel/sanctel.git
 git clone --depth 1 https://github.com/gnachman/iTerm2 iterm2
 git clone --depth 1 https://github.com/tmux/tmux
+git clone --depth 1 https://github.com/tmux-plugins/tmux-resurrect
 ```
