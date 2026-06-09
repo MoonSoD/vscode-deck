@@ -87,19 +87,33 @@ export class TmuxControlClient {
     });
 
     await attach;
-    const panes = (await this.command(`list-panes -s -t =${sessionName} -F "#{pane_id}"`))
+    // Fetch the cursor position alongside the pane id in the one list-panes we
+    // already issue — capture-pane restores the screen text but no cursor, so
+    // without this the cursor sits at end-of-content until the next redraw. The
+    // canonical control-mode client (iTerm2) likewise reads cursor_x/cursor_y as
+    // pane state apart from the content.
+    const fields = (await this.command(`list-panes -s -t =${sessionName} -F "#{pane_id} #{cursor_y} #{cursor_x}"`))
       .trim()
       .split('\n')
       .filter(Boolean);
-    if (panes.length !== 1) {
-      throw new Error(`expected exactly one tmux pane, got ${panes.length}`);
+    if (fields.length !== 1) {
+      throw new Error(`expected exactly one tmux pane, got ${fields.length}`);
     }
-    this.paneId = panes[0];
+    const [paneId, cursorRow, cursorColumn] = fields[0].split(/\s+/);
+    this.paneId = paneId;
     // -q: a pane that died between attach and capture is not a startup error.
     // -N: preserve trailing spaces (tmux >= 3.1, our preflight floor).
     // A failed capture costs history, not the terminal: the gate still opens
     // on the %error so live output flows.
     await this.command(`capture-pane -p -e -q -J -N -S -${seedLines}`, { seed: true }).catch(() => undefined);
+
+    // Emit an absolute reposition (CUP) after the seed so the cursor lands where
+    // the shell/TUI's input is, not at end-of-content.
+    const row = Number(cursorRow);
+    const column = Number(cursorColumn);
+    if (Number.isInteger(row) && Number.isInteger(column)) {
+      for (const handler of this.seedHandlers) handler(`\x1b[${row + 1};${column + 1}H`);
+    }
   }
 
   onOutput(handler: (data: string) => void): { dispose(): void } {

@@ -45,7 +45,7 @@ export class TerminalTransport {
     this.client = client;
     this.disposables.push(
       client.onSeed((seed) => {
-        const scrollback = normalizeSeedNewlines(stripTrailingBlankLines(seed));
+        const scrollback = normalizeSeedNewlines(trimSeedTrailingNewline(seed));
         if (scrollback) this.emitData(scrollback);
       }),
       client.onOutput((data) => this.emitData(data)),
@@ -135,15 +135,14 @@ export class TerminalTransport {
   }
 }
 
-function stripTrailingBlankLines(data: string): string {
+function trimSeedTrailingNewline(data: string): string {
+  // Keep the full captured screen — including blank rows below the cursor — so
+  // its geometry matches tmux and the explicit cursor reposition the control
+  // client emits after the seed (CUP, from tmux's cursor_y/cursor_x) lands on
+  // the right cell. Drop only the single trailing empty from capture-pane's
+  // final newline, so we don't scroll one row past the bottom of the screen.
   const lines = data.split('\n');
-  while (lines.length > 0 && lines.at(-1)?.trimEnd() === '') lines.pop();
-  if (lines.length === 0) return '';
-  // No trailing newline: capture-pane fills the pane height with blank rows
-  // below the prompt, so the raw capture ends in '\n'. Re-appending it would
-  // leave xterm's cursor on the empty line *below* the prompt (the "cursor
-  // below the glyph" seed artifact). The seed must end exactly at the last
-  // content line so the cursor lands on the prompt, matching the live shell.
+  if (lines.at(-1) === '') lines.pop();
   return lines.join('\n');
 }
 

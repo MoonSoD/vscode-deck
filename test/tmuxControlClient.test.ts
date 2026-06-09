@@ -33,7 +33,7 @@ describe('TmuxControlClient', () => {
       '/work/repo',
     ], { cwd: '/work/repo', stdio: 'pipe' });
     expect(child.writes).toEqual([
-      'list-panes -s -t =wt-_work_repo__term-1 -F "#{pane_id}"\n',
+      'list-panes -s -t =wt-_work_repo__term-1 -F "#{pane_id} #{cursor_y} #{cursor_x}"\n',
       'capture-pane -p -e -q -J -N -S -5000\n',
     ]);
   });
@@ -70,6 +70,25 @@ describe('TmuxControlClient', () => {
     await started;
 
     expect(events).toEqual(['seed:history', 'live:fresh']);
+  });
+
+  it('repositions the cursor from the pane state after seeding the content', async () => {
+    const child = fakeChild();
+    const client = new TmuxControlClient('/ext/resources/deck.conf', vi.fn(() => child));
+    const seeds: string[] = [];
+    client.onSeed((seed) => seeds.push(seed));
+
+    const started = client.start('wt-_work_repo__term-1', '/work/repo', 5000);
+    child.emitStdout('%begin 1 1 0\n%end 1 1 0\n');
+    await untilWrites(child, 1);
+    // pane id + cursor_y + cursor_x
+    child.emitStdout('%begin 1 2 1\n%0 3 7\n%end 1 2 1\n');
+    await untilWrites(child, 2);
+    child.emitStdout('%begin 1 3 1\nhistory\n%end 1 3 1\n');
+    await started;
+
+    // content first, then an absolute reposition (CUP) to 1-based row 4, col 8.
+    expect(seeds).toEqual(['history', '\x1b[4;8H']);
   });
 
   it('opens the output gate even when the seed capture errors', async () => {

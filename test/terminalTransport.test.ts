@@ -65,19 +65,20 @@ describe('TerminalTransport', () => {
     expect(data.mock.calls.map(([payload]) => payload)).toEqual(['seed', 'live\r\n']);
   });
 
-  it('drops trailing blank screen lines and leaves no trailing newline after the prompt', () => {
+  it('keeps the full captured screen, dropping only the trailing newline artifact', () => {
     const client = fakeClient();
     const transport = new TerminalTransport('/ext/resources/deck.conf', vi.fn(() => client));
     const data = vi.fn();
 
     transport.onData(data);
     transport.start('wt-_work_repo__term-1', '/work/repo', 80, 24);
-    // capture-pane fills the pane height with blank rows below the prompt
+    // capture-pane fills the pane height with blank rows below the prompt and
+    // ends in a newline; keep the blank rows so the screen geometry matches tmux
+    // (the control client repositions the cursor with an explicit CUP), and drop
+    // only the final-newline artifact so we don't scroll one row past the bottom.
     client.emitSeed('output\n❯ \n\n\n');
 
-    // No trailing newline: the cursor must land on the prompt line, not the
-    // empty line below it (the "cursor below the glyph" seed artifact).
-    expect(data).toHaveBeenCalledWith('output\r\n❯ ');
+    expect(data).toHaveBeenCalledWith('output\r\n❯ \r\n\r\n');
   });
 
   it('normalizes captured line feeds for xterm replay', () => {
