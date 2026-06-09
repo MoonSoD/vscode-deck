@@ -33,10 +33,9 @@ describe('renderAgentHookScript', () => {
   it('writes a Codex sidecar keyed by DECK_SESSION', async () => {
     const root = tempRoot();
     const sidecarDir = join(root, 'hooks');
-    const scriptPath = writeScript(root, renderAgentHookScript(sidecarDir));
+    const scriptPath = writeScript(root, renderAgentHookScript(sidecarDir, 'codex'));
 
     await runScript(scriptPath, {
-      args: ['--deck-agent-session-hook', 'codex'],
       env: { ...process.env, DECK_SESSION: 'wt-_work_repo__term-1' },
       input: '{"session_id":"codex-123","hook_event_name":"SessionStart"}',
     });

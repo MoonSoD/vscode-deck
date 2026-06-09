@@ -77,7 +77,7 @@ describe('HookInstaller', () => {
   it('is idempotent and preserves foreign Codex hooks', async () => {
     const root = tempRoot();
     const hooksPath = join(root, '.codex', 'hooks.json');
-    const scriptPath = join(root, '.local', 'share', 'deck', 'bin', 'deck-agent-hook.sh');
+    const scriptPath = join(root, '.local', 'share', 'deck', 'bin', 'deck-codex-hook.sh');
     mkdirSync(join(root, '.codex'), { recursive: true });
     writeFileSync(hooksPath, JSON.stringify({
       hooks: {
@@ -90,12 +90,13 @@ describe('HookInstaller', () => {
     const installer = new HookInstaller({
       claudeSettingsPath: join(root, '.claude', 'settings.json'),
       codexHooksPath: hooksPath,
-      hookScriptPath: scriptPath,
+      hookScriptPath: join(root, '.local', 'share', 'deck', 'bin', 'deck-claude-hook.sh'),
+      codexHookScriptPath: scriptPath,
       sidecarDir: join(root, '.local', 'share', 'deck', 'hooks'),
     });
 
-    await installer.installCodex();
-    await installer.installCodex();
+    await installer.install(['codex']);
+    await installer.install(['codex']);
 
     expect(JSON.parse(readFileSync(hooksPath, 'utf8'))).toEqual({
       hooks: {
@@ -114,7 +115,7 @@ describe('HookInstaller', () => {
   it('preserves foreign Codex hook groups without handlers', async () => {
     const root = tempRoot();
     const hooksPath = join(root, '.codex', 'hooks.json');
-    const scriptPath = join(root, '.local', 'share', 'deck', 'bin', 'deck-agent-hook.sh');
+    const scriptPath = join(root, '.local', 'share', 'deck', 'bin', 'deck-codex-hook.sh');
     mkdirSync(join(root, '.codex'), { recursive: true });
     writeFileSync(hooksPath, JSON.stringify({
       hooks: {
@@ -127,11 +128,12 @@ describe('HookInstaller', () => {
     const installer = new HookInstaller({
       claudeSettingsPath: join(root, '.claude', 'settings.json'),
       codexHooksPath: hooksPath,
-      hookScriptPath: scriptPath,
+      hookScriptPath: join(root, '.local', 'share', 'deck', 'bin', 'deck-claude-hook.sh'),
+      codexHookScriptPath: scriptPath,
       sidecarDir: join(root, '.local', 'share', 'deck', 'hooks'),
     });
 
-    await installer.installCodex();
+    await installer.install(['codex']);
 
     expect(JSON.parse(readFileSync(hooksPath, 'utf8'))).toEqual({
       hooks: {
@@ -143,6 +145,31 @@ describe('HookInstaller', () => {
         UserPromptSubmit: [codexDeckHookGroup(scriptPath)],
       },
     });
+  });
+
+  it('installs selected Codex hooks and reports per-agent installation', async () => {
+    const root = tempRoot();
+    const installer = new HookInstaller({
+      claudeSettingsPath: join(root, '.claude', 'settings.json'),
+      codexHooksPath: join(root, '.codex', 'hooks.json'),
+      hookScriptPath: join(root, '.local', 'share', 'deck', 'bin', 'deck-claude-hook.sh'),
+      codexHookScriptPath: join(root, '.local', 'share', 'deck', 'bin', 'deck-codex-hook.sh'),
+      sidecarDir: join(root, '.local', 'share', 'deck', 'hooks'),
+    });
+
+    await installer.install(['codex']);
+
+    const codexScriptPath = join(root, '.local', 'share', 'deck', 'bin', 'deck-codex-hook.sh');
+    expect(existsSync(codexScriptPath)).toBe(true);
+    expect(statSync(codexScriptPath).mode & 0o111).not.toBe(0);
+    expect(JSON.parse(readFileSync(join(root, '.codex', 'hooks.json'), 'utf8'))).toEqual({
+      hooks: {
+        SessionStart: [codexDeckHookGroup(codexScriptPath)],
+        UserPromptSubmit: [codexDeckHookGroup(codexScriptPath)],
+      },
+    });
+    await expect(installer.isInstalled('codex')).resolves.toBe(true);
+    await expect(installer.isInstalled('claude')).resolves.toBe(false);
   });
 });
 

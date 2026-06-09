@@ -10,9 +10,10 @@ const vscodeState = vi.hoisted(() => ({
   addTerminalArgs: undefined as unknown[] | undefined,
   addRepositoryRun: vi.fn(),
   addTerminalRun: vi.fn(),
+  agentDetectionArgs: undefined as unknown[] | undefined,
+  agentSetupPromptArgs: undefined as unknown[] | undefined,
+  agentSetupPromptRun: vi.fn(),
   hookInstallerArgs: undefined as unknown[] | undefined,
-  hookInstallerInstallClaude: vi.fn(),
-  hookInstallerInstallCodex: vi.fn(),
   configUpdate: vi.fn(),
   externalWatchDisposables: [] as Array<{ dispose: ReturnType<typeof vi.fn> }>,
   tabGroups: [] as Array<{ viewColumn: number; tabs: Array<{ input?: unknown }> }>,
@@ -236,9 +237,24 @@ vi.mock('../src/agent/hookInstaller', () => ({
     constructor(...args: unknown[]) {
       vscodeState.hookInstallerArgs = args;
     }
+  },
+}));
 
-    installClaude = vscodeState.hookInstallerInstallClaude;
-    installCodex = vscodeState.hookInstallerInstallCodex;
+vi.mock('../src/agent/agentDetection', () => ({
+  AgentDetection: class {
+    constructor(...args: unknown[]) {
+      vscodeState.agentDetectionArgs = args;
+    }
+  },
+}));
+
+vi.mock('../src/agent/agentSetupPrompt', () => ({
+  AgentSetupPrompt: class {
+    constructor(...args: unknown[]) {
+      vscodeState.agentSetupPromptArgs = args;
+    }
+
+    run = vscodeState.agentSetupPromptRun;
   },
 }));
 
@@ -288,9 +304,10 @@ describe('activate', () => {
     vi.clearAllMocks();
     vscodeState.addRepositoryArgs = undefined;
     vscodeState.addTerminalArgs = undefined;
+    vscodeState.agentDetectionArgs = undefined;
+    vscodeState.agentSetupPromptArgs = undefined;
+    vscodeState.agentSetupPromptRun.mockResolvedValue(undefined);
     vscodeState.hookInstallerArgs = undefined;
-    vscodeState.hookInstallerInstallClaude.mockResolvedValue(undefined);
-    vscodeState.hookInstallerInstallCodex.mockResolvedValue(undefined);
     vscodeState.externalWatchDisposables = [];
     vscodeState.terminalRemovalArgs = undefined;
     vscodeState.activeTab = undefined;
@@ -527,18 +544,18 @@ describe('activate', () => {
     expect(vscodeState.addTerminalRun).toHaveBeenCalledWith({ worktree: { path: '/work/repo' } });
   });
 
-  it('registers deck.installAgentHooks through HookInstaller for Claude and Codex', async () => {
+  it('registers deck.installAgentHooks through the setup prompt', async () => {
     const context = createContext();
 
     await activate(context as never);
+    expect(vscodeState.agentSetupPromptRun).toHaveBeenCalledWith();
     const registration = vscodeState.registerCommand.mock.calls.find(
       ([command]) => command === 'deck.installAgentHooks',
     );
     if (!registration) throw new Error('missing deck.installAgentHooks registration');
     await registration[1]();
 
-    expect(vscodeState.hookInstallerInstallClaude).toHaveBeenCalledOnce();
-    expect(vscodeState.hookInstallerInstallCodex).toHaveBeenCalledOnce();
+    expect(vscodeState.agentSetupPromptRun).toHaveBeenCalledWith({ ignoreDismissal: true });
   });
 
   it('registers deck.openTerminal and refreshes on workspace/view visibility events', async () => {

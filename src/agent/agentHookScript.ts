@@ -1,9 +1,11 @@
-export function renderAgentHookScript(sidecarDir: string): string {
+import type { AgentName } from './agentTypes';
+
+export function renderAgentHookScript(sidecarDir: string, agent: AgentName = 'claude'): string {
   return [
     '#!/bin/sh',
     'set -eu',
     '',
-    'agent="${2:-claude}"',
+    `agent="\${2:-${agent}}"`,
     'case "$agent" in',
     '  claude|codex) ;;',
     '  *) exit 0 ;;',

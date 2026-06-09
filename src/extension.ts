@@ -37,6 +37,8 @@ import { renderDeckConf } from './terminal/deckConf';
 import { TerminalSnapshotRuntime } from './terminal/terminalSnapshotRuntime';
 import { createRestoreGate } from './terminal/restoreGate';
 import { AgentSidecarStore } from './agent/agentSidecarStore';
+import { AgentDetection } from './agent/agentDetection';
+import { AgentSetupPrompt } from './agent/agentSetupPrompt';
 import { HookInstaller } from './agent/hookInstaller';
 import { rewriteTerminalSnapshotAgentSessions } from './agent/terminalSnapshotAgentSessions';
 
@@ -52,8 +54,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const hookInstaller = new HookInstaller({
     claudeSettingsPath: join(process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude'), 'settings.json'),
     codexHooksPath: join(process.env.CODEX_HOME || join(homedir(), '.codex'), 'hooks.json'),
-    hookScriptPath: join(deckDir, 'bin', 'deck-agent-hook.sh'),
+    hookScriptPath: join(deckDir, 'bin', 'deck-claude-hook.sh'),
+    codexHookScriptPath: join(deckDir, 'bin', 'deck-codex-hook.sh'),
     sidecarDir: join(deckDir, 'hooks'),
+  });
+  const agentSetupPrompt = new AgentSetupPrompt({
+    detector: new AgentDetection(),
+    installer: hookInstaller,
+    globalState: context.globalState,
+    notifications: vscode.window,
   });
 
   terminalSnapshotRuntime = tmuxAvailability.available
@@ -242,10 +251,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       terminalRemoval.run(node ?? treeView.selection[0]),
     ),
     vscode.commands.registerCommand('deck.terminal.find', () => terminalEditorProvider.showFind()),
-    vscode.commands.registerCommand('deck.installAgentHooks', async () => {
-      await hookInstaller.installClaude();
-      await hookInstaller.installCodex();
-    }),
+    vscode.commands.registerCommand('deck.installAgentHooks', () => agentSetupPrompt.run({ ignoreDismissal: true })),
     vscode.commands.registerCommand('deck.removeRepository', (node) => removeRepository.run(node)),
     vscode.commands.registerCommand('deck.removeWorktree', (node) => removeWorktree.run(node)),
     vscode.commands.registerCommand('deck.openWorktreeInNewWindow', (node: { worktree: { path: string } }) =>
@@ -270,6 +276,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     context.subscriptions.push(terminalSnapshotRuntime.startPeriodicSave(5 * 60 * 1000));
     await openPendingTerminalForCurrentWorktree(pendingTerminalOpens, tmux);
   }
+  void agentSetupPrompt.run();
 }
 
 export function deactivate(): Promise<void> | undefined {

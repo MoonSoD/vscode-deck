@@ -107,6 +107,20 @@ describe('SnapshotRewriter', () => {
     expect(lines[1].split('\t')[10]).toBe(':');
   });
 
+  it('rewrites a Codex pane with a sidecar to a wrapped resume command', () => {
+    const snapshot = paneLine({
+      session: 'wt-_work_repo__term-1',
+      currentCommand: 'codex',
+      fullCommand: ':codex',
+    });
+
+    const rewritten = new SnapshotRewriter().rewrite(snapshot, new Map([
+      ['wt-_work_repo__term-1', { agent: 'codex', session_id: 'codex-123' }],
+    ]));
+
+    expect(rewritten.split('\t')[10]).toBe(':sh -lc \'codex resume codex-123; exec "$SHELL"\'');
+  });
+
   it('keeps the wrapped command inside the resurrect tab-delimited command column', () => {
     const snapshot = paneLine({
       session: 'wt-_work_repo__term-1',

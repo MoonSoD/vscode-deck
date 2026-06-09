@@ -1,5 +1,7 @@
+import type { AgentName } from './agentTypes';
+
 export interface AgentSidecar {
-  agent: 'claude' | 'codex';
+  agent: AgentName;
   session_id: string;
 }
 
