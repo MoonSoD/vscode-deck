@@ -113,6 +113,16 @@ describe('package contributions', () => {
     });
   });
 
+  it('contributes install agent hooks as a command-palette action', () => {
+    expect(pkg.contributes.commands).toContainEqual({
+      command: 'deck.installAgentHooks',
+      title: 'Deck: Install Agent Hooks',
+    });
+    expect(pkg.contributes.menus.commandPalette).toContainEqual({
+      command: 'deck.installAgentHooks',
+    });
+  });
+
   it('contributes add worktree as a repository-only inline tree action', () => {
     expect(pkg.contributes.commands).toContainEqual({
       command: 'deck.addWorktree',

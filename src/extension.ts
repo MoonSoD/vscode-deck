@@ -36,6 +36,9 @@ import { SessionUriCodec } from './terminal/sessionUriCodec';
 import { renderDeckConf } from './terminal/deckConf';
 import { TerminalSnapshotRuntime } from './terminal/terminalSnapshotRuntime';
 import { createRestoreGate } from './terminal/restoreGate';
+import { AgentSidecarStore } from './agent/agentSidecarStore';
+import { HookInstaller } from './agent/hookInstaller';
+import { rewriteTerminalSnapshotAgentSessions } from './agent/terminalSnapshotAgentSessions';
 
 let terminalSnapshotRuntime: TerminalSnapshotRuntime | undefined;
 
@@ -44,13 +47,24 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   await vscode.commands.executeCommand('setContext', 'deck.tmuxAvailable', tmuxAvailability.available);
   const tmuxConfigPath = await writeDeckConf(context);
   const tmux = new TmuxCli(tmuxConfigPath);
+  const deckDir = deckDataDir();
+  const agentSidecars = new AgentSidecarStore(join(deckDir, 'hooks'));
+  const hookInstaller = new HookInstaller({
+    claudeSettingsPath: join(process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude'), 'settings.json'),
+    hookScriptPath: join(deckDir, 'bin', 'deck-claude-hook.sh'),
+    sidecarDir: join(deckDir, 'hooks'),
+  });
 
   terminalSnapshotRuntime = tmuxAvailability.available
     ? new TerminalSnapshotRuntime(
         tmux,
         () => terminalSnapshotSaveScriptPath(context),
         () => terminalSnapshotRestoreScriptPath(context),
-        () => deckDataDir(),
+        () => deckDir,
+        () => rewriteTerminalSnapshotAgentSessions(
+          join(deckDir, 'resurrect', 'last'),
+          agentSidecars,
+        ),
       )
     : undefined;
 
@@ -227,6 +241,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       terminalRemoval.run(node ?? treeView.selection[0]),
     ),
     vscode.commands.registerCommand('deck.terminal.find', () => terminalEditorProvider.showFind()),
+    vscode.commands.registerCommand('deck.installAgentHooks', () => hookInstaller.installClaude()),
     vscode.commands.registerCommand('deck.removeRepository', (node) => removeRepository.run(node)),
     vscode.commands.registerCommand('deck.removeWorktree', (node) => removeWorktree.run(node)),
     vscode.commands.registerCommand('deck.openWorktreeInNewWindow', (node: { worktree: { path: string } }) =>

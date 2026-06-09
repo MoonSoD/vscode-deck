@@ -22,7 +22,7 @@ describe('renderDeckConf', () => {
         'unbind -a -T root',
         "set -g @resurrect-dir '/global/resurrect'",
         "set -g @resurrect-capture-pane-contents 'on'",
-        "set -g @resurrect-processes 'false'",
+        "set -g @resurrect-processes ':all:'",
         "run-shell '/ext/resources/plugins/tmux-resurrect/resurrect.tmux'",
         '',
       ].join('\n'),

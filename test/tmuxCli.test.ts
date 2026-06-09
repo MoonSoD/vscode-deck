@@ -64,10 +64,37 @@ describe('TmuxCli', () => {
         '-d',
         '-s',
         'wt-_work_repo__term-1',
+        '-e',
+        'DECK_SESSION=wt-_work_repo__term-1',
         '-c',
         '/work/repo',
       ],
       ['has-session', '-t', '=wt-_work_repo__term-1'],
+    ]);
+  });
+
+  it('injects DECK_SESSION when creating a Terminal session', async () => {
+    const runner = new MockRunner([
+      { code: 1, stdout: '', stderr: 'missing' },
+      { code: 0, stdout: '', stderr: '' },
+    ]);
+    const tmux = new TmuxCli('/ext/resources/deck.conf', runner);
+
+    await tmux.ensureSession('wt-_work_repo__term-1', '/work/repo');
+
+    expect(runner.calls[1].args).toEqual([
+      '-L',
+      'deck',
+      '-f',
+      '/ext/resources/deck.conf',
+      'new-session',
+      '-d',
+      '-s',
+      'wt-_work_repo__term-1',
+      '-e',
+      'DECK_SESSION=wt-_work_repo__term-1',
+      '-c',
+      '/work/repo',
     ]);
   });
 

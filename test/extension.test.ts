@@ -10,6 +10,8 @@ const vscodeState = vi.hoisted(() => ({
   addTerminalArgs: undefined as unknown[] | undefined,
   addRepositoryRun: vi.fn(),
   addTerminalRun: vi.fn(),
+  hookInstallerArgs: undefined as unknown[] | undefined,
+  hookInstallerInstallClaude: vi.fn(),
   configUpdate: vi.fn(),
   externalWatchDisposables: [] as Array<{ dispose: ReturnType<typeof vi.fn> }>,
   tabGroups: [] as Array<{ viewColumn: number; tabs: Array<{ input?: unknown }> }>,
@@ -228,6 +230,16 @@ vi.mock('../src/terminal/terminalSnapshotRuntime', () => ({
   },
 }));
 
+vi.mock('../src/agent/hookInstaller', () => ({
+  HookInstaller: class {
+    constructor(...args: unknown[]) {
+      vscodeState.hookInstallerArgs = args;
+    }
+
+    installClaude = vscodeState.hookInstallerInstallClaude;
+  },
+}));
+
 vi.mock('../src/terminal/addTerminalCommand', () => ({
   AddTerminalCommand: class {
     constructor(...args: unknown[]) {
@@ -274,6 +286,8 @@ describe('activate', () => {
     vi.clearAllMocks();
     vscodeState.addRepositoryArgs = undefined;
     vscodeState.addTerminalArgs = undefined;
+    vscodeState.hookInstallerArgs = undefined;
+    vscodeState.hookInstallerInstallClaude.mockResolvedValue(undefined);
     vscodeState.externalWatchDisposables = [];
     vscodeState.terminalRemovalArgs = undefined;
     vscodeState.activeTab = undefined;
@@ -508,6 +522,19 @@ describe('activate', () => {
     await addTerminalRegistration[1]({ worktree: { path: '/work/repo' } });
 
     expect(vscodeState.addTerminalRun).toHaveBeenCalledWith({ worktree: { path: '/work/repo' } });
+  });
+
+  it('registers deck.installAgentHooks through HookInstaller', async () => {
+    const context = createContext();
+
+    await activate(context as never);
+    const registration = vscodeState.registerCommand.mock.calls.find(
+      ([command]) => command === 'deck.installAgentHooks',
+    );
+    if (!registration) throw new Error('missing deck.installAgentHooks registration');
+    await registration[1]();
+
+    expect(vscodeState.hookInstallerInstallClaude).toHaveBeenCalledOnce();
   });
 
   it('registers deck.openTerminal and refreshes on workspace/view visibility events', async () => {

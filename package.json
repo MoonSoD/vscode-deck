@@ -148,6 +148,10 @@
         "title": "Deck Terminal: Find"
       },
       {
+        "command": "deck.installAgentHooks",
+        "title": "Deck: Install Agent Hooks"
+      },
+      {
         "command": "deck.refresh",
         "title": "Deck: Refresh",
         "icon": "$(refresh)"
@@ -230,6 +234,9 @@
         {
           "command": "deck.terminal.find",
           "when": "activeCustomEditorId == 'deck.terminal'"
+        },
+        {
+          "command": "deck.installAgentHooks"
         },
         {
           "command": "deck.switchWorktree",

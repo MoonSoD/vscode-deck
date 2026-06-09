@@ -21,6 +21,7 @@ export class TerminalSnapshotRuntime {
     private readonly saveScriptPath: () => string,
     private readonly restoreScriptPath: () => string,
     private readonly anchorCwd: () => string,
+    private readonly beforeRestore: () => Promise<void> = () => Promise.resolve(),
   ) {}
 
   async save(): Promise<void> {
@@ -41,6 +42,7 @@ export class TerminalSnapshotRuntime {
       await this.tmux.newAnchorSession(ANCHOR_SESSION, this.anchorCwd());
       let restored = false;
       try {
+        await this.beforeRestore();
         await this.tmux.runShell(this.restoreScriptPath());
         restored = true;
       } catch (error) {

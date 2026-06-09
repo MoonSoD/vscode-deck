@@ -72,6 +72,8 @@ export class TmuxCli {
       '-d',
       '-s',
       session,
+      '-e',
+      `DECK_SESSION=${session}`,
       '-c',
       cwd,
     ]);

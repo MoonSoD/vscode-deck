@@ -97,6 +97,31 @@ describe('TerminalSnapshotRuntime', () => {
     ]);
   });
 
+  it('rewrites the TerminalSnapshot before restore.sh runs', async () => {
+    const tmux = new FakeTmux();
+    const rewrite = vi.fn(async () => {
+      tmux.calls.push('rewriteSnapshot');
+    });
+    const runtime = new TerminalSnapshotRuntime(
+      tmux,
+      () => '/ext/resources/plugins/tmux-resurrect/scripts/save.sh',
+      () => '/ext/resources/plugins/tmux-resurrect/scripts/restore.sh',
+      () => '/deck/global-storage',
+      rewrite,
+    );
+
+    await expect(runtime.restoreOnActivation()).resolves.toEqual({ restored: true });
+
+    expect(tmux.calls).toEqual([
+      'killSession:__deck_anchor',
+      'isServerRunning',
+      'newAnchorSession:__deck_anchor:/deck/global-storage',
+      'rewriteSnapshot',
+      'runShell:/ext/resources/plugins/tmux-resurrect/scripts/restore.sh',
+      'killSession:__deck_anchor',
+    ]);
+  });
+
   it('clears a stale anchor before deciding whether the server is running', async () => {
     const tmux = new FakeTmux();
     const runtime = new TerminalSnapshotRuntime(
