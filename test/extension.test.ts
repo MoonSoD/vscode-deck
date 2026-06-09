@@ -17,6 +17,7 @@ const vscodeState = vi.hoisted(() => ({
   })),
   executeCommand: vi.fn(),
   terminalRemovalRun: vi.fn(),
+  removeWorktreeRun: vi.fn(),
   terminalRemovalArgs: undefined as unknown[] | undefined,
   lifecycleOrder: [] as string[],
   activeTab: undefined as { input?: unknown } | undefined,
@@ -142,6 +143,7 @@ vi.mock('../src/worktree/addWorktreeCommand', () => ({
 
 vi.mock('../src/worktree/worktreeRemovalCommand', () => ({
   WorktreeRemovalCommand: class {
+    run = vscodeState.removeWorktreeRun;
     constructor(...args: unknown[]) {
       vscodeState.removeWorktreeArgs = args;
     }
@@ -456,19 +458,36 @@ describe('activate', () => {
     });
   });
 
-  it('deletes the selected Terminal when deck.killTerminal is invoked from a keybinding', async () => {
+  it('deletes the selected Terminal when deck.deleteSelected dispatches a Terminal row', async () => {
     const context = createContext();
     const selectedTerminal = { terminal: { sessionName: 's', windowName: 'zsh' } };
 
     await activate(context as never);
     vscodeState.treeViewSelection = [selectedTerminal];
-    const terminalRemovalRegistration = vscodeState.registerCommand.mock.calls.find(
-      ([command]) => command === 'deck.killTerminal',
+    const registration = vscodeState.registerCommand.mock.calls.find(
+      ([command]) => command === 'deck.deleteSelected',
     );
-    if (!terminalRemovalRegistration) throw new Error('missing deck.killTerminal registration');
-    await terminalRemovalRegistration[1]();
+    if (!registration) throw new Error('missing deck.deleteSelected registration');
+    await registration[1]();
 
     expect(vscodeState.terminalRemovalRun).toHaveBeenCalledWith(selectedTerminal);
+    expect(vscodeState.removeWorktreeRun).not.toHaveBeenCalled();
+  });
+
+  it('deletes the selected Worktree when deck.deleteSelected dispatches a Worktree row', async () => {
+    const context = createContext();
+    const selectedWorktree = { worktree: { path: '/work/repo' }, repositoryPath: '/work/repo' };
+
+    await activate(context as never);
+    vscodeState.treeViewSelection = [selectedWorktree];
+    const registration = vscodeState.registerCommand.mock.calls.find(
+      ([command]) => command === 'deck.deleteSelected',
+    );
+    if (!registration) throw new Error('missing deck.deleteSelected registration');
+    await registration[1]();
+
+    expect(vscodeState.removeWorktreeRun).toHaveBeenCalledWith(selectedWorktree);
+    expect(vscodeState.terminalRemovalRun).not.toHaveBeenCalled();
   });
 
   it('registers deck.terminal.find', async () => {

@@ -144,6 +144,10 @@
         "title": "Delete Terminal"
       },
       {
+        "command": "deck.deleteSelected",
+        "title": "Deck: Delete Selected"
+      },
+      {
         "command": "deck.terminal.find",
         "title": "Deck Terminal: Find"
       },
@@ -165,10 +169,10 @@
         "when": "activeCustomEditorId == 'deck.terminal'"
       },
       {
-        "command": "deck.killTerminal",
+        "command": "deck.deleteSelected",
         "key": "ctrl+backspace",
         "mac": "cmd+backspace",
-        "when": "focusedView == 'deck.repositories' && deck.tmuxAvailable"
+        "when": "focusedView == 'deck.repositories'"
       }
     ],
     "menus": {
@@ -230,6 +234,10 @@
         {
           "command": "deck.terminal.find",
           "when": "activeCustomEditorId == 'deck.terminal'"
+        },
+        {
+          "command": "deck.deleteSelected",
+          "when": "false"
         },
         {
           "command": "deck.switchWorktree",
