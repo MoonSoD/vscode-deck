@@ -388,16 +388,17 @@ describe('activate', () => {
     expect(vscodeState.terminalSnapshotRuntimeInstances).toEqual([]);
   });
 
-  it('writes generated deck.conf to global storage and gives tmux that path', async () => {
+  it('writes generated deck.conf to the machine-global Deck dir and gives tmux that path', async () => {
     const context = createContext();
 
     await activate(context as never);
 
-    const generatedConf = join(context.globalStorageUri.fsPath, 'deck.conf');
-    // The snapshot dir lives at a space-free XDG path, NOT under globalStorage:
-    // tmux-resurrect's restore.sh mishandles the space in macOS's
-    // "Application Support" globalStorage path.
-    const resurrectDir = join(context.xdgDataHome, 'deck', 'resurrect');
+    // Both the conf and the snapshot live in one space-free, machine-global
+    // Deck dir — NOT globalStorage (per-install, and macOS's "Application
+    // Support" space breaks tmux-resurrect's restore.sh).
+    const deckDir = join(context.xdgDataHome, 'deck');
+    const generatedConf = join(deckDir, 'deck.conf');
+    const resurrectDir = join(deckDir, 'resurrect');
     const generatedConfContents = readFileSync(generatedConf, 'utf8');
     expect(existsSync(resurrectDir)).toBe(true);
     expect(generatedConfContents).toContain(

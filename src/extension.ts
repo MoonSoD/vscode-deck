@@ -224,7 +224,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       tmux,
       () => terminalSnapshotSaveScriptPath(context),
       () => terminalSnapshotRestoreScriptPath(context),
-      () => context.globalStorageUri.fsPath,
+      () => deckDataDir(),
     );
     await terminalSnapshotRuntime.restoreOnActivation();
     context.subscriptions.push(terminalSnapshotRuntime.startPeriodicSave(5 * 60 * 1000));
@@ -247,12 +247,13 @@ export function deactivate(): Promise<void> | undefined {
 
 async function writeDeckConf(context: vscode.ExtensionContext): Promise<string> {
   const templatePath = join(context.extensionPath, 'resources', 'deck.conf');
-  const generatedPath = join(context.globalStorageUri.fsPath, 'deck.conf');
-  const resurrectDir = terminalSnapshotDir();
+  const dataDir = deckDataDir();
+  const generatedPath = join(dataDir, 'deck.conf');
+  const resurrectDir = join(dataDir, 'resurrect');
   const pluginPath = tmuxResurrectPath(context, 'resurrect.tmux');
 
   const template = await readFile(templatePath, 'utf8');
-  await mkdir(context.globalStorageUri.fsPath, { recursive: true });
+  // resurrectDir is under dataDir, so this creates both.
   await mkdir(resurrectDir, { recursive: true });
   await writeFile(generatedPath, renderDeckConf(template, { pluginPath, resurrectDir }), 'utf8');
   return generatedPath;
@@ -270,14 +271,17 @@ function tmuxResurrectPath(context: vscode.ExtensionContext, ...parts: string[])
   return join(context.extensionPath, 'resources', 'plugins', 'tmux-resurrect', ...parts);
 }
 
-// tmux-resurrect's restore.sh mishandles a space in @resurrect-dir, and macOS's
-// globalStorage path lives under "Application Support". Keep the generated conf
-// in globalStorage but point the TerminalSnapshot dir at a space-free,
-// Deck-namespaced XDG location — isolated from the user's own
-// ~/.local/share/tmux/resurrect.
-function terminalSnapshotDir(): string {
+// Deck's machine-global runtime dir, holding the generated DeckSocket conf and
+// the TerminalSnapshot. Deliberately NOT globalStorage: the DeckSocket
+// (`-L deck`) is one tmux server per user, but globalStorage is per-install
+// (VS Code Stable and Insiders would generate competing conf/snapshots for the
+// one shared socket) and, on macOS, lives under "~/Library/Application
+// Support/…" whose space breaks tmux-resurrect's restore.sh. A space-free
+// machine-global dir matches the machine-global socket. Isolated from the
+// user's own ~/.local/share/tmux/resurrect.
+function deckDataDir(): string {
   const dataHome = process.env.XDG_DATA_HOME || join(homedir(), '.local', 'share');
-  return join(dataHome, 'deck', 'resurrect');
+  return join(dataHome, 'deck');
 }
 
 interface RepositoryRegistryReader {

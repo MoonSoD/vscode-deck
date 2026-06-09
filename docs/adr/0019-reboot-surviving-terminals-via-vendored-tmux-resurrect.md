@@ -71,28 +71,36 @@ and we verified both against the plugin source and a working reference
    short, and a crash never calls it. Worst case: ≤5 min of scrollback lost on
    a hard crash. No per-create/kill saves; no manual save button (descoped).
 
-6. **The conf becomes generated (in `globalStorage`); the snapshot dir is a
-   space-free XDG path.** `resources/deck.conf` becomes a template with
-   `__DECK_RESURRECT_PLUGIN__` / `__DECK_RESURRECT_DIR__` placeholders; Deck
-   substitutes the resolved paths, writes the result to
-   `<globalStorageUri>/deck.conf`, and spawns
-   `tmux -L deck -f <globalStorageUri>/deck.conf` (tmux opens `-f` via argv, so
-   the space in macOS's globalStorage path is harmless there).
+6. **The conf becomes generated; both it and the snapshot live in one
+   machine-global Deck dir — not `globalStorage`.** `resources/deck.conf`
+   becomes a template with `__DECK_RESURRECT_PLUGIN__` / `__DECK_RESURRECT_DIR__`
+   placeholders; Deck substitutes the resolved paths and writes the result to
+   **`${XDG_DATA_HOME:-~/.local/share}/deck/deck.conf`**, with the snapshot dir
+   alongside at **`…/deck/resurrect`**. Deck spawns `tmux -L deck -f <that conf>`.
 
-   The **snapshot dir**, however, must **not** live under `globalStorage`.
-   `tmux-resurrect`'s `restore.sh` silently restores nothing when
-   `@resurrect-dir` contains a space (verified — see Validation), and on macOS
-   `globalStorageUri` is always under `~/Library/Application Support/…`. So the
-   snapshot dir is **`${XDG_DATA_HOME:-~/.local/share}/deck/resurrect`** — a
-   space-free, Deck-namespaced location. It is still isolated from the user's
-   own resurrect (`tmux/resurrect`), satisfying the original requirement.
+   `globalStorage` is rejected for **two** reasons:
+   - **Spaces.** `tmux-resurrect`'s `restore.sh` silently restores nothing when
+     `@resurrect-dir` contains a space (verified — see Validation), and macOS's
+     `globalStorageUri` is always under `~/Library/Application Support/…`.
+   - **Wrong scope.** The DeckSocket (`-L deck`) is **one tmux server per user**
+     (`/tmp/tmux-$UID/deck`), shared across every VS Code instance — but
+     `globalStorage` is **per-install** (Stable and Insiders have separate
+     dirs). Per-install storage for a machine-global server means two installs
+     would generate competing confs/snapshots for the one socket. A
+     machine-global dir matches the machine-global socket.
 
-   > **Supersedes this ADR's own earlier decision** to keep the snapshot dir at
-   > `<globalStorageUri>/resurrect/`. That was evidence-backed (globalStorage is
-   > VS Code's recommended store) but defeated by resurrect's space-in-path bug
-   > on the primary platform. The trade-off lost: the snapshot dir is no longer
-   > auto-cleaned on uninstall. Accepted — correctness over tidiness; the
-   > snapshot is disposable regenerable state anyway.
+   The dir is `deck`-namespaced, so it stays isolated from the user's own
+   resurrect (`…/tmux/resurrect`). The generated conf is rewritten every
+   activation, so it needs no managed persistence. `XDG_DATA_HOME` is honored
+   for convention (the one knob that could reintroduce a space if a user sets it
+   to a spaced path; documented). Under Remote-WSL/SSH the extension host,
+   `homedir()`, and tmux all resolve in the same environment, so the dir is a
+   clean Linux path there.
+
+   > **Supersedes this ADR's own earlier decision** to keep storage under
+   > `<globalStorageUri>/`. That was evidence-backed (globalStorage is VS Code's
+   > recommended store) but wrong here on both counts above. The only trade lost
+   > is uninstall auto-cleanup of a regenerable dir — accepted.
 
 7. **New conf lines** (added to the ADR-0008 §11 set, unchanged otherwise):
 
