@@ -1,4 +1,9 @@
-import { resolveDeckTmuxOptions, type DeckTmuxOptions } from './deckTmuxOptions';
+import {
+  DEFAULT_HISTORY_LIMIT,
+  resolveDeckTmuxOptions,
+  type DeckTmuxOption,
+  type DeckTmuxOptions,
+} from './deckTmuxOptions';
 
 export interface DeckConfPaths {
   pluginPath: string;
@@ -10,23 +15,29 @@ export function renderDeckConf(
   paths: DeckConfPaths,
   tmuxOptions: DeckTmuxOptions = resolveDeckTmuxOptions({}),
 ): string {
-  const automaticRenameFormat = tmuxOptions.options.find((option) =>
-    option.option === 'automatic-rename-format'
-  )?.value;
-  const historyLimit = tmuxOptions.options.find((option) =>
-    option.option === 'history-limit'
-  )?.value ?? '50000';
+  const automaticRenameFormat = tmuxOptionValue(tmuxOptions, 'automatic-rename-format');
+  const historyLimit = tmuxOptionValue(tmuxOptions, 'history-limit') ?? String(DEFAULT_HISTORY_LIMIT);
 
   return template
     .replaceAll('__DECK_RESURRECT_PLUGIN__', paths.pluginPath)
     .replaceAll('__DECK_RESURRECT_DIR__', paths.resurrectDir)
     .replaceAll(
       '__DECK_AUTOMATIC_RENAME_FORMAT__',
-      automaticRenameFormat === null || automaticRenameFormat === undefined
-        ? ''
-        : `set -g automatic-rename-format ${quoteTmuxConfValue(automaticRenameFormat)}\n`,
+      renderAutomaticRenameFormat(automaticRenameFormat),
     )
     .replaceAll('__DECK_HISTORY_LIMIT__', historyLimit);
+}
+
+function tmuxOptionValue(
+  tmuxOptions: DeckTmuxOptions,
+  optionName: DeckTmuxOption['option'],
+): string | null | undefined {
+  return tmuxOptions.options.find((option) => option.option === optionName)?.value;
+}
+
+function renderAutomaticRenameFormat(value: string | null | undefined): string {
+  if (value === null || value === undefined) return '';
+  return `set -g automatic-rename-format ${quoteTmuxConfValue(value)}\n`;
 }
 
 function quoteTmuxConfValue(value: string): string {

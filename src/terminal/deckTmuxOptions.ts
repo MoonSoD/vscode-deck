@@ -13,7 +13,7 @@ export interface DeckTmuxOptions {
   warnings: string[];
 }
 
-const DEFAULT_HISTORY_LIMIT = 50000;
+export const DEFAULT_HISTORY_LIMIT = 50000;
 const INVALID_AUTOMATIC_RENAME_FORMAT_WARNING =
   'deck.tmux.automaticRenameFormat cannot contain tabs or newlines; using tmux default.';
 
