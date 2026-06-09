@@ -8,6 +8,36 @@
       "args": ["--extensionDevelopmentPath=${workspaceFolder}"],
       "outFiles": ["${workspaceFolder}/dist/**/*.js"],
       "preLaunchTask": "npm: build"
+    },
+    // QA: verify "no agents detected -> no setup notification". Hides claude/codex
+    // from agent detection while keeping tmux working (so the tmux-availability
+    // gate still passes and the silence is really about agents).
+    //
+    // One-time setup (re-run after a reboot — /tmp is ephemeral):
+    //   mkdir -p /tmp/deck-qa/bin
+    //   ln -sf /opt/homebrew/bin/tmux /tmp/deck-qa/bin/tmux   # REAL binary, not the zsh `tmux` alias
+    //   ln -sf /usr/bin/git           /tmp/deck-qa/bin/git
+    //   rm -rf /tmp/deck-qa/none-claude /tmp/deck-qa/none-codex
+    //
+    // If tmux/claude/codex move, re-check with `which -a tmux claude codex` and adjust.
+    // Run: pick this config in Run & Debug, F5. Expect no notification, and
+    // "Deck: Install agent hooks" -> "No Claude or Codex installation detected."
+    {
+      "name": "Run Extension (no agents)",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": ["--extensionDevelopmentPath=${workspaceFolder}"],
+      "outFiles": ["${workspaceFolder}/dist/**/*.js"],
+      "preLaunchTask": "npm: build",
+      "env": {
+        // /tmp/deck-qa/bin holds ONLY tmux + git symlinks (codex lives in
+        // /opt/homebrew/bin and claude in ~/.local/bin, so we can't just keep
+        // those dirs). This PATH makes tmux resolvable but claude/codex not.
+        "PATH": "/tmp/deck-qa/bin:/usr/bin:/bin",
+        // Config-dir lookups point at paths that DON'T exist (don't create them).
+        "CLAUDE_CONFIG_DIR": "/tmp/deck-qa/none-claude",
+        "CODEX_HOME": "/tmp/deck-qa/none-codex"
+      }
     }
   ]
 }
