@@ -62,14 +62,19 @@ export class AgentSetupPrompt {
     }
     if (action !== setupAction) return;
 
-    const selected = agents.length === 1
-      ? agents
-      : (await this.deps.notifications.showQuickPick(
-          agents.map((agent) => ({ label: agentLabel(agent), agent, picked: true })),
-          { canPickMany: true, placeHolder: 'Select agents for Deck resume hooks' },
-        ))?.map((item) => item.agent) ?? [];
+    const selected = await this.selectAgentsToInstall(agents);
     if (selected.length === 0) return;
     await this.deps.installer.install(selected);
+  }
+
+  private async selectAgentsToInstall(agents: readonly AgentName[]): Promise<readonly AgentName[]> {
+    if (agents.length === 1) return agents;
+
+    const selected = await this.deps.notifications.showQuickPick(
+      agents.map((agent) => ({ label: agentLabel(agent), agent, picked: true })),
+      { canPickMany: true, placeHolder: 'Select agents for Deck resume hooks' },
+    );
+    return selected?.map((item) => item.agent) ?? [];
   }
 
   private async installedAgents(detected: readonly DetectedAgent[]): Promise<Set<AgentName>> {
