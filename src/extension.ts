@@ -207,7 +207,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 }
 
 export function deactivate(): void {
-  void terminalSnapshotRuntime?.save().catch((error) => {
+  const runtime = terminalSnapshotRuntime;
+  terminalSnapshotRuntime = undefined;
+
+  void runtime?.save().catch((error) => {
     console.warn('Deck: saving TerminalSnapshot during deactivate failed', error);
   });
 }

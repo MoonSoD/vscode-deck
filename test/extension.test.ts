@@ -397,6 +397,7 @@ describe('activate', () => {
     expect(context.subscriptions).toContain(runtime.periodicSave);
 
     deactivate();
+    deactivate();
 
     expect(runtime.save).toHaveBeenCalledOnce();
   });
