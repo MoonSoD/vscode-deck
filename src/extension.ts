@@ -51,7 +51,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const agentSidecars = new AgentSidecarStore(join(deckDir, 'hooks'));
   const hookInstaller = new HookInstaller({
     claudeSettingsPath: join(process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude'), 'settings.json'),
-    hookScriptPath: join(deckDir, 'bin', 'deck-claude-hook.sh'),
+    codexHooksPath: join(process.env.CODEX_HOME || join(homedir(), '.codex'), 'hooks.json'),
+    hookScriptPath: join(deckDir, 'bin', 'deck-agent-hook.sh'),
     sidecarDir: join(deckDir, 'hooks'),
   });
 
@@ -241,7 +242,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       terminalRemoval.run(node ?? treeView.selection[0]),
     ),
     vscode.commands.registerCommand('deck.terminal.find', () => terminalEditorProvider.showFind()),
-    vscode.commands.registerCommand('deck.installAgentHooks', () => hookInstaller.installClaude()),
+    vscode.commands.registerCommand('deck.installAgentHooks', async () => {
+      await hookInstaller.installClaude();
+      await hookInstaller.installCodex();
+    }),
     vscode.commands.registerCommand('deck.removeRepository', (node) => removeRepository.run(node)),
     vscode.commands.registerCommand('deck.removeWorktree', (node) => removeWorktree.run(node)),
     vscode.commands.registerCommand('deck.openWorktreeInNewWindow', (node: { worktree: { path: string } }) =>

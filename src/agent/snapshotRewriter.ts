@@ -1,5 +1,5 @@
 export interface AgentSidecar {
-  agent: 'claude';
+  agent: 'claude' | 'codex';
   session_id: string;
 }
 
@@ -19,14 +19,22 @@ export class SnapshotRewriter {
     const currentCommand = columns[9];
     const sidecar = sidecars.get(sessionName);
     columns[10] = ':';
-    if (sidecar?.agent === 'claude' && currentCommand === 'claude') {
-      columns[10] = `:${this.wrappedClaudeResume(sidecar.session_id)}`;
+    if (sidecar && this.isRunningAgent(sidecar.agent, currentCommand)) {
+      columns[10] = `:${this.wrappedResume(sidecar.agent, sidecar.session_id)}`;
     }
     return columns.join('\t');
   }
 
-  private wrappedClaudeResume(sessionId: string): string {
-    return `sh -lc '${shellQuote(`claude --resume ${sessionId}; exec "$SHELL"`)}'`;
+  private isRunningAgent(agent: AgentSidecar['agent'], currentCommand: string): boolean {
+    if (agent === 'claude') return currentCommand === 'claude';
+    return currentCommand === 'codex' || currentCommand.startsWith('codex-');
+  }
+
+  private wrappedResume(agent: AgentSidecar['agent'], sessionId: string): string {
+    const resumeCommand = agent === 'claude'
+      ? `claude --resume ${sessionId}`
+      : `codex resume ${sessionId}`;
+    return `sh -lc '${shellQuote(`${resumeCommand}; exec "$SHELL"`)}'`;
   }
 }
 

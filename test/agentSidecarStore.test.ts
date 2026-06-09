@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -25,6 +25,21 @@ describe('AgentSidecarStore', () => {
     });
     await expect(store.readAll()).resolves.toEqual(new Map([
       ['wt-_work_repo__term-1', { agent: 'claude', session_id: 'abc-123' }],
+    ]));
+  });
+
+  it('reads Codex sidecars by Terminal session name', async () => {
+    const root = tempRoot();
+    mkdirSync(root, { recursive: true });
+    writeFileSync(
+      join(root, 'wt-_work_repo__term-1.json'),
+      '{"agent":"codex","session_id":"codex-123"}\n',
+      'utf8',
+    );
+    const store = new AgentSidecarStore(root);
+
+    await expect(store.readAll()).resolves.toEqual(new Map([
+      ['wt-_work_repo__term-1', { agent: 'codex', session_id: 'codex-123' }],
     ]));
   });
 

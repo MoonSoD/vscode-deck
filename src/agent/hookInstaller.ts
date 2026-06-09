@@ -3,10 +3,11 @@ import { dirname } from 'node:path';
 import { renderAgentHookScript } from './agentHookScript';
 
 const DECK_HOOK_ARGS = ['--deck-agent-session-hook'];
-const CLAUDE_EVENTS = ['SessionStart', 'UserPromptSubmit'] as const;
+const AGENT_EVENTS = ['SessionStart', 'UserPromptSubmit'] as const;
 
 export interface HookInstallerPaths {
   claudeSettingsPath: string;
+  codexHooksPath: string;
   hookScriptPath: string;
   sidecarDir: string;
 }
@@ -24,7 +25,7 @@ interface HookGroup {
   [key: string]: unknown;
 }
 
-interface ClaudeSettings {
+interface AgentHookConfig {
   hooks?: Record<string, HookGroup[]>;
   [key: string]: unknown;
 }
@@ -35,17 +36,17 @@ export class HookInstaller {
   async installClaude(): Promise<void> {
     await this.writeHookScript();
 
-    const settings = await this.readClaudeSettings();
-    settings.hooks = settings.hooks ?? {};
-    for (const event of CLAUDE_EVENTS) {
-      settings.hooks[event] = [
-        ...removeDeckHookGroups(settings.hooks[event] ?? []),
-        deckHookGroup(this.paths.hookScriptPath),
-      ];
-    }
+    const settings = await this.readConfig(this.paths.claudeSettingsPath);
+    mergeDeckHook(settings, deckClaudeHookGroup(this.paths.hookScriptPath));
+    await this.writeConfig(this.paths.claudeSettingsPath, settings);
+  }
 
-    await mkdir(dirname(this.paths.claudeSettingsPath), { recursive: true });
-    await writeFile(this.paths.claudeSettingsPath, `${JSON.stringify(settings, null, 2)}\n`, 'utf8');
+  async installCodex(): Promise<void> {
+    await this.writeHookScript();
+
+    const hooks = await this.readConfig(this.paths.codexHooksPath);
+    mergeDeckHook(hooks, deckCodexHookGroup(this.paths.hookScriptPath));
+    await this.writeConfig(this.paths.codexHooksPath, hooks);
   }
 
   private async writeHookScript(): Promise<void> {
@@ -54,23 +55,48 @@ export class HookInstaller {
     await chmod(this.paths.hookScriptPath, 0o755);
   }
 
-  private async readClaudeSettings(): Promise<ClaudeSettings> {
+  private async readConfig(path: string): Promise<AgentHookConfig> {
     try {
-      return JSON.parse(await readFile(this.paths.claudeSettingsPath, 'utf8')) as ClaudeSettings;
+      return JSON.parse(await readFile(path, 'utf8')) as AgentHookConfig;
     } catch (error) {
       if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return {};
       throw error;
     }
   }
+
+  private async writeConfig(path: string, config: AgentHookConfig): Promise<void> {
+    await mkdir(dirname(path), { recursive: true });
+    await writeFile(path, `${JSON.stringify(config, null, 2)}\n`, 'utf8');
+  }
 }
 
-function deckHookGroup(scriptPath: string): HookGroup {
+function mergeDeckHook(config: AgentHookConfig, hookGroup: HookGroup): void {
+  config.hooks = config.hooks ?? {};
+  for (const event of AGENT_EVENTS) {
+    config.hooks[event] = [
+      ...removeDeckHookGroups(config.hooks[event] ?? []),
+      hookGroup,
+    ];
+  }
+}
+
+function deckClaudeHookGroup(scriptPath: string): HookGroup {
   return {
     matcher: '',
     hooks: [{
       type: 'command',
       command: scriptPath,
       args: DECK_HOOK_ARGS,
+    }],
+  };
+}
+
+function deckCodexHookGroup(scriptPath: string): HookGroup {
+  return {
+    matcher: '',
+    hooks: [{
+      type: 'command',
+      command: `'${quoteForSingleQuotedShell(scriptPath)}' ${DECK_HOOK_ARGS[0]} codex`,
     }],
   };
 }
@@ -86,9 +112,19 @@ function removeDeckHookGroups(groups: HookGroup[]): HookGroup[] {
 
 function isDeckHook(hook: HookHandler): boolean {
   return (
-    hook.type === 'command' &&
-    Array.isArray(hook.args) &&
-    hook.args.length === DECK_HOOK_ARGS.length &&
-    hook.args.every((arg, index) => arg === DECK_HOOK_ARGS[index])
+    hook.type === 'command' && (
+      (
+        Array.isArray(hook.args) &&
+        hook.args[0] === DECK_HOOK_ARGS[0]
+      ) ||
+      (
+        typeof hook.command === 'string' &&
+        hook.command.includes(DECK_HOOK_ARGS[0])
+      )
+    )
   );
+}
+
+function quoteForSingleQuotedShell(value: string): string {
+  return value.replaceAll("'", "'\"'\"'");
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SnapshotRewriter } from '../src/agent/snapshotRewriter';
+import { SnapshotRewriter, type AgentSidecar } from '../src/agent/snapshotRewriter';
 
 describe('SnapshotRewriter', () => {
   it('rewrites a Claude pane with a sidecar to a wrapped resume command', () => {
@@ -64,6 +64,32 @@ describe('SnapshotRewriter', () => {
         ':',
       ].join('\t'),
     ]);
+  });
+
+  it('rewrites Codex panes, including truncated command names, to wrapped resume commands', () => {
+    const snapshot = [
+      paneLine({
+        session: 'wt-_work_repo__term-1',
+        currentCommand: 'codex',
+        fullCommand: ':codex',
+      }),
+      paneLine({
+        session: 'wt-_work_repo__term-2',
+        currentCommand: 'codex-x86_64-a',
+        fullCommand: ':codex',
+      }),
+    ].join('\n');
+
+    const sidecars = new Map<string, AgentSidecar>([
+      ['wt-_work_repo__term-1', { agent: 'codex', session_id: 'codex-123' }],
+      ['wt-_work_repo__term-2', { agent: 'codex', session_id: 'codex-456' }],
+    ]);
+
+    const rewritten = new SnapshotRewriter().rewrite(snapshot, sidecars);
+
+    const lines = rewritten.split('\n');
+    expect(lines[0].split('\t')[10]).toBe(':sh -lc \'codex resume codex-123; exec "$SHELL"\'');
+    expect(lines[1].split('\t')[10]).toBe(':sh -lc \'codex resume codex-456; exec "$SHELL"\'');
   });
 
   it('restores exited-agent and no-sidecar panes as plain shells', () => {

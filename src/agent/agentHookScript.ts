@@ -3,6 +3,12 @@ export function renderAgentHookScript(sidecarDir: string): string {
     '#!/bin/sh',
     'set -eu',
     '',
+    'agent="${2:-claude}"',
+    'case "$agent" in',
+    '  claude|codex) ;;',
+    '  *) exit 0 ;;',
+    'esac',
+    '',
     'payload=$(cat)',
     'if [ -z "${DECK_SESSION:-}" ]; then',
     '  exit 0',
@@ -15,7 +21,7 @@ export function renderAgentHookScript(sidecarDir: string): string {
     '',
     `sidecar_dir='${quoteForSingleQuotedShell(sidecarDir)}'`,
     'mkdir -p "$sidecar_dir"',
-    'printf \'{"agent":"claude","session_id":"%s"}\\n\' "$session_id" > "$sidecar_dir/$DECK_SESSION.json"',
+    'printf \'{"agent":"%s","session_id":"%s"}\\n\' "$agent" "$session_id" > "$sidecar_dir/$DECK_SESSION.json"',
     '',
   ].join('\n');
 }
