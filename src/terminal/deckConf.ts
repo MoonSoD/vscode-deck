@@ -41,5 +41,9 @@ function renderAutomaticRenameFormat(value: string | null | undefined): string {
 }
 
 function quoteTmuxConfValue(value: string): string {
-  return `'${value.replaceAll("'", "''")}'`;
+  // tmux config quoting is shell-style, not SQL-style: a literal single quote
+  // must close the quoted run, emit an escaped quote, and reopen ('\''). SQL's
+  // '' doubling silently strips the quotes on conf load, diverging from the
+  // verbatim value the live `set -g` path stores.
+  return `'${value.replaceAll("'", "'\\''")}'`;
 }

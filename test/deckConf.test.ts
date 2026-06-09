@@ -42,7 +42,7 @@ describe('renderDeckConf', () => {
     }))).toBe(
       [
         'set -g automatic-rename on',
-        "set -g automatic-rename-format 'cmd ''#{pane_current_command}'''",
+        "set -g automatic-rename-format 'cmd '\\''#{pane_current_command}'\\'''",
         'set -g history-limit 120000',
         'set -g destroy-unattached off',
         'set -g status off',
