@@ -112,6 +112,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const addTerminal = new AddTerminalCommand(
     tmux,
     refreshTree,
+    undefined,
+    ensureSnapshotRestored,
   );
   const terminalEditorProvider = new TerminalEditorProvider(
     context.extensionUri,

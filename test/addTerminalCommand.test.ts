@@ -67,6 +67,29 @@ describe('AddTerminalCommand', () => {
     expect(refresh).toHaveBeenCalledOnce();
   });
 
+  it('restores the TerminalSnapshot before creating, so a + right after a server death does not clobber it', async () => {
+    const order: string[] = [];
+    const tmux = {
+      listSessions: vi.fn(async () => {
+        order.push('list');
+        return [];
+      }),
+      ensureSession: vi.fn(async () => {
+        order.push('ensure');
+      }),
+    };
+    const beforeCreate = vi.fn(async () => {
+      order.push('restore');
+    });
+
+    await new AddTerminalCommand(tmux, vi.fn(), undefined, beforeCreate).run({
+      worktree: { path: '/work/repo' },
+    });
+
+    expect(beforeCreate).toHaveBeenCalledOnce();
+    expect(order).toEqual(['restore', 'list', 'ensure']);
+  });
+
   it('creates a foreign-worktree tmux session and opens it in place without switching', async () => {
     vscodeState.workspaceFolders = [{ uri: { fsPath: '/work/alpha-main' } }];
     const tmux = {

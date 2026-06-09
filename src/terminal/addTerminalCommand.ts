@@ -23,10 +23,17 @@ export class AddTerminalCommand {
     private readonly tmux: AddTerminalTmuxCli,
     private readonly refresh: () => void = () => undefined,
     private readonly sessionUriCodec: SessionUriCodec = new SessionUriCodec(),
+    // Awaited before creating a terminal. If the DeckSocket died, this restores
+    // the existing TerminalSnapshot first, so a `+` right after a server death
+    // adds the new terminal alongside the restored ones instead of starting a
+    // lone blank server that the next save would write over the good snapshot.
+    private readonly beforeCreate: () => Promise<void> = () => Promise.resolve(),
   ) {}
 
   async run(node: WorktreeNodeLike | undefined): Promise<void> {
     if (!node) return;
+
+    await this.beforeCreate();
 
     const prefix = terminalSessionPrefix(node.worktree.path);
     const existing = await this.tmux.listSessions(prefix);
