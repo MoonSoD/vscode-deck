@@ -6,6 +6,7 @@ export type WatchCommonDir = (commonDir: string, onChange: () => void) => Dispos
 
 export class ExternalGitWatch implements Disposable {
   private readonly watches = new Map<string, Disposable>();
+  private disposed = false;
 
   constructor(
     private readonly watchCommonDir: WatchCommonDir,
@@ -13,6 +14,8 @@ export class ExternalGitWatch implements Disposable {
   ) {}
 
   sync(commonDirs: ReadonlySet<string>): void {
+    if (this.disposed) return;
+
     for (const [commonDir, watch] of this.watches) {
       if (commonDirs.has(commonDir)) continue;
       watch.dispose();
@@ -26,6 +29,7 @@ export class ExternalGitWatch implements Disposable {
   }
 
   dispose(): void {
+    this.disposed = true;
     for (const watch of this.watches.values()) {
       watch.dispose();
     }

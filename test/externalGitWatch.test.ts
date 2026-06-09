@@ -35,4 +35,14 @@ describe('ExternalGitWatch', () => {
     expect(disposables.get('/git/beta')?.dispose).toHaveBeenCalledOnce();
     expect(disposables.get('/git/gamma')?.dispose).toHaveBeenCalledOnce();
   });
+
+  it('does not create watches after disposal', () => {
+    const watchCommonDir = vi.fn(() => ({ dispose: vi.fn() }));
+    const externalGitWatch = new ExternalGitWatch(watchCommonDir);
+
+    externalGitWatch.dispose();
+    externalGitWatch.sync(new Set(['/git/alpha']));
+
+    expect(watchCommonDir).not.toHaveBeenCalled();
+  });
 });
