@@ -79,6 +79,7 @@ const vscodeState = vi.hoisted(() => ({
   configListeners: [] as Array<(event: { affectsConfiguration(section: string): boolean }) => unknown>,
   rewriteTerminalSnapshotAgentSessions: vi.fn(async () => undefined),
   showWarningMessage: vi.fn(),
+  showInformationMessage: vi.fn(),
   treeViewSelection: [] as unknown[],
 }));
 
@@ -108,6 +109,7 @@ vi.mock('vscode', () => ({
     createTreeView: vscodeState.createTreeView,
     registerCustomEditorProvider: vscodeState.registerCustomEditorProvider,
     showWarningMessage: vscodeState.showWarningMessage,
+    showInformationMessage: vscodeState.showInformationMessage,
     onDidCloseTerminal: vscodeState.onDidCloseTerminal,
     onDidChangeActiveTerminal: vscodeState.onDidChangeActiveTerminal,
     onDidOpenTerminal: vscodeState.onDidOpenTerminal,
@@ -349,7 +351,7 @@ describe('activate', () => {
     vscodeState.agentSetupPromptArgs = undefined;
     vscodeState.agentSetupPromptRun.mockResolvedValue(undefined);
     vscodeState.hookInstallerArgs = undefined;
-    vscodeState.hookInstallerRemove.mockResolvedValue(undefined);
+    vscodeState.hookInstallerRemove.mockResolvedValue([]);
     vscodeState.externalWatchDisposables = [];
     vscodeState.terminalRemovalArgs = undefined;
     vscodeState.activeTab = undefined;

@@ -65,11 +65,13 @@ export class HookInstaller {
     return previews;
   }
 
-  async remove(): Promise<void> {
-    await this.removeDeckHooksFrom(this.paths.claudeSettingsPath);
-    if (this.paths.codexHooksPath) {
-      await this.removeDeckHooksFrom(this.paths.codexHooksPath);
+  async remove(): Promise<AgentName[]> {
+    const removed: AgentName[] = [];
+    if (await this.removeDeckHooksFrom(this.paths.claudeSettingsPath)) removed.push('claude');
+    if (this.paths.codexHooksPath && await this.removeDeckHooksFrom(this.paths.codexHooksPath)) {
+      removed.push('codex');
     }
+    return removed;
   }
 
   async isInstalled(agent: AgentName): Promise<boolean> {
@@ -124,9 +126,9 @@ export class HookInstaller {
     }
   }
 
-  private async removeDeckHooksFrom(configPath: string): Promise<void> {
+  private async removeDeckHooksFrom(configPath: string): Promise<boolean> {
     const settings = await this.readSettings(configPath);
-    if (!settings.hooks) return;
+    if (!settings.hooks) return false;
 
     const hooks = { ...settings.hooks };
     let removed = false;
@@ -141,7 +143,7 @@ export class HookInstaller {
       }
     }
 
-    if (!removed) return;
+    if (!removed) return false;
 
     if (Object.keys(hooks).length > 0) {
       settings.hooks = hooks;
@@ -150,6 +152,7 @@ export class HookInstaller {
     }
 
     await writeFile(configPath, `${JSON.stringify(settings, null, 2)}\n`, 'utf8');
+    return true;
   }
 
   private configFor(agent: AgentName): { configPath: string; scriptPath: string } {

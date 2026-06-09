@@ -286,7 +286,7 @@ describe('HookInstaller', () => {
       sidecarDir: join(root, '.local', 'share', 'deck', 'hooks'),
     });
 
-    await installer.remove();
+    await expect(installer.remove()).resolves.toEqual(['claude', 'codex']);
 
     expect(JSON.parse(readFileSync(claudeSettingsPath, 'utf8'))).toEqual({
       hooks: {
@@ -332,7 +332,7 @@ describe('HookInstaller', () => {
       sidecarDir: join(root, '.local', 'share', 'deck', 'hooks'),
     });
 
-    await installer.remove();
+    await expect(installer.remove()).resolves.toEqual([]);
 
     expect(readFileSync(claudeSettingsPath, 'utf8')).toBe(originalSettings);
     expect(existsSync(codexHooksPath)).toBe(false);

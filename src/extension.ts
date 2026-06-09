@@ -276,8 +276,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand('deck.terminal.find', () => terminalEditorProvider.showFind()),
     vscode.commands.registerCommand('deck.installAgentHooks', () => agentSetupPrompt.run({ explicit: true })),
     vscode.commands.registerCommand('deck.removeAgentHooks', async () => {
-      await hookInstaller.remove();
+      const removed = await hookInstaller.remove();
       await context.globalState.update(AGENT_HOOK_SETUP_DISMISSED_KEY, true);
+      const labels = removed.map((agent) => (agent === 'claude' ? 'Claude' : 'Codex'));
+      void vscode.window.showInformationMessage(
+        labels.length > 0
+          ? `Removed Deck agent hooks for ${labels.join(' and ')}. Your other hooks are untouched.`
+          : 'No Deck agent hooks were installed.',
+      );
     }),
     vscode.commands.registerCommand('deck.removeRepository', (node) => removeRepository.run(node)),
     vscode.commands.registerCommand('deck.removeWorktree', (node) => removeWorktree.run(node)),
