@@ -1,4 +1,9 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+const tempRoots: string[] = [];
 
 const vscodeState = vi.hoisted(() => ({
   addRepositoryArgs: undefined as unknown[] | undefined,
@@ -41,6 +46,7 @@ const vscodeState = vi.hoisted(() => ({
   removeWorktreeArgs: undefined as unknown[] | undefined,
   settingsRepositories: ['/settings/repo'],
   tmuxInstances: [] as Array<{
+    configPath: string;
     killSession: ReturnType<typeof vi.fn>;
     listSessions: ReturnType<typeof vi.fn>;
   }>,
@@ -175,6 +181,7 @@ vi.mock('../src/terminal/tmuxPreflight', () => ({
 
 vi.mock('../src/terminal/tmuxCli', () => ({
   TmuxCli: class {
+    configPath: string;
     killSession = vi.fn(async () => undefined);
     windowName = vi.fn(async () => 'zsh');
     listSessions = vi.fn(async () => {
@@ -182,7 +189,8 @@ vi.mock('../src/terminal/tmuxCli', () => ({
       return [{ sessionName: 'wt-_work_alpha-main__term-1', windowName: 'zsh' }];
     });
 
-    constructor() {
+    constructor(configPath: string) {
+      this.configPath = configPath;
       vscodeState.tmuxInstances.push(this);
     }
   },
@@ -251,8 +259,16 @@ describe('activate', () => {
     vscodeState.tmuxPreflight.mockResolvedValue({ available: true });
   });
 
+  afterEach(() => {
+    for (const root of tempRoots.splice(0)) {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   function createContext(globalRepositories: string[] = []) {
     const values: Record<string, unknown> = { 'deck.repositoryRegistry': globalRepositories };
+    const globalStoragePath = mkdtempSync(join(tmpdir(), 'deck-test-global-'));
+    tempRoots.push(globalStoragePath);
     return {
       globalState: {
         get: <T>(key: string, defaultValue: T) => (values[key] as T | undefined) ?? defaultValue,
@@ -267,8 +283,9 @@ describe('activate', () => {
         }),
       },
       subscriptions: [] as Array<{ dispose(): void }>,
-      extensionPath: '/ext',
-      extensionUri: { fsPath: '/ext' },
+      extensionPath: process.cwd(),
+      extensionUri: { fsPath: process.cwd() },
+      globalStorageUri: { fsPath: globalStoragePath },
       values,
     };
   }
@@ -323,6 +340,23 @@ describe('activate', () => {
       false,
     );
     expect(vscodeState.repositoryTreeArgs?.[6]).toBe(false);
+  });
+
+  it('writes generated deck.conf to global storage and gives tmux that path', async () => {
+    const context = createContext();
+
+    await activate(context as never);
+
+    const generatedConf = join(context.globalStorageUri.fsPath, 'deck.conf');
+    const resurrectDir = join(context.globalStorageUri.fsPath, 'resurrect');
+    expect(existsSync(resurrectDir)).toBe(true);
+    expect(readFileSync(generatedConf, 'utf8')).toContain(
+      `set -g @resurrect-dir '${resurrectDir}'`,
+    );
+    expect(readFileSync(generatedConf, 'utf8')).toContain(
+      `run-shell '${join(process.cwd(), 'resources', 'plugins', 'tmux-resurrect', 'resurrect.tmux')}'`,
+    );
+    expect(vscodeState.tmuxInstances[0].configPath).toBe(generatedConf);
   });
 
   it('shares pending WorktreeRemoval state between the command and tree', async () => {
