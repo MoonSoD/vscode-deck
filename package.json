@@ -152,6 +152,10 @@
         "title": "Deck: Install Agent Hooks"
       },
       {
+        "command": "deck.removeAgentHooks",
+        "title": "Deck: Remove Agent Hooks"
+      },
+      {
         "command": "deck.refresh",
         "title": "Deck: Refresh",
         "icon": "$(refresh)"
@@ -237,6 +241,9 @@
         },
         {
           "command": "deck.installAgentHooks"
+        },
+        {
+          "command": "deck.removeAgentHooks"
         },
         {
           "command": "deck.switchWorktree",

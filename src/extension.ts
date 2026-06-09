@@ -38,7 +38,7 @@ import { TerminalSnapshotRuntime } from './terminal/terminalSnapshotRuntime';
 import { createRestoreGate } from './terminal/restoreGate';
 import { AgentSidecarStore } from './agent/agentSidecarStore';
 import { AgentDetection } from './agent/agentDetection';
-import { AgentSetupPrompt } from './agent/agentSetupPrompt';
+import { AGENT_HOOK_SETUP_DISMISSED_KEY, AgentSetupPrompt } from './agent/agentSetupPrompt';
 import { HookInstaller } from './agent/hookInstaller';
 import { rewriteTerminalSnapshotAgentSessions } from './agent/terminalSnapshotAgentSessions';
 
@@ -252,6 +252,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     ),
     vscode.commands.registerCommand('deck.terminal.find', () => terminalEditorProvider.showFind()),
     vscode.commands.registerCommand('deck.installAgentHooks', () => agentSetupPrompt.run({ ignoreDismissal: true })),
+    vscode.commands.registerCommand('deck.removeAgentHooks', async () => {
+      await hookInstaller.remove();
+      await context.globalState.update(AGENT_HOOK_SETUP_DISMISSED_KEY, true);
+    }),
     vscode.commands.registerCommand('deck.removeRepository', (node) => removeRepository.run(node)),
     vscode.commands.registerCommand('deck.removeWorktree', (node) => removeWorktree.run(node)),
     vscode.commands.registerCommand('deck.openWorktreeInNewWindow', (node: { worktree: { path: string } }) =>

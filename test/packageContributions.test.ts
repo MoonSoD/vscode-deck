@@ -123,6 +123,16 @@ describe('package contributions', () => {
     });
   });
 
+  it('contributes remove agent hooks as a command-palette action', () => {
+    expect(pkg.contributes.commands).toContainEqual({
+      command: 'deck.removeAgentHooks',
+      title: 'Deck: Remove Agent Hooks',
+    });
+    expect(pkg.contributes.menus.commandPalette).toContainEqual({
+      command: 'deck.removeAgentHooks',
+    });
+  });
+
   it('contributes add worktree as a repository-only inline tree action', () => {
     expect(pkg.contributes.commands).toContainEqual({
       command: 'deck.addWorktree',

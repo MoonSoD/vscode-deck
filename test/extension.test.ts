@@ -14,6 +14,7 @@ const vscodeState = vi.hoisted(() => ({
   agentSetupPromptArgs: undefined as unknown[] | undefined,
   agentSetupPromptRun: vi.fn(),
   hookInstallerArgs: undefined as unknown[] | undefined,
+  hookInstallerRemove: vi.fn(),
   configUpdate: vi.fn(),
   externalWatchDisposables: [] as Array<{ dispose: ReturnType<typeof vi.fn> }>,
   tabGroups: [] as Array<{ viewColumn: number; tabs: Array<{ input?: unknown }> }>,
@@ -237,6 +238,8 @@ vi.mock('../src/agent/hookInstaller', () => ({
     constructor(...args: unknown[]) {
       vscodeState.hookInstallerArgs = args;
     }
+
+    remove = vscodeState.hookInstallerRemove;
   },
 }));
 
@@ -249,6 +252,7 @@ vi.mock('../src/agent/agentDetection', () => ({
 }));
 
 vi.mock('../src/agent/agentSetupPrompt', () => ({
+  AGENT_HOOK_SETUP_DISMISSED_KEY: 'deck.agentHooks.setup.dismissed',
   AgentSetupPrompt: class {
     constructor(...args: unknown[]) {
       vscodeState.agentSetupPromptArgs = args;
@@ -308,6 +312,7 @@ describe('activate', () => {
     vscodeState.agentSetupPromptArgs = undefined;
     vscodeState.agentSetupPromptRun.mockResolvedValue(undefined);
     vscodeState.hookInstallerArgs = undefined;
+    vscodeState.hookInstallerRemove.mockResolvedValue(undefined);
     vscodeState.externalWatchDisposables = [];
     vscodeState.terminalRemovalArgs = undefined;
     vscodeState.activeTab = undefined;
@@ -556,6 +561,20 @@ describe('activate', () => {
     await registration[1]();
 
     expect(vscodeState.agentSetupPromptRun).toHaveBeenCalledWith({ ignoreDismissal: true });
+  });
+
+  it('registers deck.removeAgentHooks through HookInstaller and dismisses setup prompts', async () => {
+    const context = createContext();
+
+    await activate(context as never);
+    const registration = vscodeState.registerCommand.mock.calls.find(
+      ([command]) => command === 'deck.removeAgentHooks',
+    );
+    if (!registration) throw new Error('missing deck.removeAgentHooks registration');
+    await registration[1]();
+
+    expect(vscodeState.hookInstallerRemove).toHaveBeenCalledOnce();
+    expect(context.values['deck.agentHooks.setup.dismissed']).toBe(true);
   });
 
   it('registers deck.openTerminal and refreshes on workspace/view visibility events', async () => {

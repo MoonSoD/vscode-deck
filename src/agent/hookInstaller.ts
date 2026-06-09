@@ -32,6 +32,11 @@ interface HookSettings {
   [key: string]: unknown;
 }
 
+interface HookGroupRemoval {
+  groups: HookGroup[];
+  removed: boolean;
+}
+
 export class HookInstaller {
   constructor(private readonly paths: HookInstallerPaths) {}
 
@@ -47,6 +52,13 @@ export class HookInstaller {
 
   async installCodex(): Promise<void> {
     await this.install(['codex']);
+  }
+
+  async remove(): Promise<void> {
+    await this.removeDeckHooksFrom(this.paths.claudeSettingsPath);
+    if (this.paths.codexHooksPath) {
+      await this.removeDeckHooksFrom(this.paths.codexHooksPath);
+    }
   }
 
   async isInstalled(agent: AgentName): Promise<boolean> {
@@ -67,7 +79,7 @@ export class HookInstaller {
     settings.hooks = settings.hooks ?? {};
     for (const event of HOOK_EVENTS) {
       settings.hooks[event] = [
-        ...removeDeckHookGroups(settings.hooks[event] ?? []),
+        ...removeDeckHookGroups(settings.hooks[event] ?? []).groups,
         deckHookGroup(config.scriptPath, agent),
       ];
     }
@@ -89,6 +101,34 @@ export class HookInstaller {
       if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return {};
       throw error;
     }
+  }
+
+  private async removeDeckHooksFrom(configPath: string): Promise<void> {
+    const settings = await this.readSettings(configPath);
+    if (!settings.hooks) return;
+
+    const hooks = { ...settings.hooks };
+    let removed = false;
+    for (const [event, groups] of Object.entries(settings.hooks)) {
+      const result = removeDeckHookGroups(groups);
+      if (!result.removed) continue;
+      removed = true;
+      if (result.groups.length > 0) {
+        hooks[event] = result.groups;
+      } else {
+        delete hooks[event];
+      }
+    }
+
+    if (!removed) return;
+
+    if (Object.keys(hooks).length > 0) {
+      settings.hooks = hooks;
+    } else {
+      delete settings.hooks;
+    }
+
+    await writeFile(configPath, `${JSON.stringify(settings, null, 2)}\n`, 'utf8');
   }
 
   private configFor(agent: AgentName): { configPath: string; scriptPath: string } {
@@ -130,18 +170,28 @@ function deckCodexHookGroup(scriptPath: string): HookGroup {
   };
 }
 
-function removeDeckHookGroups(groups: HookGroup[]): HookGroup[] {
-  return groups
-    .map(removeDeckHooksFromGroup)
-    .filter((group): group is HookGroup => group !== undefined);
-}
+function removeDeckHookGroups(groups: HookGroup[]): HookGroupRemoval {
+  let removed = false;
+  const remainingGroups: HookGroup[] = [];
+  for (const group of groups) {
+    if (!group.hooks) {
+      remainingGroups.push(group);
+      continue;
+    }
 
-function removeDeckHooksFromGroup(group: HookGroup): HookGroup | undefined {
-  if (!group.hooks) return group;
+    const hooks = group.hooks.filter((hook) => !isDeckHook(hook));
+    if (hooks.length === group.hooks.length) {
+      remainingGroups.push(group);
+      continue;
+    }
 
-  const hooks = group.hooks.filter((hook) => !isDeckHook(hook));
-  if (hooks.length === 0 && group.hooks.length > 0) return undefined;
-  return { ...group, hooks };
+    removed = true;
+    if (hooks.length > 0) {
+      remainingGroups.push({ ...group, hooks });
+    }
+  }
+
+  return { groups: remainingGroups, removed };
 }
 
 function isDeckHook(hook: HookHandler): boolean {
