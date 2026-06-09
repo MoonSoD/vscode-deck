@@ -54,7 +54,7 @@
         "deck.tmux.automaticRenameFormat": {
           "type": "string",
           "default": "",
-          "description": "tmux automatic-rename-format value for Deck Terminals. Empty uses tmux's default foreground-command naming."
+          "markdownDescription": "tmux `automatic-rename-format` value for Deck Terminals. Empty uses tmux's default foreground-command naming. See the [tmux Formats guide](https://github.com/tmux/tmux/wiki/Formats) for the `#{…}` syntax and examples."
         },
         "deck.tmux.historyLimit": {
           "type": "integer",

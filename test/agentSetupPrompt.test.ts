@@ -106,6 +106,44 @@ describe('AgentSetupPrompt', () => {
     await dismissed.run();
     expect(dismissed.values[AGENT_HOOK_SETUP_DISMISSED_KEY]).toBe(true);
   });
+
+  it('skips the offer and selects agents straight away when invoked explicitly', async () => {
+    const prompt = createPrompt({
+      detected: [
+        { agent: 'claude', configPath: '/home/me/.claude/settings.json' },
+        { agent: 'codex', configPath: '/home/me/.codex/hooks.json' },
+      ],
+      infoChoices: [undefined],
+    });
+
+    await prompt.run({ explicit: true });
+
+    expect(prompt.notifications.showQuickPick).toHaveBeenCalled();
+    expect(prompt.installer.install).toHaveBeenCalledWith(['claude', 'codex']);
+    // No "Set Up / Don't ask again" offer — only the post-install review toast.
+    expect(prompt.notifications.showInformationMessage).toHaveBeenCalledOnce();
+  });
+
+  it('reports instead of silently doing nothing when explicit and all installed', async () => {
+    const prompt = createPrompt({
+      detected: [{ agent: 'claude', configPath: '/home/me/.claude/settings.json' }],
+      installed: new Set(['claude']),
+    });
+
+    await prompt.run({ explicit: true });
+
+    expect(prompt.installer.install).not.toHaveBeenCalled();
+    expect(prompt.notifications.showInformationMessage).toHaveBeenCalledOnce();
+  });
+
+  it('reports instead of silently doing nothing when explicit and none detected', async () => {
+    const prompt = createPrompt({ detected: [] });
+
+    await prompt.run({ explicit: true });
+
+    expect(prompt.installer.install).not.toHaveBeenCalled();
+    expect(prompt.notifications.showInformationMessage).toHaveBeenCalledOnce();
+  });
 });
 
 function createPrompt(input: {

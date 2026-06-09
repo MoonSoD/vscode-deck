@@ -94,7 +94,11 @@ by id. Two findings shaped the design:
 7. **Install is consented, transparent, and reversible.** On activation Deck
    shows a notification for **detected** agents (binary on PATH or config dir
    present, honoring `CLAUDE_CONFIG_DIR`/`CODEX_HOME`); none detected → nothing
-   shown. For multiple detected agents a quick-pick offers them pre-ticked.
+   shown. The **`Deck: Install agent hooks` command** is the explicit entry
+   point: it skips the offer notification (the user already expressed intent) and
+   goes straight to agent selection, reporting "already installed" / "none
+   detected" rather than doing nothing silently. For multiple detected agents a
+   quick-pick offers them pre-ticked.
    Before each write Deck **backs the config up to `<file>.deck.bak`**; after
    writing, a **Review changes** action opens a native diff (backup ↔ modified
    file) in the editor. *(A modal preview was tried first and rejected: VS Code

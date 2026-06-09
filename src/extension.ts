@@ -280,7 +280,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       terminalRemoval.run(node ?? treeView.selection[0]),
     ),
     vscode.commands.registerCommand('deck.terminal.find', () => terminalEditorProvider.showFind()),
-    vscode.commands.registerCommand('deck.installAgentHooks', () => agentSetupPrompt.run({ ignoreDismissal: true })),
+    vscode.commands.registerCommand('deck.installAgentHooks', () => agentSetupPrompt.run({ explicit: true })),
     vscode.commands.registerCommand('deck.removeAgentHooks', async () => {
       await hookInstaller.remove();
       await context.globalState.update(AGENT_HOOK_SETUP_DISMISSED_KEY, true);

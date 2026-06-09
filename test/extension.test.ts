@@ -687,7 +687,7 @@ describe('activate', () => {
     if (!registration) throw new Error('missing deck.installAgentHooks registration');
     await registration[1]();
 
-    expect(vscodeState.agentSetupPromptRun).toHaveBeenCalledWith({ ignoreDismissal: true });
+    expect(vscodeState.agentSetupPromptRun).toHaveBeenCalledWith({ explicit: true });
   });
 
   it('wires agent setup verification through the setup prompt', async () => {
