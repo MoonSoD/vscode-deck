@@ -6,6 +6,7 @@ const vscodeState = vi.hoisted(() => ({
   addRepositoryRun: vi.fn(),
   addTerminalRun: vi.fn(),
   configUpdate: vi.fn(),
+  externalWatchDisposables: [] as Array<{ dispose: ReturnType<typeof vi.fn> }>,
   tabGroups: [] as Array<{ viewColumn: number; tabs: Array<{ input?: unknown }> }>,
   createTreeView: vi.fn(() => ({
     dispose: vi.fn(),
@@ -44,6 +45,7 @@ const vscodeState = vi.hoisted(() => ({
     killSession: ReturnType<typeof vi.fn>;
     listSessions: ReturnType<typeof vi.fn>;
   }>,
+  watchGitCommonDir: vi.fn(),
   workspaceFolders: [{ uri: { fsPath: '/work/alpha-main' } }],
   tmuxPreflight: vi.fn(async () => ({ available: true })),
   treeViewSelection: [] as unknown[],
@@ -118,6 +120,11 @@ vi.mock('../src/worktree/worktreeListCacheStore', () => ({
 
 vi.mock('../src/repository/repositoryCommonDirCache', () => ({
   RepositoryCommonDirCache: class {},
+  resolveCommonDirSafe: vi.fn(async () => null),
+}));
+
+vi.mock('../src/repository/vscodeExternalGitWatch', () => ({
+  watchGitCommonDir: vscodeState.watchGitCommonDir,
 }));
 
 vi.mock('../src/repository/addRepositoryCommand', () => ({
@@ -226,6 +233,7 @@ vi.mock('../src/terminal/killTerminalCommand', () => ({
 
 import * as vscode from 'vscode';
 import { activate, openPendingTerminalForCurrentWorktree } from '../src/extension';
+import { resolveCommonDirSafe } from '../src/repository/repositoryCommonDirCache';
 import { PendingTerminalOpenStore } from '../src/terminal/pendingTerminalOpenStore';
 
 describe('activate', () => {
@@ -233,6 +241,7 @@ describe('activate', () => {
     vi.clearAllMocks();
     vscodeState.addRepositoryArgs = undefined;
     vscodeState.addTerminalArgs = undefined;
+    vscodeState.externalWatchDisposables = [];
     vscodeState.terminalRemovalArgs = undefined;
     vscodeState.activeTab = undefined;
     vscodeState.lifecycleOrder = [];
@@ -242,6 +251,11 @@ describe('activate', () => {
     vscodeState.removeWorktreeArgs = undefined;
     vscodeState.settingsRepositories = ['/settings/repo'];
     vscodeState.tmuxInstances = [];
+    vscodeState.watchGitCommonDir.mockImplementation(() => {
+      const disposable = { dispose: vi.fn() };
+      vscodeState.externalWatchDisposables.push(disposable);
+      return disposable;
+    });
     vscodeState.onDidChangeTabGroups.mockClear();
     vscodeState.onDidChangeTabs.mockClear();
     vscodeState.tabGroups = [];
@@ -249,6 +263,7 @@ describe('activate', () => {
     vscodeState.workspaceFolders = [{ uri: { fsPath: '/work/alpha-main' } }];
     vscodeState.configUpdate.mockResolvedValue(undefined);
     vscodeState.tmuxPreflight.mockResolvedValue({ available: true });
+    vi.mocked(resolveCommonDirSafe).mockResolvedValue(null);
   });
 
   function createContext(globalRepositories: string[] = []) {
@@ -323,6 +338,30 @@ describe('activate', () => {
       false,
     );
     expect(vscodeState.repositoryTreeArgs?.[6]).toBe(false);
+  });
+
+  it('syncs one ExternalGitWatch per registered Repository common dir', async () => {
+    const context = createContext(['/work/alpha-main', '/work/alpha-linked']);
+    vi.mocked(resolveCommonDirSafe).mockResolvedValue('/git/alpha');
+
+    await activate(context as never);
+    await Promise.resolve();
+
+    expect(vscodeState.watchGitCommonDir).toHaveBeenCalledOnce();
+    expect(vscodeState.watchGitCommonDir).toHaveBeenCalledWith('/git/alpha', expect.any(Function));
+
+    vi.mocked(resolveCommonDirSafe).mockImplementation(async (_cache, repositoryPath) =>
+      repositoryPath === '/work/alpha-main' ? '/git/alpha' : '/git/beta',
+    );
+    const refreshRegistration = vscodeState.registerCommand.mock.calls.find(
+      ([command]) => command === 'deck.refresh',
+    );
+    if (!refreshRegistration) throw new Error('missing deck.refresh registration');
+    refreshRegistration[1]();
+
+    await vi.waitFor(() => expect(vscodeState.watchGitCommonDir).toHaveBeenCalledTimes(2));
+    expect(vscodeState.watchGitCommonDir).toHaveBeenLastCalledWith('/git/beta', expect.any(Function));
+    expect(vscodeState.externalWatchDisposables[0].dispose).not.toHaveBeenCalled();
   });
 
   it('shares pending WorktreeRemoval state between the command and tree', async () => {

@@ -6,8 +6,10 @@ import { DetachedOpener } from './switch/detachedOpener';
 import { WorktreeSwitcher } from './switch/worktreeSwitcher';
 import { AddRepositoryCommand, VsCodeRepositoryFolderPicker } from './repository/addRepositoryCommand';
 import { RepositoryRemovalCommand } from './repository/repositoryRemovalCommand';
-import { RepositoryCommonDirCache } from './repository/repositoryCommonDirCache';
+import { ExternalGitWatch } from './repository/externalGitWatch';
+import { RepositoryCommonDirCache, resolveCommonDirSafe } from './repository/repositoryCommonDirCache';
 import { RepositoryRegistryStore } from './repository/repositoryRegistryStore';
+import { watchGitCommonDir } from './repository/vscodeExternalGitWatch';
 import { AddWorktreeCommand } from './worktree/addWorktreeCommand';
 import { BranchDeletionPreferenceStore } from './worktree/branchDeletionPreferenceStore';
 import { WorktreeListCacheStore } from './worktree/worktreeListCacheStore';
@@ -58,19 +60,37 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     tmuxAvailability.available,
     pendingWorktreeRemovals,
   );
+  const externalGitWatch = new ExternalGitWatch(watchGitCommonDir, refreshTree);
+  let externalGitSyncVersion = 0;
+
+  function refreshTree(): void {
+    tree.refresh();
+    syncExternalGitWatches();
+  }
+
+  function syncExternalGitWatches(): void {
+    const version = ++externalGitSyncVersion;
+    void registeredCommonDirs(repositoryRegistry, repositoryCommonDirCache).then((commonDirs) => {
+      if (version !== externalGitSyncVersion) return;
+      externalGitWatch.sync(commonDirs);
+    });
+  }
+
+  syncExternalGitWatches();
+
   const addTerminal = new AddTerminalCommand(
     tmux,
-    () => tree.refresh(),
+    refreshTree,
   );
   const terminalEditorProvider = new TerminalEditorProvider(
     context.extensionUri,
     tmuxConfigPath,
     undefined,
     undefined,
-    () => tree.refresh(),
+    refreshTree,
     // %window-renamed from any open terminal's control client → relabel the row
     // live (automatic-rename tracks the foreground command); event-driven, no poll.
-    () => tree.refresh(),
+    refreshTree,
     (sessionName) => tmux.windowName(sessionName),
   );
   const openTerminal = new OpenTerminalCommand({
@@ -79,26 +99,26 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const openTerminalInNewWindow = new OpenTerminalInNewWindowCommand(pendingTerminalOpens);
   const terminalRemoval = new TerminalRemovalCommand(
     tmux,
-    () => tree.refresh(),
+    refreshTree,
     confirmTerminalRemoval,
   );
   const terminalCascade = new TerminalCascade(tmux);
   const addWorktree = new AddWorktreeCommand(
     switcher,
     detachedOpener,
-    () => tree.refresh(),
+    refreshTree,
     worktreeRoots,
     worktreeListCache,
     repositoryCommonDirCache,
   );
   const dragAndDropController = new DeckTreeDragAndDropController(
-    () => tree.refresh(),
+    refreshTree,
     repositoryRegistry,
     worktreeOrders,
   );
   const removeWorktree = new WorktreeRemovalCommand(
     activeWorktrees,
-    () => tree.refresh(),
+    refreshTree,
     branchDeletionPreferences,
     worktreeListCache,
     repositoryCommonDirCache,
@@ -110,7 +130,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     activeWorktrees,
     worktreeRoots,
     worktreeOrders,
-    () => tree.refresh(),
+    refreshTree,
     terminalCascade,
     worktreeListCache,
   );
@@ -126,7 +146,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     activeWorktrees,
     switcher,
     detachedOpener,
-    () => tree.refresh(),
+    refreshTree,
     async (repositoryPath) => {
       const roots = tree.getChildren();
       if (!Array.isArray(roots)) return;
@@ -146,6 +166,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   context.subscriptions.push(
     treeView,
+    externalGitWatch,
     vscode.window.registerCustomEditorProvider(terminalEditorViewType, terminalEditorProvider, {
       webviewOptions: {
         retainContextWhenHidden: true,
@@ -154,7 +175,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }),
     terminalEditorProvider,
     vscode.commands.registerCommand('deck.refresh', () => {
-      tree.refresh();
+      refreshTree();
     }),
     vscode.commands.registerCommand('deck.addRepository', () => addRepository.run()),
     vscode.commands.registerCommand('deck.addWorktree', (node) => addWorktree.run(node)),
@@ -179,9 +200,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     ),
     vscode.commands.registerCommand('deck.switchWorktree', async (node: { worktree: { path: string } }) => {
       await switcher.switchTo(node.worktree.path);
-      tree.refresh();
+      refreshTree();
     }),
-    vscode.workspace.onDidChangeWorkspaceFolders(() => tree.refresh()),
+    vscode.workspace.onDidChangeWorkspaceFolders(refreshTree),
     vscode.window.tabGroups.onDidChangeTabs(async () => {
       await revealActiveTerminalInTree(tree, treeView);
     }),
@@ -189,7 +210,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       await revealActiveTerminalInTree(tree, treeView);
     }),
     treeView.onDidChangeVisibility((event) => {
-      if (event.visible) tree.refresh();
+      if (event.visible) refreshTree();
     }),
   );
   if (tmuxAvailability.available) {
@@ -198,6 +219,22 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 }
 
 export function deactivate(): void {}
+
+interface RepositoryRegistryReader {
+  list(): readonly string[];
+}
+
+async function registeredCommonDirs(
+  repositoryRegistry: RepositoryRegistryReader,
+  repositoryCommonDirCache: RepositoryCommonDirCache,
+): Promise<Set<string>> {
+  const commonDirs = await Promise.all(
+    repositoryRegistry.list().map((repositoryPath) =>
+      resolveCommonDirSafe(repositoryCommonDirCache, repositoryPath),
+    ),
+  );
+  return new Set(commonDirs.filter((commonDir): commonDir is string => commonDir !== null));
+}
 
 // Mirrors the Explorer's delete confirmation (a modal warning gated by a
 // setting). The webview API has no in-dialog "do not ask again" checkbox, so
