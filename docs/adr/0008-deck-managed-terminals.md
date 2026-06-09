@@ -103,6 +103,10 @@ state, not the user's whole tmux. Sanctel solved this with `-L sanctel -f
    primitive). Subsequent `+` clicks invoke the same primitive with the
    next N.
 
+   > **Superseded in part by [ADR-0019](./0019-reboot-surviving-terminals-via-vendored-tmux-resurrect.md):**
+   > Deck now starts the DeckSocket on activation when restoring a
+   > TerminalSnapshot after server death. New Terminal creation remains lazy.
+
 6. **Attach is direct.** Clicking a row creates a VS Code terminal with
    `shellPath: 'tmux', shellArgs: ['-L','deck','attach-session','-t','=<session>'], location: { viewColumn: ViewColumn.Active }`.
    The leading `=` prevents tmux's prefix matching from binding the wrong

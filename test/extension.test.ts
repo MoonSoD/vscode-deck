@@ -54,6 +54,7 @@ const vscodeState = vi.hoisted(() => ({
     tmux: unknown;
     saveScriptPath: () => string;
     save: ReturnType<typeof vi.fn>;
+    restoreOnActivation: ReturnType<typeof vi.fn>;
     startPeriodicSave: ReturnType<typeof vi.fn>;
     periodicSave: { dispose: ReturnType<typeof vi.fn> };
   }>,
@@ -206,6 +207,7 @@ vi.mock('../src/terminal/tmuxCli', () => ({
 vi.mock('../src/terminal/terminalSnapshotRuntime', () => ({
   TerminalSnapshotRuntime: class {
     save = vi.fn(async () => undefined);
+    restoreOnActivation = vi.fn(async () => ({ restored: true }));
     periodicSave = { dispose: vi.fn() };
     startPeriodicSave = vi.fn(() => this.periodicSave);
 
@@ -363,6 +365,7 @@ describe('activate', () => {
       false,
     );
     expect(vscodeState.repositoryTreeArgs?.[6]).toBe(false);
+    expect(vscodeState.terminalSnapshotRuntimeInstances).toEqual([]);
   });
 
   it('writes generated deck.conf to global storage and gives tmux that path', async () => {
@@ -400,6 +403,15 @@ describe('activate', () => {
     deactivate();
 
     expect(runtime.save).toHaveBeenCalledOnce();
+  });
+
+  it('restores the TerminalSnapshot during activation when tmux is available', async () => {
+    const context = createContext();
+
+    await activate(context as never);
+
+    const runtime = vscodeState.terminalSnapshotRuntimeInstances[0];
+    expect(runtime.restoreOnActivation).toHaveBeenCalledOnce();
   });
 
   it('shares pending WorktreeRemoval state between the command and tree', async () => {

@@ -105,6 +105,46 @@ describe('TmuxCli', () => {
     }]);
   });
 
+  it('checks whether the Deck socket server is running', async () => {
+    const runner = new MockRunner([
+      { code: 0, stdout: '', stderr: '' },
+      { code: 1, stdout: '', stderr: 'no server running on /tmp/tmux-1000/deck' },
+    ]);
+    const tmux = new TmuxCli('/ext/resources/deck.conf', runner);
+
+    await expect(tmux.isServerRunning()).resolves.toBe(true);
+    await expect(tmux.isServerRunning()).resolves.toBe(false);
+
+    expect(runner.calls.map((call) => call.args)).toEqual([
+      ['-L', 'deck', '-f', '/ext/resources/deck.conf', 'has-session'],
+      ['-L', 'deck', '-f', '/ext/resources/deck.conf', 'has-session'],
+    ]);
+  });
+
+  it('creates an anchor session on the Deck socket', async () => {
+    const runner = new MockRunner([{ code: 0, stdout: '', stderr: '' }]);
+    const tmux = new TmuxCli('/ext/resources/deck.conf', runner);
+
+    await tmux.newAnchorSession('__deck_anchor', '/work/repo');
+
+    expect(runner.calls).toEqual([{
+      command: 'tmux',
+      args: [
+        '-L',
+        'deck',
+        '-f',
+        '/ext/resources/deck.conf',
+        'new-session',
+        '-d',
+        '-s',
+        '__deck_anchor',
+        '-c',
+        '/work/repo',
+      ],
+      cwd: undefined,
+    }]);
+  });
+
   it('lists Deck sessions with window names', async () => {
     const runner = new MockRunner([
       {

@@ -148,6 +148,28 @@ export class TmuxCli {
     throw new Error(result.stderr || result.stdout || `tmux run-shell failed: ${result.code}`);
   }
 
+  async newAnchorSession(session: string, cwd: string): Promise<void> {
+    const result = await this.runner.run('tmux', [
+      ...this.baseArgs(),
+      'new-session',
+      '-d',
+      '-s',
+      session,
+      '-c',
+      cwd,
+    ]);
+    if (result.code === 0) return;
+    throw new Error(result.stderr || result.stdout || `tmux new-session failed: ${result.code}`);
+  }
+
+  async isServerRunning(): Promise<boolean> {
+    const result = await this.runner.run('tmux', [
+      ...this.baseArgs(),
+      'has-session',
+    ]);
+    return result.code === 0;
+  }
+
   private baseArgs(): string[] {
     return ['-L', 'deck', '-f', this.configPath];
   }

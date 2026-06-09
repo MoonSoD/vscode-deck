@@ -198,7 +198,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }),
   );
   if (tmuxAvailability.available) {
-    terminalSnapshotRuntime = new TerminalSnapshotRuntime(tmux, () => terminalSnapshotSaveScriptPath(context));
+    terminalSnapshotRuntime = new TerminalSnapshotRuntime(
+      tmux,
+      () => terminalSnapshotSaveScriptPath(context),
+      () => terminalSnapshotRestoreScriptPath(context),
+      () => context.globalStorageUri.fsPath,
+    );
+    await terminalSnapshotRuntime.restoreOnActivation();
     context.subscriptions.push(terminalSnapshotRuntime.startPeriodicSave(5 * 60 * 1000));
     await openPendingTerminalForCurrentWorktree(pendingTerminalOpens, tmux);
   } else {
@@ -241,6 +247,17 @@ function terminalSnapshotSaveScriptPath(context: vscode.ExtensionContext): strin
     'tmux-resurrect',
     'scripts',
     'save.sh',
+  );
+}
+
+function terminalSnapshotRestoreScriptPath(context: vscode.ExtensionContext): string {
+  return join(
+    context.extensionPath,
+    'resources',
+    'plugins',
+    'tmux-resurrect',
+    'scripts',
+    'restore.sh',
   );
 }
 
