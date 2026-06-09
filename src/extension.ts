@@ -1,3 +1,4 @@
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import * as vscode from 'vscode';
 import { RepositoryTreeProvider, type RepositoryTreeNode } from './tree/repositoryTree';
@@ -29,11 +30,12 @@ import { TmuxCli, type TmuxSession } from './terminal/tmuxCli';
 import { terminalSessionNumber, terminalSessionPrefix } from './terminal/tmuxSafe';
 import { tmuxPreflight } from './terminal/tmuxPreflight';
 import { SessionUriCodec } from './terminal/sessionUriCodec';
+import { renderDeckConf } from './terminal/deckConf';
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const tmuxAvailability = await tmuxPreflight();
   await vscode.commands.executeCommand('setContext', 'deck.tmuxAvailable', tmuxAvailability.available);
-  const tmuxConfigPath = join(context.extensionPath, 'resources', 'deck.conf');
+  const tmuxConfigPath = await writeDeckConf(context);
   const tmux = new TmuxCli(tmuxConfigPath);
 
   const repositoryRegistry = new RepositoryRegistryStore(context.globalState);
@@ -198,6 +200,24 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 }
 
 export function deactivate(): void {}
+
+async function writeDeckConf(context: vscode.ExtensionContext): Promise<string> {
+  const templatePath = join(context.extensionPath, 'resources', 'deck.conf');
+  const generatedPath = join(context.globalStorageUri.fsPath, 'deck.conf');
+  const resurrectDir = join(context.globalStorageUri.fsPath, 'resurrect');
+  const pluginPath = join(
+    context.extensionPath,
+    'resources',
+    'plugins',
+    'tmux-resurrect',
+    'resurrect.tmux',
+  );
+
+  const template = await readFile(templatePath, 'utf8');
+  await mkdir(resurrectDir, { recursive: true });
+  await writeFile(generatedPath, renderDeckConf(template, { pluginPath, resurrectDir }), 'utf8');
+  return generatedPath;
+}
 
 // Mirrors the Explorer's delete confirmation (a modal warning gated by a
 // setting). The webview API has no in-dialog "do not ask again" checkbox, so

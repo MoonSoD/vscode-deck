@@ -1,10 +1,16 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { renderDeckConf } from '../src/terminal/deckConf';
 
-describe('resources/deck.conf', () => {
-  it('matches the shipped deck.conf exactly', () => {
-    expect(readFileSync(join(process.cwd(), 'resources/deck.conf'), 'utf8')).toBe(
+describe('renderDeckConf', () => {
+  it('substitutes resurrect paths in the shipped DeckSocket tmux template', () => {
+    const template = readFileSync(join(process.cwd(), 'resources', 'deck.conf'), 'utf8');
+
+    expect(renderDeckConf(template, {
+      pluginPath: '/ext/resources/plugins/tmux-resurrect/resurrect.tmux',
+      resurrectDir: '/global/resurrect',
+    })).toBe(
       [
         'set -g automatic-rename on',
         'set -g history-limit 50000',
@@ -14,6 +20,10 @@ describe('resources/deck.conf', () => {
         'set -g prefix2 None',
         'unbind -a -T prefix',
         'unbind -a -T root',
+        "set -g @resurrect-dir '/global/resurrect'",
+        "set -g @resurrect-capture-pane-contents 'on'",
+        "set -g @resurrect-processes 'false'",
+        "run-shell '/ext/resources/plugins/tmux-resurrect/resurrect.tmux'",
         '',
       ].join('\n'),
     );
