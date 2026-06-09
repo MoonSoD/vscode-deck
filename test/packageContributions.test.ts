@@ -78,6 +78,17 @@ describe('package contributions', () => {
     expect(pkg.contributes.configuration?.properties?.['deck.repositories']).toBeUndefined();
   });
 
+  it('contributes per-agent resume template settings', () => {
+    expect(pkg.contributes.configuration?.properties?.['deck.agentResumeTemplates.claude']).toMatchObject({
+      type: 'string',
+      default: 'claude --resume {id}',
+    });
+    expect(pkg.contributes.configuration?.properties?.['deck.agentResumeTemplates.codex']).toMatchObject({
+      type: 'string',
+      default: 'codex resume {id}',
+    });
+  });
+
   it('does not ship node-pty or its postinstall workaround', () => {
     expect(pkg.dependencies?.['node-pty']).toBeUndefined();
     expect(pkg.devDependencies?.['node-pty']).toBeUndefined();

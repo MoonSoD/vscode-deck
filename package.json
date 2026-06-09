@@ -40,6 +40,16 @@
           "type": "boolean",
           "default": true,
           "description": "Controls whether Deck asks for confirmation before deleting a Terminal."
+        },
+        "deck.agentResumeTemplates.claude": {
+          "type": "string",
+          "default": "claude --resume {id}",
+          "description": "Claude Code command template Deck uses to resume an AgentSession. Include {id} for the session id."
+        },
+        "deck.agentResumeTemplates.codex": {
+          "type": "string",
+          "default": "codex resume {id}",
+          "description": "Codex command template Deck uses to resume an AgentSession. Include {id} for the session id."
         }
       }
     },
