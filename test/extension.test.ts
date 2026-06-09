@@ -349,11 +349,12 @@ describe('activate', () => {
 
     const generatedConf = join(context.globalStorageUri.fsPath, 'deck.conf');
     const resurrectDir = join(context.globalStorageUri.fsPath, 'resurrect');
+    const generatedConfContents = readFileSync(generatedConf, 'utf8');
     expect(existsSync(resurrectDir)).toBe(true);
-    expect(readFileSync(generatedConf, 'utf8')).toContain(
+    expect(generatedConfContents).toContain(
       `set -g @resurrect-dir '${resurrectDir}'`,
     );
-    expect(readFileSync(generatedConf, 'utf8')).toContain(
+    expect(generatedConfContents).toContain(
       `run-shell '${join(process.cwd(), 'resources', 'plugins', 'tmux-resurrect', 'resurrect.tmux')}'`,
     );
     expect(vscodeState.tmuxInstances[0].configPath).toBe(generatedConf);
