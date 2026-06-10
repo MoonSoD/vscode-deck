@@ -110,7 +110,11 @@ export class HookInstaller {
       const { configPath, scriptPath } = this.configFor(agent);
       const expectedConfig = await this.renderSettingsWithDeckHooks(configPath, scriptPath, agent);
       const expectedScript = renderAgentHookScript(this.paths.sidecarDir, agent);
-      const configDrifted = await this.readFileOrUndefined(configPath) !== expectedConfig;
+      // Compare the config structurally, not byte-wise: other tools (Claude Code
+      // itself) rewrite the same file with their own formatting and key order,
+      // and a formatting-only "drift" would rewrite the user's file and toast on
+      // every such change.
+      const configDrifted = !sameJsonStructure(await this.readFileOrUndefined(configPath), expectedConfig);
       const scriptDrifted = await this.readFileOrUndefined(scriptPath) !== expectedScript;
       if (!configDrifted && !scriptDrifted) continue;
 
@@ -294,6 +298,28 @@ function removeDeckHookGroups(groups: HookGroup[]): HookGroupRemoval {
   }
 
   return { groups: remainingGroups, removed };
+}
+
+function sameJsonStructure(actual: string | undefined, expected: string): boolean {
+  if (actual === undefined) return false;
+  try {
+    return canonicalJson(JSON.parse(actual)) === canonicalJson(JSON.parse(expected));
+  } catch {
+    return false;
+  }
+}
+
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map(canonicalJson).join(',')}]`;
+  }
+  if (typeof value === 'object' && value !== null) {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+      .map(([key, entry]) => `${JSON.stringify(key)}:${canonicalJson(entry)}`);
+    return `{${entries.join(',')}}`;
+  }
+  return JSON.stringify(value);
 }
 
 function isDeckHook(hook: HookHandler): boolean {

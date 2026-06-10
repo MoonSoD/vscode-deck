@@ -559,6 +559,30 @@ describe('HookInstaller', () => {
     expect(existsSync(`${settingsPath}.deck.bak`)).toBe(false);
     expect(existsSync(codexScriptPath)).toBe(false);
   });
+
+  it('treats an externally reformatted current config as not drifted', async () => {
+    const root = tempRoot();
+    const settingsPath = join(root, '.claude', 'settings.json');
+    const scriptPath = join(root, '.local', 'share', 'deck', 'bin', 'deck-claude-hook.sh');
+    const installer = new HookInstaller({
+      claudeSettingsPath: settingsPath,
+      codexHooksPath: join(root, '.codex', 'hooks.json'),
+      hookScriptPath: scriptPath,
+      codexHookScriptPath: join(root, '.local', 'share', 'deck', 'bin', 'deck-codex-hook.sh'),
+      sidecarDir: join(root, '.local', 'share', 'deck', 'hooks'),
+    });
+    await installer.install(['claude']);
+    // Another tool (e.g. Claude Code itself) rewrites the same file with its
+    // own formatting: different indentation, reordered keys, no trailing newline.
+    const settings = JSON.parse(readFileSync(settingsPath, 'utf8')) as Record<string, unknown>;
+    const reformatted = JSON.stringify({ theme: 'dark', ...settings }, null, 4);
+    writeFileSync(settingsPath, reformatted, 'utf8');
+
+    await expect(installer.reconcileInstalledHooks()).resolves.toEqual([]);
+
+    expect(readFileSync(settingsPath, 'utf8')).toBe(reformatted);
+    expect(existsSync(`${settingsPath}.deck.bak`)).toBe(false);
+  });
 });
 
 function tempRoot(): string {
