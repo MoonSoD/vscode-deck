@@ -122,4 +122,4 @@ agent-aware tree decoration ADR-0021 §10 deferred — a separate, larger featur
 
 ## Status
 
-Proposed.
+Accepted — shipped in v0.4.0.
