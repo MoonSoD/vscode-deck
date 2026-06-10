@@ -8,6 +8,8 @@ docs/**
 .claude/**
 .agents/**
 tmp/**
+scratchpad.md
+prototypes/**
 **/*.ts
 **/*.map
 icon.svg
