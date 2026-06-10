@@ -265,4 +265,4 @@ by id. Two findings shaped the design:
 
 ## Status
 
-Proposed.
+Accepted — shipped in v0.3.0.
