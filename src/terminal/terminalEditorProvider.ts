@@ -247,6 +247,7 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
   <link rel="stylesheet" href="${xtermCss}">
   <style>
     html, body, #terminal {
+      box-sizing: border-box;
       width: 100%;
       height: 100%;
       margin: 0;
@@ -256,9 +257,6 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
     body {
       color: var(--vscode-editor-foreground);
       font-family: var(--vscode-font-family);
-    }
-    #terminal {
-      box-sizing: border-box;
     }
     #context-menu {
       position: fixed;
