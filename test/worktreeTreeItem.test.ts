@@ -133,8 +133,17 @@ describe('describeTerminalTreeItem', () => {
     })).toEqual({
       label: 'claude',
       iconId: 'circle-small-filled',
+      iconColorId: 'agentSessionReadIndicator.foreground',
       contextValue: 'deck.terminal.foreign',
     });
+  });
+
+  it('carries the needs-input message as the tooltip', () => {
+    expect(describeTerminalTreeItem('claude', false, {
+      status: 'needsInput',
+      statusAt: 1710000000,
+      message: 'Allow Bash(ls)?',
+    }).tooltip).toBe('Allow Bash(ls)?');
   });
 
   it('renders failed agent status as a red error icon', () => {

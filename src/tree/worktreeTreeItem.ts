@@ -17,8 +17,13 @@ export interface WorktreeTreeItemDescription {
 export interface TerminalTreeItemDescription {
   label: string;
   description?: string;
+  tooltip?: string;
   iconId: 'terminal' | 'loading~spin' | 'circle-filled' | 'circle-small-filled' | 'error';
-  iconColorId?: 'textLink.foreground' | 'list.warningForeground' | 'errorForeground';
+  iconColorId?:
+    | 'textLink.foreground'
+    | 'list.warningForeground'
+    | 'errorForeground'
+    | 'agentSessionReadIndicator.foreground';
   contextValue: 'deck.terminal.active' | 'deck.terminal.foreign';
 }
 
@@ -83,6 +88,9 @@ export function describeTerminalTreeItem(
     return {
       label: windowName,
       description: 'Input needed.',
+      // The hook's captured prompt (e.g. the tool awaiting permission) is only
+      // shown transiently in the toast otherwise.
+      tooltip: status.message,
       iconId: 'circle-filled',
       iconColorId: 'list.warningForeground',
       contextValue,
@@ -93,6 +101,9 @@ export function describeTerminalTreeItem(
       return {
         label: windowName,
         iconId: 'circle-small-filled',
+        // VS Code's read indicator color (foreground at 20%); an unknown color
+        // id falls back to the default icon foreground, i.e. the prior look.
+        iconColorId: 'agentSessionReadIndicator.foreground',
         contextValue,
       };
     }
