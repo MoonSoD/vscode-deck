@@ -17,9 +17,17 @@ const vscodeState = vi.hoisted(() => ({
   agentStatusStoreArgs: undefined as unknown[] | undefined,
   agentStatusStoreMarkRead: vi.fn(async () => undefined),
   agentStatusStoreChange: undefined as (() => void) | undefined,
-  agentStatusStoreEntries: [] as Array<[string, { status: 'inProgress' | 'needsInput' | 'completed' | 'failed'; statusAt: number }]>,
+  agentStatusStoreEntries: [] as Array<[
+    string,
+    {
+      status: 'inProgress' | 'needsInput' | 'completed' | 'failed';
+      statusAt: number;
+      message?: string;
+    },
+  ]>,
   agentStatusStorePrune: vi.fn(async () => undefined),
   agentStatusStoreStart: vi.fn(async () => ({ dispose: vi.fn() })),
+  agentStatusStoreChangeListeners: [] as Array<() => void>,
   agentStatusStoreChangeListener: undefined as (() => void) | undefined,
   hookInstallerArgs: undefined as unknown[] | undefined,
   hookInstallerRemove: vi.fn(),
@@ -52,6 +60,7 @@ const vscodeState = vi.hoisted(() => ({
   repositoryTreeArgs: undefined as unknown[] | undefined,
   repositoryTreeInstances: [] as Array<{
     findTerminal: ReturnType<typeof vi.fn>;
+    findTerminalBySessionName: ReturnType<typeof vi.fn>;
     refresh: ReturnType<typeof vi.fn>;
     getChildren: ReturnType<typeof vi.fn>;
   }>,
@@ -60,6 +69,10 @@ const vscodeState = vi.hoisted(() => ({
   removeWorktreeArgs: undefined as unknown[] | undefined,
   settingsRepositories: ['/settings/repo'],
   settingsAgentResumeTemplates: {} as Record<string, string | undefined>,
+  settingsAgentStatusNotifications: {} as {
+    notifyOnNeedsInput?: string;
+    notifyOnCompleted?: string;
+  },
   settingsDeckTmux: {} as {
     automaticRenameFormat?: string;
   },
@@ -118,6 +131,11 @@ vi.mock('vscode', () => ({
     registerCustomEditorProvider: vscodeState.registerCustomEditorProvider,
     showWarningMessage: vscodeState.showWarningMessage,
     showInformationMessage: vscodeState.showInformationMessage,
+    state: {
+      get focused() {
+        return true;
+      },
+    },
     onDidCloseTerminal: vscodeState.onDidCloseTerminal,
     onDidChangeActiveTerminal: vscodeState.onDidChangeActiveTerminal,
     onDidOpenTerminal: vscodeState.onDidOpenTerminal,
@@ -142,6 +160,12 @@ vi.mock('vscode', () => ({
         }
         if (key === 'agentResumeTemplates.codex') {
           return (vscodeState.settingsAgentResumeTemplates.codex as T | undefined) ?? defaultValue;
+        }
+        if (key === 'notifyOnNeedsInput') {
+          return (vscodeState.settingsAgentStatusNotifications.notifyOnNeedsInput as T | undefined) ?? defaultValue;
+        }
+        if (key === 'notifyOnCompleted') {
+          return (vscodeState.settingsAgentStatusNotifications.notifyOnCompleted as T | undefined) ?? defaultValue;
         }
         return defaultValue;
       },
@@ -219,6 +243,7 @@ vi.mock('../src/repository/repositoryRemovalCommand', () => ({
 vi.mock('../src/tree/repositoryTree', () => ({
   RepositoryTreeProvider: class {
     findTerminal = vi.fn();
+    findTerminalBySessionName = vi.fn();
     refresh = vi.fn();
     getChildren = vi.fn(() => [{ repositoryPath: '/settings/repo' }]);
 
@@ -286,10 +311,11 @@ vi.mock('../src/agent/agentStatusStore', () => ({
     markRead = vscodeState.agentStatusStoreMarkRead;
     entries = vi.fn(() => vscodeState.agentStatusStoreEntries.values());
     onDidChange = vi.fn((listener: () => void) => {
-      if (vscodeState.agentStatusStoreChangeListener) {
-        vscodeState.agentStatusStoreChange = listener;
-      } else {
+      vscodeState.agentStatusStoreChangeListeners.push(listener);
+      if (!vscodeState.agentStatusStoreChangeListener) {
         vscodeState.agentStatusStoreChangeListener = listener;
+      } else if (!vscodeState.agentStatusStoreChange) {
+        vscodeState.agentStatusStoreChange = listener;
       }
       return { dispose: vi.fn() };
     });
@@ -387,6 +413,7 @@ describe('activate', () => {
     vscodeState.agentSetupPromptUninstall.mockResolvedValue(undefined);
     vscodeState.agentStatusStoreArgs = undefined;
     vscodeState.agentStatusStoreChange = undefined;
+    vscodeState.agentStatusStoreChangeListeners = [];
     vscodeState.agentStatusStoreEntries = [];
     vscodeState.agentStatusStorePrune.mockResolvedValue(undefined);
     vscodeState.agentStatusStoreStart.mockResolvedValue({ dispose: vi.fn() });
@@ -402,6 +429,7 @@ describe('activate', () => {
     vscodeState.removeWorktreeArgs = undefined;
     vscodeState.settingsRepositories = ['/settings/repo'];
     vscodeState.settingsAgentResumeTemplates = {};
+    vscodeState.settingsAgentStatusNotifications = {};
     vscodeState.settingsDeckTmux = {};
     vscodeState.tmuxServerRunning = false;
     vscodeState.tmuxInstances = [];
@@ -779,6 +807,42 @@ describe('activate', () => {
     expect(vscodeState.onDidChangeWorkspaceFolders).toHaveBeenCalledWith(expect.any(Function));
     expect(vscodeState.createTreeView.mock.results[0].value.onDidChangeVisibility).toHaveBeenCalledWith(
       expect.any(Function),
+    );
+  });
+
+  it('opens and reveals a Terminal from an agent status notification action', async () => {
+    const context = createContext();
+    const terminalNode = {
+      terminal: { sessionName: 'wt-_work_alpha-feature__term-1', windowName: 'claude' },
+      worktreePath: '/work/alpha-feature',
+    };
+    vscodeState.showWarningMessage.mockResolvedValue('Open Terminal');
+
+    await activate(context as never);
+    vscodeState.repositoryTreeInstances[0].findTerminalBySessionName.mockResolvedValue(terminalNode);
+    vscodeState.agentStatusStoreEntries = [
+      ['wt-_work_alpha-feature__term-1', {
+        status: 'needsInput',
+        statusAt: 1710000000,
+        message: 'Allow Bash(ls)?',
+      }],
+    ];
+    vscodeState.agentStatusStoreChangeListeners.at(-1)?.();
+    await Promise.resolve();
+
+    expect(vscodeState.showWarningMessage).toHaveBeenCalledWith(
+      'Allow Bash(ls)?',
+      'Open Terminal',
+    );
+    expect(vscodeState.repositoryTreeInstances[0].findTerminalBySessionName).toHaveBeenCalledWith(
+      'wt-_work_alpha-feature__term-1',
+    );
+    await vi.waitFor(() => {
+      expect(vscodeState.openTerminalRun).toHaveBeenCalledWith(terminalNode);
+    });
+    expect(vscodeState.createTreeView.mock.results[0].value.reveal).toHaveBeenCalledWith(
+      terminalNode,
+      { select: true, focus: false },
     );
   });
 

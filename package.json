@@ -51,6 +51,26 @@
           "default": "codex resume {id}",
           "description": "Codex command template Deck uses to resume an AgentSession. Include {id} for the session id."
         },
+        "deck.notifyOnNeedsInput": {
+          "type": "string",
+          "enum": [
+            "off",
+            "windowNotFocused",
+            "always"
+          ],
+          "default": "always",
+          "description": "Controls when Deck notifies that an agent needs input."
+        },
+        "deck.notifyOnCompleted": {
+          "type": "string",
+          "enum": [
+            "off",
+            "windowNotFocused",
+            "always"
+          ],
+          "default": "off",
+          "description": "Controls when Deck notifies that an agent has completed a turn."
+        },
         "deck.tmux.automaticRenameFormat": {
           "type": "string",
           "default": "",

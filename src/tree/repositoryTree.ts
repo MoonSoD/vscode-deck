@@ -224,6 +224,23 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
     return undefined;
   }
 
+  async findTerminalBySessionName(sessionName: string): Promise<RepositoryTreeNode | undefined> {
+    const repositories = await this.resolveChildren();
+    for (const repository of repositories) {
+      if (!(repository instanceof RepositoryNode)) continue;
+      const worktrees = await this.resolveChildren(repository);
+      for (const worktree of worktrees) {
+        if (!(worktree instanceof WorktreeNode)) continue;
+        const terminals = await this.resolveChildren(worktree);
+        const terminal = terminals.find(
+          (node) => node instanceof TerminalNode && node.terminal.sessionName === sessionName,
+        );
+        if (terminal) return terminal;
+      }
+    }
+    return undefined;
+  }
+
   private async resolveChildren(element?: RepositoryTreeNode): Promise<RepositoryTreeNode[]> {
     return (await Promise.resolve(this.getChildren(element))) ?? [];
   }

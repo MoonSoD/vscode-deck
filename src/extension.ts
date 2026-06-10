@@ -38,6 +38,10 @@ import { resolveDeckTmuxOptions, type DeckTmuxOptions } from './terminal/deckTmu
 import { TerminalSnapshotRuntime } from './terminal/terminalSnapshotRuntime';
 import { createRestoreGate } from './terminal/restoreGate';
 import { AgentSidecarStore } from './agent/agentSidecarStore';
+import {
+  AgentStatusNotifier,
+  type AgentStatusNotificationMode,
+} from './agent/agentStatusNotifier';
 import { AgentStatusStore } from './agent/agentStatusStore';
 import { countNeedsInputStatuses, describeNeedsInputBadge } from './agent/agentStatusRollups';
 import { AgentDetection } from './agent/agentDetection';
@@ -237,6 +241,22 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   }
   syncAgentStatusBadge();
   const agentStatusBadgeWatch = agentStatuses.onDidChange(syncAgentStatusBadge);
+  const agentStatusNotifierWatch = new AgentStatusNotifier({
+    store: agentStatuses,
+    settings: {
+      notifyOnNeedsInput: () => agentStatusNotificationModeFromSettings('notifyOnNeedsInput', 'always'),
+      notifyOnCompleted: () => agentStatusNotificationModeFromSettings('notifyOnCompleted', 'off'),
+    },
+    windowState: {
+      isFocused: () => vscode.window.state.focused,
+      activeTerminalSessionName: () => activeDeckTerminal()?.sessionName,
+    },
+    notifications: {
+      showWarningMessage: (message, ...items) => vscode.window.showWarningMessage(message, ...items),
+      showInformationMessage: (message, ...items) => vscode.window.showInformationMessage(message, ...items),
+    },
+    openTerminal: (sessionName) => openAgentStatusTerminal(tree, treeView, openTerminal, sessionName),
+  }).start();
   const addRepository = new AddRepositoryCommand(
     new VsCodeRepositoryFolderPicker(),
     repositoryRegistry,
@@ -266,6 +286,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     agentStatusWatch,
     activeTerminalReadWatch,
     agentStatusBadgeWatch,
+    agentStatusNotifierWatch,
     externalGitWatch,
     vscode.window.registerCustomEditorProvider(terminalEditorViewType, terminalEditorProvider, {
       webviewOptions: {
@@ -445,6 +466,18 @@ function resumeTemplateFromSettings(): ResumeTemplate {
   });
 }
 
+function agentStatusNotificationModeFromSettings(
+  key: 'notifyOnNeedsInput' | 'notifyOnCompleted',
+  fallback: AgentStatusNotificationMode,
+): AgentStatusNotificationMode {
+  const value = vscode.workspace.getConfiguration('deck').get<string>(key, fallback);
+  return isAgentStatusNotificationMode(value) ? value : fallback;
+}
+
+function isAgentStatusNotificationMode(value: unknown): value is AgentStatusNotificationMode {
+  return value === 'off' || value === 'windowNotFocused' || value === 'always';
+}
+
 interface RepositoryRegistryReader {
   list(): readonly string[];
 }
@@ -494,6 +527,22 @@ async function revealActiveTerminalInTree(
     // a hidden view; neither should surface as an unhandled rejection from a
     // tab event.
     console.warn('Deck: revealing the active terminal failed', error);
+  }
+}
+
+async function openAgentStatusTerminal(
+  tree: RepositoryTreeProvider,
+  treeView: vscode.TreeView<RepositoryTreeNode>,
+  openTerminal: OpenTerminalCommand,
+  sessionName: string,
+): Promise<void> {
+  try {
+    const terminalNode = await tree.findTerminalBySessionName(sessionName);
+    if (!terminalNode || !('terminal' in terminalNode)) return;
+    await openTerminal.run(terminalNode);
+    await treeView.reveal(terminalNode, { select: true, focus: false });
+  } catch (error) {
+    console.warn('Deck: opening agent status Terminal failed', error);
   }
 }
 

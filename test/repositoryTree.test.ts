@@ -703,6 +703,33 @@ describe('RepositoryTreeProvider', () => {
     });
   });
 
+  it('finds a Terminal row by session name for notification actions', async () => {
+    const tmux = {
+      listSessions: vi.fn(async (prefix?: string) =>
+        prefix === 'wt-_work_alpha-feature__term-'
+          ? [{ sessionName: 'wt-_work_alpha-feature__term-1', windowName: 'claude' }]
+          : [],
+      ),
+    };
+    const provider = new RepositoryTreeProvider(
+      registry(['/work/alpha-main']),
+      { get: vi.fn() } as unknown as ActiveWorktreeStore,
+      { get: vi.fn() } as unknown as WorktreeOrderStore,
+      { get: vi.fn(), set: vi.fn(async () => undefined) } as unknown as WorktreeListCacheStore,
+      { get: vi.fn(() => '/git/alpha'), set: vi.fn(async () => undefined) } as unknown as RepositoryCommonDirCache,
+      tmux,
+      true,
+    );
+
+    const terminal = await provider.findTerminalBySessionName('wt-_work_alpha-feature__term-1');
+
+    expect(terminal).toMatchObject({
+      id: 'terminal::wt-_work_alpha-feature__term-1',
+      worktreePath: '/work/alpha-feature',
+      terminal: { windowName: 'claude' },
+    });
+  });
+
   it('marks terminals in the current workspace folder as active', async () => {
     const tmux = {
       listSessions: vi.fn(async () => [

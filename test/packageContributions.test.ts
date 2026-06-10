@@ -89,6 +89,19 @@ describe('package contributions', () => {
     });
   });
 
+  it('contributes agent status notification settings', () => {
+    expect(pkg.contributes.configuration?.properties?.['deck.notifyOnNeedsInput']).toMatchObject({
+      type: 'string',
+      enum: ['off', 'windowNotFocused', 'always'],
+      default: 'always',
+    });
+    expect(pkg.contributes.configuration?.properties?.['deck.notifyOnCompleted']).toMatchObject({
+      type: 'string',
+      enum: ['off', 'windowNotFocused', 'always'],
+      default: 'off',
+    });
+  });
+
   it('contributes the curated safe automatic-rename-format setting only', () => {
     expect(pkg.contributes.configuration?.properties?.['deck.tmux.automaticRenameFormat']).toMatchObject({
       type: 'string',
