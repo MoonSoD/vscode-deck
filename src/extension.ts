@@ -248,7 +248,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       showInformationMessage: (message, ...items) => vscode.window.showInformationMessage(message, ...items),
     },
     osNotifications: osNotifier,
-    deepLink: (sessionName) => agentStatusTerminalDeepLink(sessionName),
+    deepLink: (sessionName) => agentStatusTerminalDeepLink(context.extension.id, sessionName),
     openTerminal: (sessionName) => openAgentStatusTerminal(tree, treeView, openTerminal, sessionName),
   }).start();
   const agentStatusUriHandler = vscode.window.registerUriHandler({
@@ -478,8 +478,8 @@ function isAgentStatusNotificationMode(value: unknown): value is AgentStatusNoti
   return value === 'off' || value === 'windowNotFocused' || value === 'always';
 }
 
-function agentStatusTerminalDeepLink(sessionName: string): string {
-  return `${vscode.env.uriScheme}://a9a4k.deck/open-terminal?session=${encodeURIComponent(sessionName)}`;
+function agentStatusTerminalDeepLink(extensionId: string, sessionName: string): string {
+  return `${vscode.env.uriScheme}://${extensionId}/open-terminal?session=${encodeURIComponent(sessionName)}`;
 }
 
 interface RepositoryRegistryReader {

@@ -14,8 +14,8 @@ export class OsNotifier {
     if (platform !== 'darwin') return new OsNotifier(runner, false);
 
     try {
-      await runner.run('terminal-notifier', ['-help']);
-      return new OsNotifier(runner, true);
+      const result = await runner.run('terminal-notifier', ['-help']);
+      return new OsNotifier(runner, result.code === 0);
     } catch {
       return new OsNotifier(runner, false);
     }

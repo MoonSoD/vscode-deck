@@ -518,6 +518,7 @@ describe('activate', () => {
         }),
       },
       subscriptions: [] as Array<{ dispose(): void }>,
+      extension: { id: 'a9a4k.deck' },
       extensionPath: process.cwd(),
       extensionUri: { fsPath: process.cwd() },
       globalStorageUri: { fsPath: globalStoragePath },

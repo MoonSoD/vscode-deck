@@ -46,6 +46,18 @@ describe('OsNotifier', () => {
     expect(runner.run).toHaveBeenCalledWith('terminal-notifier', ['-help']);
   });
 
+  it('does not post or clear when terminal-notifier cannot run successfully', async () => {
+    const runner = fakeRunner();
+    runner.run.mockResolvedValueOnce({ code: 1, stdout: '', stderr: 'usage failed' });
+    const notifier = await OsNotifier.create({ platform: 'darwin', runner });
+
+    await notifier.notify('wt-_work_repo__term-1', 'Allow Bash(ls)?', 'vscode://a9a4k.deck/open-terminal');
+    await notifier.clear('wt-_work_repo__term-1');
+
+    expect(runner.run).toHaveBeenCalledTimes(1);
+    expect(runner.run).toHaveBeenCalledWith('terminal-notifier', ['-help']);
+  });
+
   it('does nothing on non-macOS platforms', async () => {
     const runner = fakeRunner();
     const notifier = await OsNotifier.create({ platform: 'linux', runner });
