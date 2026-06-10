@@ -814,6 +814,35 @@ describe('activate', () => {
         { fsPath: '/home/me/.claude/settings.json.deck.bak' },
         { fsPath: '/home/me/.claude/settings.json' },
         'Deck Claude hooks (before ↔ after)',
+        { preview: false },
+      );
+    });
+  });
+
+  it('opens one persistent review tab per agent when both reconcile', async () => {
+    const context = createContext();
+    vscodeState.hookInstallerReconcile.mockResolvedValue([
+      { agent: 'claude', configPath: '/home/me/.claude/settings.json' },
+      { agent: 'codex', configPath: '/home/me/.codex/hooks.json' },
+    ]);
+    vscodeState.showInformationMessage.mockResolvedValue('Review Changes');
+
+    await activate(context as never);
+
+    await vi.waitFor(() => {
+      expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
+        'vscode.diff',
+        { fsPath: '/home/me/.claude/settings.json.deck.bak' },
+        { fsPath: '/home/me/.claude/settings.json' },
+        'Deck Claude hooks (before ↔ after)',
+        { preview: false },
+      );
+      expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
+        'vscode.diff',
+        { fsPath: '/home/me/.codex/hooks.json.deck.bak' },
+        { fsPath: '/home/me/.codex/hooks.json' },
+        'Deck Codex hooks (before ↔ after)',
+        { preview: false },
       );
     });
   });
