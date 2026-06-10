@@ -33,6 +33,27 @@ describe('rewriteTerminalSnapshotAgentSessions', () => {
     ].join('\n'));
   });
 
+  it('rewrites valid sidecars when another sidecar is corrupt', async () => {
+    const root = tempRoot();
+    const snapshotPath = join(root, 'resurrect', 'last');
+    const sidecarDir = join(root, 'hooks');
+    mkdirSync(join(root, 'resurrect'), { recursive: true });
+    mkdirSync(sidecarDir, { recursive: true });
+    writeFileSync(snapshotPath, [
+      'pane\twt-_work_repo__term-1\t0\t1\t:*\t0\t%0\t:/work/repo\t1\tclaude\t:claude',
+      'pane\twt-_work_repo__term-2\t0\t1\t:*\t0\t%1\t:/work/repo\t1\tclaude\t:claude',
+    ].join('\n'), 'utf8');
+    writeFileSync(join(sidecarDir, 'wt-_work_repo__term-1.json'), '{"agent":"claude","session_id":"abc-123"}\n', 'utf8');
+    writeFileSync(join(sidecarDir, 'wt-_work_repo__term-2.json'), '{"agent":"claude",', 'utf8');
+
+    await rewriteTerminalSnapshotAgentSessions(snapshotPath, new AgentSidecarStore(sidecarDir));
+
+    expect(readFileSync(snapshotPath, 'utf8')).toBe([
+      'pane\twt-_work_repo__term-1\t0\t1\t:*\t0\t%0\t:/work/repo\t1\tclaude\t:claude --resume abc-123',
+      'pane\twt-_work_repo__term-2\t0\t1\t:*\t0\t%1\t:/work/repo\t1\tclaude\t:',
+    ].join('\n'));
+  });
+
   it('does nothing when there is no latest snapshot yet', async () => {
     const root = tempRoot();
 
