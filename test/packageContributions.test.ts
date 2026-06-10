@@ -51,7 +51,8 @@ describe('package contributions', () => {
     });
     expect(pkg.contributes.keybindings).toContainEqual({
       command: 'workbench.view.extension.deck',
-      key: 'ctrl+alt+d',
+      key: 'ctrl+shift+.',
+      mac: 'cmd+shift+.',
     });
 
     expect(pkg.contributes.walkthroughs).toEqual([{

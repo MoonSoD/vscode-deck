@@ -49,6 +49,19 @@ describe('AgentSidecarStore', () => {
     ]));
   });
 
+  it('skips malformed sidecars without dropping valid sidecars', async () => {
+    const root = tempRoot();
+    mkdirSync(root, { recursive: true });
+    writeFileSync(join(root, 'wt-_work_repo__term-1.json'), '{"agent":"claude","session_id":"abc-123"}\n', 'utf8');
+    writeFileSync(join(root, 'wt-_work_repo__term-2.json'), '', 'utf8');
+    writeFileSync(join(root, 'wt-_work_repo__term-3.json'), '{"agent":"claude",', 'utf8');
+    const store = new AgentSidecarStore(root);
+
+    await expect(store.readAll()).resolves.toEqual(new Map([
+      ['wt-_work_repo__term-1', { agent: 'claude', session_id: 'abc-123' }],
+    ]));
+  });
+
   it('prunes sidecars whose Terminal session no longer exists', async () => {
     const root = tempRoot();
     const store = new AgentSidecarStore(root);

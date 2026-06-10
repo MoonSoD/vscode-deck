@@ -14,6 +14,14 @@ describe('renderAgentHookScript', () => {
     }
   });
 
+  it('renders atomic sidecar writes without redirecting into the sidecar path', () => {
+    const script = renderAgentHookScript('/tmp/deck/hooks');
+
+    expect(script).not.toContain('> "$sidecar_dir/$DECK_SESSION.json"');
+    expect(script).toContain('tmp=$(mktemp "$sidecar_dir/$DECK_SESSION.XXXXXX")');
+    expect(script).toContain('mv "$tmp" "$sidecar_dir/$DECK_SESSION.json"');
+  });
+
   it('writes a Claude sidecar keyed by DECK_SESSION', async () => {
     const root = tempRoot();
     const sidecarDir = join(root, 'hooks');
@@ -30,7 +38,7 @@ describe('renderAgentHookScript', () => {
     });
   });
 
-  it('writes a completed status on Stop after the sidecar write', async () => {
+  it('writes a completed status on Stop without writing a sidecar', async () => {
     const root = tempRoot();
     const sidecarDir = join(root, 'hooks');
     const statusDir = join(root, 'status');
@@ -41,10 +49,7 @@ describe('renderAgentHookScript', () => {
       input: '{"session_id":"abc-123","hook_event_name":"Stop"}',
     });
 
-    expect(JSON.parse(readFileSync(join(sidecarDir, 'wt-_work_repo__term-1.json'), 'utf8'))).toEqual({
-      agent: 'claude',
-      session_id: 'abc-123',
-    });
+    expect(existsSync(sidecarDir)).toBe(false);
     const status = JSON.parse(readFileSync(join(statusDir, 'wt-_work_repo__term-1.json'), 'utf8'));
     expect(status.status).toBe('completed');
     expect(typeof status.statusAt).toBe('number');
@@ -88,6 +93,35 @@ describe('renderAgentHookScript', () => {
     const status = JSON.parse(readFileSync(join(statusDir, 'wt-_work_repo__term-1.json'), 'utf8'));
     expect(status.status).toBe('inProgress');
     expect(typeof status.statusAt).toBe('number');
+  });
+
+  it.each([
+    ['PreToolUse', 'inProgress'],
+    ['PostToolUse', 'inProgress'],
+    ['PostToolUseFailure', 'inProgress'],
+    ['Stop', 'completed'],
+  ])('does not rewrite the sidecar on %s', async (hookEventName, expectedStatus) => {
+    const root = tempRoot();
+    const sidecarDir = join(root, 'hooks');
+    const statusDir = join(root, 'status');
+    const sidecarPath = join(sidecarDir, 'wt-_work_repo__term-1.json');
+    const scriptPath = writeScript(root, renderAgentHookScript(sidecarDir));
+    const env = { ...process.env, DECK_SESSION: 'wt-_work_repo__term-1' };
+
+    await runScript(scriptPath, {
+      env,
+      input: '{"session_id":"abc-123","hook_event_name":"SessionStart"}',
+    });
+    const originalSidecar = readFileSync(sidecarPath, 'utf8');
+
+    await runScript(scriptPath, {
+      env,
+      input: `{"session_id":"def-456","hook_event_name":"${hookEventName}"}`,
+    });
+
+    expect(readFileSync(sidecarPath, 'utf8')).toBe(originalSidecar);
+    const status = JSON.parse(readFileSync(join(statusDir, 'wt-_work_repo__term-1.json'), 'utf8'));
+    expect(status.status).toBe(expectedStatus);
   });
 
   it('writes needs-input with the payload message on PermissionRequest and clears it after approval', async () => {
@@ -180,21 +214,26 @@ describe('renderAgentHookScript', () => {
     expect(typeof status.statusAt).toBe('number');
   });
 
-  it('keeps the Stop sidecar write when status writing fails', async () => {
+  it('keeps the sidecar unchanged when Stop status writing fails', async () => {
     const root = tempRoot();
     const sidecarDir = join(root, 'hooks');
     writeFileSync(join(root, 'status'), 'not a directory', 'utf8');
     const scriptPath = writeScript(root, renderAgentHookScript(sidecarDir));
+    const env = { ...process.env, DECK_SESSION: 'wt-_work_repo__term-1' };
 
     await runScript(scriptPath, {
-      env: { ...process.env, DECK_SESSION: 'wt-_work_repo__term-1' },
-      input: '{"session_id":"abc-123","hook_event_name":"Stop"}',
+      env,
+      input: '{"session_id":"abc-123","hook_event_name":"SessionStart"}',
+    });
+    const sidecarPath = join(sidecarDir, 'wt-_work_repo__term-1.json');
+    const originalSidecar = readFileSync(sidecarPath, 'utf8');
+
+    await runScript(scriptPath, {
+      env,
+      input: '{"session_id":"def-456","hook_event_name":"Stop"}',
     });
 
-    expect(JSON.parse(readFileSync(join(sidecarDir, 'wt-_work_repo__term-1.json'), 'utf8'))).toEqual({
-      agent: 'claude',
-      session_id: 'abc-123',
-    });
+    expect(readFileSync(sidecarPath, 'utf8')).toBe(originalSidecar);
   });
 
   it('renames the Deck tmux window to the agent on SessionStart', async () => {
@@ -334,7 +373,7 @@ describe('renderAgentHookScript', () => {
     expect(existsSync(tmuxLogPath)).toBe(false);
   });
 
-  it('writes the sidecar even when hook_event_name is absent, and issues no rename', async () => {
+  it('does not write a sidecar when hook_event_name is absent, and issues no rename', async () => {
     const root = tempRoot();
     const sidecarDir = join(root, 'hooks');
     const scriptPath = writeScript(root, renderAgentHookScript(sidecarDir));
@@ -349,10 +388,7 @@ describe('renderAgentHookScript', () => {
       input: '{"session_id":"abc-123"}',
     });
 
-    expect(JSON.parse(readFileSync(join(sidecarDir, 'wt-_work_repo__term-1.json'), 'utf8'))).toEqual({
-      agent: 'claude',
-      session_id: 'abc-123',
-    });
+    expect(existsSync(sidecarDir)).toBe(false);
     expect(existsSync(tmuxLogPath)).toBe(false);
   });
 });

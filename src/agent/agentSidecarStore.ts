@@ -53,7 +53,12 @@ export class AgentSidecarStore {
 }
 
 function parseSidecar(text: string): AgentSidecar | undefined {
-  const value: unknown = JSON.parse(text);
+  let value: unknown;
+  try {
+    value = JSON.parse(text);
+  } catch {
+    return undefined;
+  }
   if (
     typeof value === 'object' &&
     value !== null &&
