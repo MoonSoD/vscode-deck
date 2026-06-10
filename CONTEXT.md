@@ -79,11 +79,11 @@ The resumable AI-agent conversation (Claude Code or Codex) a Terminal was runnin
 _Avoid_: agent chat session (implies a separate chat surface; this is an attribute of a Terminal), conversation, thread, agent process
 
 **AgentStatus**:
-The observed state of an AgentSession in a Terminal: InProgress, NeedsInput,
-Completed, or Failed. Absence means there is no current status to show. Deck
-derives Claude statuses from hooks and stores them in disposable per-Terminal
-status files, separate from AgentSession resume sidecars.
-_Avoid_: terminal status (the Terminal itself can be healthy while the agent is blocked), process status
+The observed status of an AgentSession in a Terminal: InProgress, NeedsInput,
+Completed with unread metadata, or Failed. Absence means there is nothing current
+to report. Deck observes it through agent hooks; it does not own or infer the
+agent lifecycle.
+_Avoid_: busy, done, agent state, terminal status (the Terminal itself can be healthy while the agent is blocked), process status
 
 **Terminal**:
 A persistent shell owned by Deck — one tmux session on the DeckSocket — shown as a row under a Worktree and opened as an xterm.js editor tab addressed by `deck-terminal:/<worktree>/term-N`. Like a file, the Terminal is the durable thing and its tab is just a view onto it: closing the tab leaves the Terminal running, and any Terminal can be opened from any mounted Worktree without a Switch.
