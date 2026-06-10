@@ -479,14 +479,16 @@ async function registeredCommonDirs(
 }
 
 async function showAgentHookUpgradeNotifications(configs: readonly HookReconcileResult[]): Promise<void> {
-  for (const config of configs) {
+  // Unchained: an ignored toast's promise stays pending until dismissed, so a
+  // sequential loop could hold back the next agent's toast indefinitely.
+  await Promise.all(configs.map(async (config) => {
     const reviewChanges = 'Review Changes';
     const choice = await vscode.window.showInformationMessage(
       `Deck updated its ${agentHookProductName(config.agent)} hooks for this Deck version`,
       reviewChanges,
     );
     if (choice === reviewChanges) await showAgentHookConfigChanges([config]);
-  }
+  }));
 }
 
 async function showAgentHookConfigChanges(configs: readonly AgentConfigChange[]): Promise<void> {

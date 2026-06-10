@@ -818,6 +818,29 @@ describe('activate', () => {
     });
   });
 
+  it('shows upgrade toasts for every reconciled agent even while the first toast is pending', async () => {
+    const context = createContext();
+    vscodeState.hookInstallerReconcile.mockResolvedValue([
+      { agent: 'claude', configPath: '/home/me/.claude/settings.json' },
+      { agent: 'codex', configPath: '/home/me/.codex/hooks.json' },
+    ]);
+    // An ignored toast keeps its promise pending; the codex toast must not wait on it.
+    vscodeState.showInformationMessage.mockImplementation(() => new Promise(() => {}));
+
+    await activate(context as never);
+
+    await vi.waitFor(() => {
+      expect(vscodeState.showInformationMessage).toHaveBeenCalledWith(
+        'Deck updated its Claude Code hooks for this Deck version',
+        'Review Changes',
+      );
+      expect(vscodeState.showInformationMessage).toHaveBeenCalledWith(
+        'Deck updated its Codex hooks for this Deck version',
+        'Review Changes',
+      );
+    });
+  });
+
   it('registers deck.removeAgentHooks through the setup prompt uninstall flow', async () => {
     const context = createContext();
 
