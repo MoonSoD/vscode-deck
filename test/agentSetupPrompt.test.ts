@@ -78,6 +78,20 @@ describe('AgentSetupPrompt', () => {
     expect(prompt.installer.install).not.toHaveBeenCalled();
   });
 
+  it('offers a legacy Claude hook upgrade even after setup was dismissed', async () => {
+    const prompt = createPrompt({
+      detected: [{ agent: 'claude', configPath: '/home/me/.claude/settings.json' }],
+      deckHooks: new Set(['claude']),
+      dismissed: true,
+      infoChoices: ['Set Up Claude', undefined],
+    });
+
+    await prompt.run();
+
+    expect(prompt.installer.install).toHaveBeenCalledWith(['claude']);
+    expect(prompt.values[AGENT_HOOK_SETUP_DISMISSED_KEY]).toBe(true);
+  });
+
   it('pre-ticks multiple offered agents and persists dismissal', async () => {
     const prompt = createPrompt({
       detected: [
@@ -165,6 +179,19 @@ describe('AgentSetupPrompt', () => {
     expect(prompt.notifications.showInformationMessage).toHaveBeenCalledOnce();
   });
 
+  it('uninstall removes legacy Claude hooks that are not current installs', async () => {
+    const prompt = createPrompt({
+      detected: [],
+      installed: new Set(),
+      deckHooks: new Set(['claude']),
+    });
+
+    await prompt.uninstall();
+
+    expect(prompt.notifications.showQuickPick).not.toHaveBeenCalled();
+    expect(prompt.installer.remove).toHaveBeenCalledWith(['claude']);
+  });
+
   it('uninstall removes a single installed agent without prompting or dismissing', async () => {
     const prompt = createPrompt({ detected: [], installed: new Set(['claude']) });
 
@@ -209,6 +236,7 @@ describe('AgentSetupPrompt', () => {
 function createPrompt(input: {
   detected: Array<{ agent: AgentName; configPath: string }>;
   installed?: ReadonlySet<AgentName>;
+  deckHooks?: ReadonlySet<AgentName>;
   infoChoice?: string;
   infoChoices?: Array<string | undefined>;
   dismissed?: boolean;
@@ -225,7 +253,9 @@ function createPrompt(input: {
     ),
   };
   const installer = {
-    isInstalled: vi.fn(async (agent: AgentName) => input.installed?.has(agent) ?? false),
+    isCurrentInstall: vi.fn(async (agent: AgentName) => input.installed?.has(agent) ?? false),
+    hasDeckHooks: vi.fn(async (agent: AgentName) =>
+      input.deckHooks?.has(agent) ?? input.installed?.has(agent) ?? false),
     install: vi.fn(async () => undefined),
     remove: vi.fn(async (agents: readonly AgentName[]) => [...agents]),
   };

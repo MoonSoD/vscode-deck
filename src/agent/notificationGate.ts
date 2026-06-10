@@ -3,12 +3,16 @@ import type { AgentName, DetectedAgent } from './agentTypes';
 export class NotificationGate {
   static shouldPrompt(input: {
     detected: readonly DetectedAgent[];
-    installed: ReadonlySet<AgentName>;
+    currentInstalls: ReadonlySet<AgentName>;
+    deckHookInstalls: ReadonlySet<AgentName>;
     dismissed: boolean;
   }): AgentName[] {
-    if (input.dismissed) return [];
     return input.detected
-      .filter((agent) => !input.installed.has(agent.agent))
+      .filter((agent) => {
+        if (input.currentInstalls.has(agent.agent)) return false;
+        if (input.deckHookInstalls.has(agent.agent)) return true;
+        return !input.dismissed;
+      })
       .map((agent) => agent.agent);
   }
 }

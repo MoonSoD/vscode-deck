@@ -101,7 +101,7 @@ export class HookInstaller {
     const refreshed: AgentName[] = [];
     for (const agent of agents) {
       if (agent === 'codex' && (!this.paths.codexHooksPath || !this.paths.codexHookScriptPath)) continue;
-      if (!(await this.isInstalled(agent))) continue;
+      if (!(await this.hasDeckHooks(agent))) continue;
 
       const { scriptPath } = this.configFor(agent);
       const expected = renderAgentHookScript(this.paths.sidecarDir, agent);
@@ -114,6 +114,20 @@ export class HookInstaller {
   }
 
   async isInstalled(agent: AgentName): Promise<boolean> {
+    return this.isCurrentInstall(agent);
+  }
+
+  async hasDeckHooks(agent: AgentName): Promise<boolean> {
+    const config = this.configFor(agent);
+    const settings = await this.readSettings(config.configPath);
+    return Object.values(settings.hooks ?? {}).some((groups) =>
+      groups.some((group) =>
+        (group.hooks ?? []).some(isDeckHook),
+      ),
+    );
+  }
+
+  async isCurrentInstall(agent: AgentName): Promise<boolean> {
     const config = this.configFor(agent);
     const settings = await this.readSettings(config.configPath);
     return HOOK_EVENTS_BY_AGENT[agent].every((event) =>

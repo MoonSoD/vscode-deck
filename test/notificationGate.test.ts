@@ -8,25 +8,38 @@ describe('NotificationGate', () => {
         { agent: 'claude', configPath: '/home/me/.claude/settings.json' },
         { agent: 'codex', configPath: '/home/me/.codex/hooks.json' },
       ],
-      installed: new Set(['claude']),
+      currentInstalls: new Set(['claude']),
+      deckHookInstalls: new Set(['claude']),
       dismissed: false,
     })).toEqual(['codex']);
   });
 
-  it('stays quiet when no agent is detected, hooks are installed, or dismissed', () => {
+  it('offers detected legacy installs even when dismissed', () => {
+    expect(NotificationGate.shouldPrompt({
+      detected: [{ agent: 'claude', configPath: '/home/me/.claude/settings.json' }],
+      currentInstalls: new Set(),
+      deckHookInstalls: new Set(['claude']),
+      dismissed: true,
+    })).toEqual(['claude']);
+  });
+
+  it('stays quiet when no agent is detected, hooks are current, or fresh setup is dismissed', () => {
     expect(NotificationGate.shouldPrompt({
       detected: [],
-      installed: new Set(),
+      currentInstalls: new Set(),
+      deckHookInstalls: new Set(),
       dismissed: false,
     })).toEqual([]);
     expect(NotificationGate.shouldPrompt({
       detected: [{ agent: 'claude', configPath: '/home/me/.claude/settings.json' }],
-      installed: new Set(['claude']),
+      currentInstalls: new Set(['claude']),
+      deckHookInstalls: new Set(['claude']),
       dismissed: false,
     })).toEqual([]);
     expect(NotificationGate.shouldPrompt({
       detected: [{ agent: 'claude', configPath: '/home/me/.claude/settings.json' }],
-      installed: new Set(),
+      currentInstalls: new Set(),
+      deckHookInstalls: new Set(),
       dismissed: true,
     })).toEqual([]);
   });

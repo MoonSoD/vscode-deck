@@ -15,7 +15,8 @@ interface AgentDetector {
 }
 
 interface AgentHookInstaller {
-  isInstalled(agent: AgentName): Promise<boolean>;
+  hasDeckHooks(agent: AgentName): Promise<boolean>;
+  isCurrentInstall(agent: AgentName): Promise<boolean>;
   install(agents: readonly AgentName[]): Promise<void>;
   remove(agents: readonly AgentName[]): Promise<AgentName[]>;
 }
@@ -62,10 +63,12 @@ export class AgentSetupPrompt {
     if (explicit) await this.deps.globalState.update(AGENT_HOOK_SETUP_DISMISSED_KEY, false);
 
     const detected = await this.deps.detector.detect();
-    const installed = await this.installedAgents(detected);
+    const currentInstalls = await this.currentInstallAgents(detected);
+    const deckHookInstalls = await this.deckHookAgents(detected.map((agent) => agent.agent));
     const agents = NotificationGate.shouldPrompt({
       detected,
-      installed,
+      currentInstalls,
+      deckHookInstalls,
       dismissed: !explicit && this.deps.globalState.get(AGENT_HOOK_SETUP_DISMISSED_KEY, false),
     });
 
@@ -88,7 +91,7 @@ export class AgentSetupPrompt {
   // dismissal — suppression is only ever an explicit user choice ("Don't ask
   // again") — so after removing an agent the activation offer can resurface it.
   async uninstall(): Promise<void> {
-    const installed = await this.installedAgentList();
+    const installed = await this.deckHookAgentList();
     if (installed.length === 0) {
       await this.deps.notifications.showInformationMessage('No Deck agent hooks are installed.');
       return;
@@ -167,18 +170,26 @@ export class AgentSetupPrompt {
     return selected?.map((item) => item.agent) ?? [];
   }
 
-  private async installedAgents(detected: readonly DetectedAgent[]): Promise<Set<AgentName>> {
+  private async currentInstallAgents(detected: readonly DetectedAgent[]): Promise<Set<AgentName>> {
     const installed = new Set<AgentName>();
     await Promise.all(detected.map(async ({ agent }) => {
-      if (await this.deps.installer.isInstalled(agent)) installed.add(agent);
+      if (await this.deps.installer.isCurrentInstall(agent)) installed.add(agent);
     }));
     return installed;
   }
 
-  private async installedAgentList(): Promise<AgentName[]> {
+  private async deckHookAgents(agents: readonly AgentName[]): Promise<Set<AgentName>> {
+    const installed = new Set<AgentName>();
+    await Promise.all(agents.map(async (agent) => {
+      if (await this.deps.installer.hasDeckHooks(agent)) installed.add(agent);
+    }));
+    return installed;
+  }
+
+  private async deckHookAgentList(): Promise<AgentName[]> {
     const installed: AgentName[] = [];
     for (const agent of ALL_AGENTS) {
-      if (await this.deps.installer.isInstalled(agent)) installed.push(agent);
+      if (await this.deps.installer.hasDeckHooks(agent)) installed.push(agent);
     }
     return installed;
   }

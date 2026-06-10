@@ -33,7 +33,7 @@ describe('HookInstaller', () => {
     });
   });
 
-  it('treats a legacy Claude install without full status events as not installed', async () => {
+  it('detects legacy Claude hooks separately from current installs', async () => {
     const root = tempRoot();
     const settingsPath = join(root, '.claude', 'settings.json');
     const scriptPath = join(root, '.local', 'share', 'deck', 'bin', 'deck-claude-hook.sh');
@@ -53,7 +53,8 @@ describe('HookInstaller', () => {
       sidecarDir: join(root, '.local', 'share', 'deck', 'hooks'),
     });
 
-    await expect(installer.isInstalled('claude')).resolves.toBe(false);
+    await expect(installer.hasDeckHooks('claude')).resolves.toBe(true);
+    await expect(installer.isCurrentInstall('claude')).resolves.toBe(false);
   });
 
   it('previews the exact Claude config change without writing', async () => {
@@ -420,6 +421,36 @@ describe('HookInstaller', () => {
     });
     await installer.install(['claude']);
     writeFileSync(scriptPath, '#!/bin/sh\n# stale pre-upgrade script\n', 'utf8');
+
+    await expect(installer.refreshInstalledScripts()).resolves.toEqual(['claude']);
+
+    expect(readFileSync(scriptPath, 'utf8')).toBe(renderAgentHookScript(sidecarDir, 'claude'));
+    expect(statSync(scriptPath).mode & 0o111).not.toBe(0);
+  });
+
+  it('refreshes a legacy Claude install whose hook script drifted from the current build', async () => {
+    const root = tempRoot();
+    const settingsPath = join(root, '.claude', 'settings.json');
+    const scriptPath = join(root, '.local', 'share', 'deck', 'bin', 'deck-claude-hook.sh');
+    const sidecarDir = join(root, '.local', 'share', 'deck', 'hooks');
+    mkdirSync(join(root, '.claude'), { recursive: true });
+    mkdirSync(join(root, '.local', 'share', 'deck', 'bin'), { recursive: true });
+    writeFileSync(settingsPath, JSON.stringify({
+      hooks: {
+        SessionStart: [deckHookGroup(scriptPath)],
+        UserPromptSubmit: [deckHookGroup(scriptPath)],
+        SessionEnd: [deckHookGroup(scriptPath)],
+        Stop: [deckHookGroup(scriptPath)],
+      },
+    }), 'utf8');
+    writeFileSync(scriptPath, '#!/bin/sh\n# stale pre-status script\n', 'utf8');
+    const installer = new HookInstaller({
+      claudeSettingsPath: settingsPath,
+      codexHooksPath: join(root, '.codex', 'hooks.json'),
+      hookScriptPath: scriptPath,
+      codexHookScriptPath: join(root, '.local', 'share', 'deck', 'bin', 'deck-codex-hook.sh'),
+      sidecarDir,
+    });
 
     await expect(installer.refreshInstalledScripts()).resolves.toEqual(['claude']);
 
