@@ -43,7 +43,7 @@ keystroke.
    `\x16`; otherwise the existing `readText()` text paste. Both routes behave
    identically.
 
-4. **Drag-and-drop is deferred** (see Considered Options).
+4. **Drag-and-drop is out of scope and not planned** (see Considered Options).
 
 This is **agent-agnostic by construction**: Claude, Codex, and pi all read the
 pasteboard on Ctrl+V, so the same forwarded keystroke serves every agent — and a
@@ -73,10 +73,11 @@ plain shell simply receives `^V` (harmless).
 - **Deck stays a dumb pipe for paste.** It owns no image format/size policy — the
   agent's own clipboard reader does (PNG/JPEG/WebP/GIF, conversion, limits). One
   fewer thing to maintain.
-- **Drag-drop still does nothing** (the webview has no `drop` handler today
-  either). A dropped Finder file is *not* in the pasteboard, so `\x16` can't serve
-  it — it would need path injection, which is Claude-only. Deferred rather than
-  reintroduce that asymmetry.
+- **Drag-drop is intentionally unsupported.** VS Code's workbench intercepts a
+  file drop and opens the image in an editor tab before the webview sees it (QA-
+  confirmed) — a reasonable default. Overriding it would mean fighting the
+  workbench *and* falling back to Claude-only path injection (a dropped file isn't
+  in the pasteboard, so `\x16` can't serve it), so we decline it.
 - **Linux/Windows caveat, unverified.** There the browser paste shortcut *is*
   Ctrl+V, which can race xterm's own `^V` from the keydown. The handler guards on
   an image being present and `preventDefault`s; Linux/Windows behavior is a
@@ -84,4 +85,4 @@ plain shell simply receives `^V` (harmless).
 
 ## Status
 
-Proposed.
+Accepted — shipped in v0.5.0.
