@@ -204,27 +204,20 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
     sessionName: string,
     worktreePath: string,
   ): Promise<RepositoryTreeNode | undefined> {
-    const repositories = await this.resolveChildren();
-    for (const repository of repositories) {
-      if (!(repository instanceof RepositoryNode)) continue;
-      const worktrees = await this.resolveChildren(repository);
-      const worktree = worktrees.find(
-        (node) =>
-          node instanceof WorktreeNode &&
-          path.resolve(node.worktree.path) === path.resolve(worktreePath),
-      );
-      if (!(worktree instanceof WorktreeNode)) continue;
-
-      const terminals = await this.resolveChildren(worktree);
-      const terminal = terminals.find(
-        (node) => node instanceof TerminalNode && node.terminal.sessionName === sessionName,
-      );
-      if (terminal) return terminal;
-    }
-    return undefined;
+    return this.findTerminalNode(
+      (terminal, worktree) =>
+        terminal.terminal.sessionName === sessionName &&
+        path.resolve(worktree.worktree.path) === path.resolve(worktreePath),
+    );
   }
 
   async findTerminalBySessionName(sessionName: string): Promise<RepositoryTreeNode | undefined> {
+    return this.findTerminalNode((terminal) => terminal.terminal.sessionName === sessionName);
+  }
+
+  private async findTerminalNode(
+    matches: (terminal: TerminalNode, worktree: WorktreeNode) => boolean,
+  ): Promise<TerminalNode | undefined> {
     const repositories = await this.resolveChildren();
     for (const repository of repositories) {
       if (!(repository instanceof RepositoryNode)) continue;
@@ -232,10 +225,9 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
       for (const worktree of worktrees) {
         if (!(worktree instanceof WorktreeNode)) continue;
         const terminals = await this.resolveChildren(worktree);
-        const terminal = terminals.find(
-          (node) => node instanceof TerminalNode && node.terminal.sessionName === sessionName,
-        );
-        if (terminal) return terminal;
+        for (const terminal of terminals) {
+          if (terminal instanceof TerminalNode && matches(terminal, worktree)) return terminal;
+        }
       }
     }
     return undefined;
