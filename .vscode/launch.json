@@ -9,6 +9,45 @@
       "outFiles": ["${workspaceFolder}/dist/**/*.js"],
       "preLaunchTask": "npm: build"
     },
+    // QA: "fresh machine" for the hook install/upgrade flow (QA doc §1). Claude
+    // stays detectable (real PATH), but Deck's config reads/writes land in
+    // scratch dirs and globalState starts empty (no dismissed flag, no repo
+    // registry), so the setup offer fires like a first install.
+    //
+    // One-time setup (re-run after a reboot — /tmp is ephemeral):
+    //   mkdir -p /tmp/deck-qa/fresh-claude /tmp/deck-qa/fresh-codex /tmp/deck-qa/fresh-data
+    // Factory-reset between runs:
+    //   rm -rf /tmp/deck-qa/fresh-user-data /tmp/deck-qa/fresh-data
+    //   rm -rf /tmp/deck-qa/fresh-claude /tmp/deck-qa/fresh-codex && mkdir -p /tmp/deck-qa/fresh-claude /tmp/deck-qa/fresh-codex
+    //
+    // Legacy-upgrade test: accept the fresh install, then prune the scratch
+    // settings down to the v0.5 events and reload the dev host:
+    //   cd /tmp/deck-qa/fresh-claude && jq '.hooks |= with_entries(select(.key == "SessionStart" or .key == "UserPromptSubmit" or .key == "SessionEnd"))' settings.json > s.tmp && mv s.tmp settings.json
+    //
+    // ⚠️ Install-flow QA only (QA doc §1). Live-agent scenarios (§2+) belong in
+    // the normal "Run Extension" profile: the deck tmux server is machine-global
+    // and its panes don't inherit this profile's CLAUDE_CONFIG_DIR, so agents
+    // launched in terminals here still use your real ~/.claude hooks.
+    {
+      "name": "Run Extension (fresh machine)",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}",
+        "--user-data-dir=/tmp/deck-qa/fresh-user-data"
+      ],
+      "outFiles": ["${workspaceFolder}/dist/**/*.js"],
+      "preLaunchTask": "npm: build",
+      "env": {
+        "CLAUDE_CONFIG_DIR": "/tmp/deck-qa/fresh-claude",
+        // Own scratch dir, NOT none-codex: codex is detected via its PATH
+        // binary, so the offer includes it and accepting writes hooks.json
+        // here — reusing none-codex would create the dir the "no agents"
+        // profile needs absent.
+        "CODEX_HOME": "/tmp/deck-qa/fresh-codex",
+        "XDG_DATA_HOME": "/tmp/deck-qa/fresh-data"
+      }
+    },
     // QA: verify "no agents detected -> no setup notification". Hides claude/codex
     // from agent detection while keeping tmux working (so the tmux-availability
     // gate still passes and the silence is really about agents).
