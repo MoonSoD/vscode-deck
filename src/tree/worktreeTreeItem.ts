@@ -17,7 +17,7 @@ export interface WorktreeTreeItemDescription {
 export interface TerminalTreeItemDescription {
   label: string;
   description?: string;
-  iconId: 'terminal' | 'loading~spin' | 'circle-filled' | 'error';
+  iconId: 'terminal' | 'loading~spin' | 'circle-filled' | 'circle-small-filled' | 'error';
   iconColorId?: 'textLink.foreground' | 'list.warningForeground' | 'errorForeground';
   contextValue: 'deck.terminal.active' | 'deck.terminal.foreign';
 }
@@ -87,6 +87,13 @@ export function describeTerminalTreeItem(
     };
   }
   if (status?.status === 'completed') {
+    if (status.unread === false) {
+      return {
+        label: windowName,
+        iconId: 'circle-small-filled',
+        contextValue,
+      };
+    }
     return {
       label: windowName,
       iconId: 'circle-filled',

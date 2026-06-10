@@ -34,6 +34,7 @@ describe('AgentStatusStore', () => {
       expect(store.get('wt-_work_repo__term-1')).toEqual({
         status: 'completed',
         statusAt: 1710000000,
+        unread: true,
       });
     });
 
@@ -47,9 +48,75 @@ describe('AgentStatusStore', () => {
       expect(store.get('wt-_work_repo__term-1')).toEqual({
         status: 'completed',
         statusAt: 1710000001,
+        unread: true,
       });
     });
     expect(changes).toHaveBeenCalled();
+  });
+
+  it('marks a completed Terminal read and re-arms unread for a newer completion', async () => {
+    const root = tempRoot();
+    mkdirSync(root, { recursive: true });
+    writeFileSync(
+      join(root, 'wt-_work_repo__term-1.json'),
+      '{"status":"completed","statusAt":1710000000}\n',
+      'utf8',
+    );
+    const storage = new MemoryMemento();
+    const store = new AgentStatusStore(root, 10, storage);
+    disposables.push(await store.start());
+
+    expect(store.get('wt-_work_repo__term-1')).toEqual({
+      status: 'completed',
+      statusAt: 1710000000,
+      unread: true,
+    });
+
+    await store.markRead('wt-_work_repo__term-1');
+
+    expect(store.get('wt-_work_repo__term-1')).toEqual({
+      status: 'completed',
+      statusAt: 1710000000,
+      unread: false,
+    });
+
+    writeFileSync(
+      join(root, 'wt-_work_repo__term-1.json'),
+      '{"status":"completed","statusAt":1710000001}\n',
+      'utf8',
+    );
+
+    await vi.waitFor(() => {
+      expect(store.get('wt-_work_repo__term-1')).toEqual({
+        status: 'completed',
+        statusAt: 1710000001,
+        unread: true,
+      });
+    });
+  });
+
+  it('persists completed read state through injected storage', async () => {
+    const root = tempRoot();
+    mkdirSync(root, { recursive: true });
+    writeFileSync(
+      join(root, 'wt-_work_repo__term-1.json'),
+      '{"status":"completed","statusAt":1710000000}\n',
+      'utf8',
+    );
+    const storage = new MemoryMemento();
+    const firstStore = new AgentStatusStore(root, 10, storage);
+    disposables.push(await firstStore.start());
+
+    await firstStore.markRead('wt-_work_repo__term-1');
+
+    const secondStore = new AgentStatusStore(root, 10, storage);
+    disposables.push(await secondStore.start());
+
+    expect(secondStore.get('wt-_work_repo__term-1')).toEqual({
+      status: 'completed',
+      statusAt: 1710000000,
+      unread: false,
+    });
   });
 
   it('ignores malformed and invalid status files', async () => {
@@ -84,7 +151,7 @@ describe('AgentStatusStore', () => {
       statusAt: 1710000001,
       message: 'Allow Bash?',
     });
-    expect(store.get('done')).toEqual({ status: 'completed', statusAt: 1710000002 });
+    expect(store.get('done')).toEqual({ status: 'completed', statusAt: 1710000002, unread: true });
     expect(store.get('failed')).toEqual({ status: 'failed', statusAt: 1710000003 });
   });
 
@@ -109,4 +176,16 @@ function tempRoot(): string {
   const root = mkdtempSync(join(tmpdir(), 'deck-agent-status-'));
   tempRoots.push(root);
   return root;
+}
+
+class MemoryMemento {
+  private readonly values: Record<string, unknown> = {};
+
+  get<T>(key: string, defaultValue: T): T {
+    return (this.values[key] as T | undefined) ?? defaultValue;
+  }
+
+  async update(key: string, value: unknown): Promise<void> {
+    this.values[key] = value;
+  }
 }

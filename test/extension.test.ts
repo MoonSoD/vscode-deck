@@ -15,8 +15,10 @@ const vscodeState = vi.hoisted(() => ({
   agentSetupPromptRun: vi.fn(),
   agentSetupPromptUninstall: vi.fn(),
   agentStatusStoreArgs: undefined as unknown[] | undefined,
+  agentStatusStoreMarkRead: vi.fn(async () => undefined),
   agentStatusStorePrune: vi.fn(async () => undefined),
   agentStatusStoreStart: vi.fn(async () => ({ dispose: vi.fn() })),
+  agentStatusStoreChangeListener: undefined as (() => void) | undefined,
   hookInstallerArgs: undefined as unknown[] | undefined,
   hookInstallerRemove: vi.fn(),
   configUpdate: vi.fn(),
@@ -279,7 +281,11 @@ vi.mock('../src/agent/terminalSnapshotAgentSessions', () => ({
 vi.mock('../src/agent/agentStatusStore', () => ({
   AgentStatusStore: class {
     get = vi.fn();
-    onDidChange = vi.fn(() => ({ dispose: vi.fn() }));
+    markRead = vscodeState.agentStatusStoreMarkRead;
+    onDidChange = vi.fn((listener: () => void) => {
+      vscodeState.agentStatusStoreChangeListener = listener;
+      return { dispose: vi.fn() };
+    });
     prune = vscodeState.agentStatusStorePrune;
     start = vscodeState.agentStatusStoreStart;
 
@@ -368,6 +374,8 @@ describe('activate', () => {
     vscodeState.addTerminalArgs = undefined;
     vscodeState.agentDetectionArgs = undefined;
     vscodeState.agentSetupPromptArgs = undefined;
+    vscodeState.agentStatusStoreChangeListener = undefined;
+    vscodeState.agentStatusStoreMarkRead.mockResolvedValue(undefined);
     vscodeState.agentSetupPromptRun.mockResolvedValue(undefined);
     vscodeState.agentSetupPromptUninstall.mockResolvedValue(undefined);
     vscodeState.agentStatusStoreArgs = undefined;
@@ -762,6 +770,33 @@ describe('activate', () => {
       terminalNode,
       { select: true, focus: false },
     );
+  });
+
+  it('marks the active Deck Terminal read when its tab is focused or status changes', async () => {
+    const context = createContext();
+    const activeTab = {
+      input: {
+        viewType: 'deck.terminal',
+        uri: {
+          scheme: 'deck-terminal',
+          path: '/work/alpha-main/term-1',
+        },
+      },
+    };
+
+    await activate(context as never);
+    vscodeState.activeTab = activeTab;
+    const tabChangeHandler = vscodeState.onDidChangeTabs.mock.calls[0]?.[0];
+    if (!tabChangeHandler) throw new Error('missing tab change listener');
+    await tabChangeHandler({ opened: [], closed: [], changed: [activeTab] });
+
+    expect(vscodeState.agentStatusStoreMarkRead).toHaveBeenCalledWith('wt-_work_alpha-main__term-1');
+
+    vscodeState.agentStatusStoreMarkRead.mockClear();
+    vscodeState.agentStatusStoreChangeListener?.();
+    await Promise.resolve();
+
+    expect(vscodeState.agentStatusStoreMarkRead).toHaveBeenCalledWith('wt-_work_alpha-main__term-1');
   });
 
   it('does not reveal a tree row when a non-Terminal tab becomes active', async () => {

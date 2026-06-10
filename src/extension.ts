@@ -58,8 +58,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   await applyDeckTmuxOptionsIfServerRunning(tmux, initialTmuxOptions, tmuxAvailability.available);
   const deckDir = deckDataDir();
   const agentSidecars = new AgentSidecarStore(join(deckDir, 'hooks'));
-  const agentStatuses = new AgentStatusStore(join(deckDir, 'status'));
+  const agentStatuses = new AgentStatusStore(join(deckDir, 'status'), 100, context.globalState);
   const agentStatusWatch = await agentStatuses.start();
+  const activeTerminalReadWatch = agentStatuses.onDidChange(() => {
+    void markActiveTerminalRead(agentStatuses);
+  });
+  void markActiveTerminalRead(agentStatuses);
   const hookInstaller = new HookInstaller({
     claudeSettingsPath: join(process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude'), 'settings.json'),
     codexHooksPath: join(process.env.CODEX_HOME || join(homedir(), '.codex'), 'hooks.json'),
@@ -252,6 +256,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   context.subscriptions.push(
     treeView,
     agentStatusWatch,
+    activeTerminalReadWatch,
     externalGitWatch,
     vscode.window.registerCustomEditorProvider(terminalEditorViewType, terminalEditorProvider, {
       webviewOptions: {
@@ -299,9 +304,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       await applyDeckTmuxOptionsIfServerRunning(tmux, tmuxOptions, tmuxAvailability.available);
     }),
     vscode.window.tabGroups.onDidChangeTabs(async () => {
+      await markActiveTerminalRead(agentStatuses);
       await revealActiveTerminalInTree(tree, treeView);
     }),
     vscode.window.tabGroups.onDidChangeTabGroups(async () => {
+      await markActiveTerminalRead(agentStatuses);
       await revealActiveTerminalInTree(tree, treeView);
     }),
     treeView.onDidChangeVisibility((event) => {
@@ -466,16 +473,8 @@ async function revealActiveTerminalInTree(
   tree: RepositoryTreeProvider,
   treeView: vscode.TreeView<RepositoryTreeNode>,
 ): Promise<void> {
-  const activeTab = vscode.window.tabGroups.activeTabGroup.activeTab;
-  const input = activeTab?.input as { viewType?: unknown; uri?: vscode.Uri } | undefined;
-  if (input?.viewType !== terminalEditorViewType || !input.uri) return;
-
-  let decoded;
-  try {
-    decoded = new SessionUriCodec().decode(input.uri);
-  } catch {
-    return;
-  }
+  const decoded = activeDeckTerminal();
+  if (!decoded) return;
 
   try {
     const terminalNode = await tree.findTerminal(decoded.sessionName, decoded.worktreePath);
@@ -486,6 +485,31 @@ async function revealActiveTerminalInTree(
     // a hidden view; neither should surface as an unhandled rejection from a
     // tab event.
     console.warn('Deck: revealing the active terminal failed', error);
+  }
+}
+
+function activeDeckTerminal(): { sessionName: string; worktreePath: string } | undefined {
+  const activeTab = vscode.window.tabGroups.activeTabGroup.activeTab;
+  const input = activeTab?.input as { viewType?: unknown; uri?: vscode.Uri } | undefined;
+  if (input?.viewType !== terminalEditorViewType || !input.uri) return undefined;
+
+  try {
+    return new SessionUriCodec().decode(input.uri);
+  } catch {
+    return undefined;
+  }
+}
+
+async function markActiveTerminalRead(
+  agentStatuses: Pick<AgentStatusStore, 'markRead'>,
+): Promise<void> {
+  const activeTerminal = activeDeckTerminal();
+  if (!activeTerminal) return;
+
+  try {
+    await agentStatuses.markRead(activeTerminal.sessionName);
+  } catch (error) {
+    console.warn('Deck: marking active Terminal agent status read failed', error);
   }
 }
 

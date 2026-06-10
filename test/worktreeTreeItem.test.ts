@@ -91,11 +91,27 @@ describe('describeTerminalTreeItem', () => {
     });
   });
 
-  it('renders completed agent status as a blue filled dot', () => {
-    expect(describeTerminalTreeItem('claude', false, { status: 'completed', statusAt: 1710000000 })).toEqual({
+  it('renders unread completed agent status as a blue filled dot', () => {
+    expect(describeTerminalTreeItem('claude', false, {
+      status: 'completed',
+      statusAt: 1710000000,
+      unread: true,
+    })).toEqual({
       label: 'claude',
       iconId: 'circle-filled',
       iconColorId: 'textLink.foreground',
+      contextValue: 'deck.terminal.foreign',
+    });
+  });
+
+  it('renders read completed agent status as a muted small dot', () => {
+    expect(describeTerminalTreeItem('claude', false, {
+      status: 'completed',
+      statusAt: 1710000000,
+      unread: false,
+    })).toEqual({
+      label: 'claude',
+      iconId: 'circle-small-filled',
       contextValue: 'deck.terminal.foreign',
     });
   });

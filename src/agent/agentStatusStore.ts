@@ -2,28 +2,51 @@ import { watch } from 'node:fs';
 import { mkdir, readdir, readFile, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 
+export const AGENT_STATUS_READS_KEY = 'deck.agentStatusReads';
+export const AGENT_STATUS_READS_SCHEMA_VERSION = 1;
+
+type MaybePromise<T> = T | PromiseLike<T>;
+
+export interface AgentStatusReadStorage {
+  get<T>(key: string, defaultValue: T): T;
+  update(key: string, value: unknown): MaybePromise<void>;
+}
+
 export interface AgentStatus {
   status: 'inProgress' | 'needsInput' | 'completed' | 'failed';
   statusAt: number;
   message?: string;
+  unread?: boolean;
 }
 
 export interface Disposable {
   dispose(): void;
 }
 
+interface AgentStatusReads {
+  schemaVersion: number;
+  completed: Record<string, number>;
+}
+
+const EMPTY_READ_STORAGE: AgentStatusReadStorage = {
+  get: (_key, defaultValue) => defaultValue,
+  update: () => undefined,
+};
+
 export class AgentStatusStore {
   private statuses = new Map<string, AgentStatus>();
   private readonly listeners = new Set<() => void>();
   private debounceTimer: NodeJS.Timeout | undefined;
+  private readState: AgentStatusReads | undefined;
 
   constructor(
     private readonly root: string,
     private readonly debounceMs = 100,
+    private readonly readStorage: AgentStatusReadStorage = EMPTY_READ_STORAGE,
   ) {}
 
   get(sessionName: string): AgentStatus | undefined {
-    return this.statuses.get(sessionName);
+    return this.withReadState(sessionName, this.statuses.get(sessionName));
   }
 
   onDidChange(listener: () => void): Disposable {
@@ -74,6 +97,25 @@ export class AgentStatusStore {
     await this.reload();
   }
 
+  async markRead(sessionName: string): Promise<void> {
+    const status = this.statuses.get(sessionName);
+    if (status?.status !== 'completed') return;
+    const reads = this.reads();
+    if (reads.completed[sessionName] >= status.statusAt) return;
+
+    const next = {
+      schemaVersion: AGENT_STATUS_READS_SCHEMA_VERSION,
+      completed: {
+        ...reads.completed,
+        [sessionName]: status.statusAt,
+      },
+    };
+    this.readState = next;
+    await this.writeReads(next);
+
+    for (const listener of this.listeners) listener();
+  }
+
   private scheduleReload(): void {
     if (this.debounceTimer !== undefined) clearTimeout(this.debounceTimer);
     this.debounceTimer = setTimeout(() => {
@@ -120,6 +162,30 @@ export class AgentStatusStore {
       throw error;
     }
   }
+
+  private withReadState(sessionName: string, status: AgentStatus | undefined): AgentStatus | undefined {
+    if (status?.status !== 'completed') return status;
+    const readStatusAt = this.reads().completed[sessionName];
+    return {
+      ...status,
+      unread: readStatusAt === undefined || status.statusAt > readStatusAt,
+    };
+  }
+
+  private reads(): AgentStatusReads {
+    if (this.readState !== undefined) return this.readState;
+    const raw = this.readStorage.get<AgentStatusReads | undefined>(AGENT_STATUS_READS_KEY, undefined);
+    if (!isAgentStatusReads(raw)) {
+      this.readState = { schemaVersion: AGENT_STATUS_READS_SCHEMA_VERSION, completed: {} };
+      return this.readState;
+    }
+    this.readState = raw;
+    return this.readState;
+  }
+
+  private async writeReads(reads: AgentStatusReads): Promise<void> {
+    await this.readStorage.update(AGENT_STATUS_READS_KEY, reads);
+  }
 }
 
 function parseStatus(text: string): AgentStatus | undefined {
@@ -141,6 +207,19 @@ function parseStatus(text: string): AgentStatus | undefined {
 
 function isAgentStatusValue(value: unknown): value is AgentStatus['status'] {
   return value === 'inProgress' || value === 'needsInput' || value === 'completed' || value === 'failed';
+}
+
+function isAgentStatusReads(value: unknown): value is AgentStatusReads {
+  if (
+    typeof value !== 'object' ||
+    value === null ||
+    (value as { schemaVersion?: unknown }).schemaVersion !== AGENT_STATUS_READS_SCHEMA_VERSION ||
+    typeof (value as { completed?: unknown }).completed !== 'object' ||
+    (value as { completed?: unknown }).completed === null
+  ) {
+    return false;
+  }
+  return Object.values((value as AgentStatusReads).completed).every((statusAt) => typeof statusAt === 'number');
 }
 
 function sameStatuses(left: ReadonlyMap<string, AgentStatus>, right: ReadonlyMap<string, AgentStatus>): boolean {
