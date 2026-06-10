@@ -501,12 +501,10 @@ async function showAgentHookConfigChanges(configs: readonly AgentConfigChange[])
     const title = `Deck ${agent === 'claude' ? 'Claude' : 'Codex'} hooks (before ↔ after)`;
     try {
       await vscode.workspace.fs.stat(backup);
-      // preview: false — a multi-agent install opens one tab per agent, and a
-      // preview tab would be replaced by the next agent's diff.
-      await vscode.commands.executeCommand('vscode.diff', backup, current, title, { preview: false });
+      await vscode.commands.executeCommand('vscode.diff', backup, current, title);
     } catch {
       // No backup (config was absent before) — just open the new file.
-      await vscode.window.showTextDocument(current, { preview: false });
+      await vscode.window.showTextDocument(current);
     }
   }
 }
