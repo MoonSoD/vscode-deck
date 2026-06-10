@@ -14,7 +14,7 @@ describe('renderDeckConf', () => {
     }, resolveDeckTmuxOptions({}))).toBe(
       [
         'set -g automatic-rename on',
-        'set -g history-limit 50000',
+        'set -g history-limit 5000',
         'set -g destroy-unattached off',
         'set -g status off',
         'set -g prefix None',
@@ -42,7 +42,7 @@ describe('renderDeckConf', () => {
       [
         'set -g automatic-rename on',
         "set -g automatic-rename-format 'cmd '\\''#{pane_current_command}'\\'''",
-        'set -g history-limit 50000',
+        'set -g history-limit 5000',
         'set -g destroy-unattached off',
         'set -g status off',
         'set -g prefix None',

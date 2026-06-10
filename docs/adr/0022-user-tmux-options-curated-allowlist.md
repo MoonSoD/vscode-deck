@@ -37,7 +37,8 @@ Alternatives considered:
      `""` — empty emits no line, preserving tmux's built-in default (today's
      behavior). Non-empty is rendered and live-applied.
    - `history-limit` was scoped in but **dropped before shipping** — see the
-     Consequences note. `deck.conf` keeps its hardcoded `50000`.
+     Consequences note. `deck.conf` derives it from Deck's internal scrollback
+     cap.
 
 3. **Render + live-apply, running server is source of truth.** Values are
    rendered into `deck.conf` (so a fresh server — reboot/`kill-server` restore —
@@ -65,13 +66,14 @@ Alternatives considered:
   with the reattach seed capped to match); tmux's `history-limit` governs only
   tmux's internal pane history, which Deck reads via `capture-pane` for the
   reload/reboot seed. So a `historyLimit` setting could not raise visible
-  scrollback (xterm caps it), its proposed `50000` default already exceeded the
-  `5000` cap (inert), and lowering it would only *shrink* restored scrollback —
-  a knob that is inert at its default and harmful when changed. Exposing it
-  would not satisfy "tune my scrollback." Genuine scrollback control would have
-  to drive xterm's `scrollback` + the seed + tmux `history-limit` together (a
-  larger change with a real per-terminal memory tradeoff); deferred to its own
-  feature rather than shipped as a misleading tmux passthrough.
+  scrollback (xterm caps it), its old `50000` default exceeded the `5000` cap
+  (inert), and lowering it below the seed would only *shrink* restored
+  scrollback — a knob that is inert at its default and harmful when changed.
+  Exposing it would not satisfy "tune my scrollback." Genuine scrollback
+  control would have to drive xterm's `scrollback` + the seed + tmux
+  `history-limit` together (a larger change with a real per-terminal memory
+  tradeoff); deferred to its own feature rather than shipped as a misleading
+  tmux passthrough.
 - Adding a future safe field is a small, pattern-following change: a new
   `deck.tmux.*` setting plus its render + live-apply wiring. The deliberate
   *no* — free-form passthrough — stays closed. The `history-limit` episode is

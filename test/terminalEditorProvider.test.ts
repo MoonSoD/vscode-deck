@@ -286,6 +286,7 @@ describe('TerminalEditorProvider', () => {
     expect(terminalPanel.webview.html).toContain('@xterm/addon-web-links');
     expect(terminalPanel.webview.html).toContain('@xterm/addon-search');
     expect(terminalPanel.webview.html).toContain('@xterm/addon-unicode11');
+    expect(terminalPanel.webview.html).toContain('scrollback: 5000');
     expect(terminalPanel.webview.html).toContain("terminal.unicode.activeVersion = '11'");
     // tmux answers DA/DSR for the pane; xterm must not also reply (would leak
     // e.g. '1;2c' to the shell after the querying program exits).

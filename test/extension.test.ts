@@ -514,7 +514,7 @@ describe('activate', () => {
     const deckDir = join(context.xdgDataHome, 'deck');
     const generatedConf = join(deckDir, 'deck.conf');
     expect(readFileSync(generatedConf, 'utf8')).toContain(
-      "set -g automatic-rename-format '#{pane_current_command}:#{pane_current_path}'\nset -g history-limit 50000",
+      "set -g automatic-rename-format '#{pane_current_command}:#{pane_current_path}'\nset -g history-limit 5000",
     );
     expect(vscodeState.tmuxInstances[0].setOption).toHaveBeenCalledWith(
       'automatic-rename-format',

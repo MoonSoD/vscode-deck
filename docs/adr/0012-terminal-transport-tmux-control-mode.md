@@ -80,7 +80,8 @@ Alternatives considered:
    `vscode.setState` snapshot plumbing are removed — under control mode
    tmux never redraws, so a snapshot-less reload would otherwise paint
    an empty screen, and mixing snapshot + seed duplicates content (seen
-   in QA). One source of truth: tmux's `history-limit 50000`.
+   in QA). `deck.conf` sizes tmux's `history-limit` to the same cap so
+   tmux does not retain pane history Deck can never surface.
 
 6. **Exit semantics are preserved.** Child-process exit (and the
    preceding `%exit`) maps to `onExit(code)` exactly as node-pty's exit

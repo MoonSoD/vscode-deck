@@ -10,7 +10,11 @@ describe('TerminalTransport', () => {
     transport.start('wt-_work_repo__term-1', '/work/repo', 120, 32);
 
     expect(factory).toHaveBeenCalledWith('/ext/resources/deck.conf');
-    expect(client.start).toHaveBeenCalledWith('wt-_work_repo__term-1', '/work/repo', 5000);
+    expect(client.start).toHaveBeenCalledWith(
+      'wt-_work_repo__term-1',
+      '/work/repo',
+      5000,
+    );
     expect(client.resize).toHaveBeenCalledWith(120, 32);
   });
 

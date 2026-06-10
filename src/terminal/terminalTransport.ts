@@ -1,4 +1,5 @@
 import { TmuxControlClient } from './tmuxControlClient';
+import { TERMINAL_SCROLLBACK_LINES } from './terminalScrollback';
 
 export interface TmuxControlClientLike {
   start(sessionName: string, cwd: string, seedLines: number): Promise<void> | void;
@@ -16,9 +17,6 @@ export type TmuxControlClientFactory = (configPath: string) => TmuxControlClient
 
 const defaultClientFactory: TmuxControlClientFactory = (configPath) =>
   new TmuxControlClient(configPath);
-
-// Matches the webview's xterm scrollback; seeding deeper is wasted writes.
-const SEED_LINES = 5000;
 
 export class TerminalTransport {
   private client: TmuxControlClientLike | undefined;
@@ -55,7 +53,7 @@ export class TerminalTransport {
       client.onExit((code) => this.emitExit(code ?? 0)),
     );
 
-    this.startPromise = Promise.resolve(client.start(sessionName, cwd, SEED_LINES))
+    this.startPromise = Promise.resolve(client.start(sessionName, cwd, TERMINAL_SCROLLBACK_LINES))
       .then(() => {
         if (this.client === client) this.ready = true;
       })
