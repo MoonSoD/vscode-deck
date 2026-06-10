@@ -5,3 +5,4 @@ dist/
 .agents/local-repos.json
 tmux-client-*.log
 scratchpad.md
+tmp/

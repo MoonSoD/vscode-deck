@@ -7,6 +7,7 @@ docs/**
 .sandcastle/**
 .claude/**
 .agents/**
+tmp/**
 **/*.ts
 **/*.map
 icon.svg
