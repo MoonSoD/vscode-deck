@@ -44,6 +44,7 @@ export function renderAgentHookScript(
     '  printf "%s" "$1" | sed \'s/\\\\/\\\\\\\\/g; s/"/\\\\"/g\'',
     '}',
     'write_status() {',
+    '  [ "$agent" = "claude" ] || return 0',
     '  mkdir -p "$status_dir" || return 0',
     '  tmp=$(mktemp "$status_dir/$DECK_SESSION.XXXXXX") || return 0',
     '  status_at=$(date +%s 2>/dev/null || printf 0)',

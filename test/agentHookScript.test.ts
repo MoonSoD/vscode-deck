@@ -278,6 +278,24 @@ describe('renderAgentHookScript', () => {
     });
   });
 
+  it('keeps Codex hooks identity-only on UserPromptSubmit', async () => {
+    const root = tempRoot();
+    const sidecarDir = join(root, 'hooks');
+    const statusDir = join(root, 'status');
+    const scriptPath = writeScript(root, renderAgentHookScript(sidecarDir, 'codex'));
+
+    await runScript(scriptPath, {
+      env: { ...process.env, DECK_SESSION: 'wt-_work_repo__term-1' },
+      input: '{"session_id":"codex-123","hook_event_name":"UserPromptSubmit"}',
+    });
+
+    expect(JSON.parse(readFileSync(join(sidecarDir, 'wt-_work_repo__term-1.json'), 'utf8'))).toEqual({
+      agent: 'codex',
+      session_id: 'codex-123',
+    });
+    expect(existsSync(statusDir)).toBe(false);
+  });
+
   it('no-ops outside Deck when DECK_SESSION is absent', async () => {
     const root = tempRoot();
     const sidecarDir = join(root, 'hooks');
