@@ -79,7 +79,7 @@ export class AgentSetupPrompt {
 
     if (!explicit && !(await this.offerSetup(agents))) return;
 
-    const selected = await this.pickAgents(agents, 'Select agents for Deck resume hooks');
+    const selected = await this.pickAgents(agents, 'Select agents for Deck agent hooks');
     if (selected.length === 0) return;
 
     await this.deps.installer.install(selected);
@@ -97,7 +97,7 @@ export class AgentSetupPrompt {
       return;
     }
 
-    const selected = await this.pickAgents(installed, 'Select agents to remove Deck resume hooks from');
+    const selected = await this.pickAgents(installed, 'Select agents to remove Deck agent hooks from');
     if (selected.length === 0) return;
 
     const removed = await this.deps.installer.remove(selected);
@@ -112,7 +112,7 @@ export class AgentSetupPrompt {
     const setupAction = `Set Up ${formatAgentList(agents)}`;
     const dontAskAgain = "Don't ask again";
     const action = await this.deps.notifications.showInformationMessage(
-      `Deck can restore ${formatAgentList(agents)} agent sessions after reboot. Each config is backed up first; undo anytime with "Deck: Uninstall agent hooks".`,
+      `Deck can restore ${formatAgentList(agents)} sessions after reboot, show agent status, and notify you when an agent needs input. Each config is backed up first; undo anytime with "Deck: Uninstall agent hooks".`,
       setupAction,
       dontAskAgain,
     );
@@ -126,7 +126,7 @@ export class AgentSetupPrompt {
   private async reportNothingToInstall(detected: readonly DetectedAgent[]): Promise<void> {
     const message = detected.length === 0
       ? 'No Claude or Codex installation detected.'
-      : `Deck resume hooks are already installed for ${formatAgentList(detected.map((agent) => agent.agent))}.`;
+      : `Deck agent hooks are already installed for ${formatAgentList(detected.map((agent) => agent.agent))}.`;
     await this.deps.notifications.showInformationMessage(message);
   }
 
