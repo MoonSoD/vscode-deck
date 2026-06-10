@@ -52,6 +52,11 @@ export interface HookPreview {
   contents: string;
 }
 
+export interface HookReconcileResult {
+  agent: AgentName;
+  configPath: string;
+}
+
 interface HookGroupRemoval {
   groups: HookGroup[];
   removed: boolean;
@@ -91,26 +96,28 @@ export class HookInstaller {
     return removed;
   }
 
-  // Keep each installed agent's Deck hook *script* current with the bundled
-  // renderer. The script lives in Deck's own data dir (not user config), so a
-  // drift after a Deck upgrade can be rewritten silently — the hooks.json
-  // command is unchanged, so no re-consent and (for Codex) the trust hash,
-  // which is over the command string not the script body, stays valid. Returns
-  // the agents whose script was rewritten.
-  async refreshInstalledScripts(agents: readonly AgentName[] = ['claude', 'codex']): Promise<AgentName[]> {
-    const refreshed: AgentName[] = [];
+  // Reconcile installed Deck hooks with this build. The user already consented
+  // to Deck-owned hook entries; the command string stays stable, and the write
+  // path backs up the config before replacing only Deck's groups.
+  async reconcileInstalledHooks(
+    agents: readonly AgentName[] = ['claude', 'codex'],
+  ): Promise<HookReconcileResult[]> {
+    const reconciled: HookReconcileResult[] = [];
     for (const agent of agents) {
       if (agent === 'codex' && (!this.paths.codexHooksPath || !this.paths.codexHookScriptPath)) continue;
       if (!(await this.hasDeckHooks(agent))) continue;
 
-      const { scriptPath } = this.configFor(agent);
-      const expected = renderAgentHookScript(this.paths.sidecarDir, agent);
-      if (await this.readFileOrUndefined(scriptPath) === expected) continue;
+      const { configPath, scriptPath } = this.configFor(agent);
+      const expectedConfig = await this.renderSettingsWithDeckHooks(configPath, scriptPath, agent);
+      const expectedScript = renderAgentHookScript(this.paths.sidecarDir, agent);
+      const configDrifted = await this.readFileOrUndefined(configPath) !== expectedConfig;
+      const scriptDrifted = await this.readFileOrUndefined(scriptPath) !== expectedScript;
+      if (!configDrifted && !scriptDrifted) continue;
 
-      await this.writeHookScript(scriptPath, agent);
-      refreshed.push(agent);
+      await this.installAgent(agent);
+      reconciled.push({ agent, configPath });
     }
-    return refreshed;
+    return reconciled;
   }
 
   async hasDeckHooks(agent: AgentName): Promise<boolean> {
@@ -149,13 +156,22 @@ export class HookInstaller {
     agent: AgentName,
   ): Promise<string> {
     const settings = await this.readSettings(configPath);
-    settings.hooks = settings.hooks ?? {};
+    const hooks = { ...(settings.hooks ?? {}) };
+    for (const [event, groups] of Object.entries(hooks)) {
+      const result = removeDeckHookGroups(groups);
+      if (result.groups.length > 0) {
+        hooks[event] = result.groups;
+      } else {
+        delete hooks[event];
+      }
+    }
     for (const event of HOOK_EVENTS_BY_AGENT[agent]) {
-      settings.hooks[event] = [
-        ...removeDeckHookGroups(settings.hooks[event] ?? []).groups,
+      hooks[event] = [
+        ...(hooks[event] ?? []),
         deckHookGroup(scriptPath, agent),
       ];
     }
+    settings.hooks = hooks;
 
     return `${JSON.stringify(settings, null, 2)}\n`;
   }

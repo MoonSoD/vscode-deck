@@ -408,12 +408,13 @@ describe('HookInstaller', () => {
     expect(existsSync(`${codexHooksPath}.deck.bak`)).toBe(false);
   });
 
-  it('refreshes an installed agent whose hook script drifted from the current build', async () => {
+  it('reconciles an installed agent whose hook script drifted from the current build', async () => {
     const root = tempRoot();
+    const settingsPath = join(root, '.claude', 'settings.json');
     const scriptPath = join(root, '.local', 'share', 'deck', 'bin', 'deck-claude-hook.sh');
     const sidecarDir = join(root, '.local', 'share', 'deck', 'hooks');
     const installer = new HookInstaller({
-      claudeSettingsPath: join(root, '.claude', 'settings.json'),
+      claudeSettingsPath: settingsPath,
       codexHooksPath: join(root, '.codex', 'hooks.json'),
       hookScriptPath: scriptPath,
       codexHookScriptPath: join(root, '.local', 'share', 'deck', 'bin', 'deck-codex-hook.sh'),
@@ -422,13 +423,15 @@ describe('HookInstaller', () => {
     await installer.install(['claude']);
     writeFileSync(scriptPath, '#!/bin/sh\n# stale pre-upgrade script\n', 'utf8');
 
-    await expect(installer.refreshInstalledScripts()).resolves.toEqual(['claude']);
+    await expect(installer.reconcileInstalledHooks()).resolves.toEqual([
+      { agent: 'claude', configPath: settingsPath },
+    ]);
 
     expect(readFileSync(scriptPath, 'utf8')).toBe(renderAgentHookScript(sidecarDir, 'claude'));
     expect(statSync(scriptPath).mode & 0o111).not.toBe(0);
   });
 
-  it('refreshes a legacy Claude install whose hook script drifted from the current build', async () => {
+  it('reconciles a legacy Claude install to the current config and script', async () => {
     const root = tempRoot();
     const settingsPath = join(root, '.claude', 'settings.json');
     const scriptPath = join(root, '.local', 'share', 'deck', 'bin', 'deck-claude-hook.sh');
@@ -443,6 +446,7 @@ describe('HookInstaller', () => {
         Stop: [deckHookGroup(scriptPath)],
       },
     }), 'utf8');
+    const originalSettings = readFileSync(settingsPath, 'utf8');
     writeFileSync(scriptPath, '#!/bin/sh\n# stale pre-status script\n', 'utf8');
     const installer = new HookInstaller({
       claudeSettingsPath: settingsPath,
@@ -452,26 +456,107 @@ describe('HookInstaller', () => {
       sidecarDir,
     });
 
-    await expect(installer.refreshInstalledScripts()).resolves.toEqual(['claude']);
+    await expect(installer.reconcileInstalledHooks()).resolves.toEqual([
+      { agent: 'claude', configPath: settingsPath },
+    ]);
 
+    expect(JSON.parse(readFileSync(settingsPath, 'utf8'))).toEqual({
+      hooks: claudeDeckHooks(scriptPath),
+    });
+    expect(readFileSync(`${settingsPath}.deck.bak`, 'utf8')).toBe(originalSettings);
     expect(readFileSync(scriptPath, 'utf8')).toBe(renderAgentHookScript(sidecarDir, 'claude'));
     expect(statSync(scriptPath).mode & 0o111).not.toBe(0);
+
+    await expect(installer.reconcileInstalledHooks()).resolves.toEqual([]);
   });
 
-  it('leaves a current script untouched and never touches an uninstalled agent', async () => {
+  it('removes stale Deck hook groups from events outside the current build', async () => {
+    const root = tempRoot();
+    const settingsPath = join(root, '.claude', 'settings.json');
+    const scriptPath = join(root, '.local', 'share', 'deck', 'bin', 'deck-claude-hook.sh');
+    mkdirSync(join(root, '.claude'), { recursive: true });
+    mkdirSync(join(root, '.local', 'share', 'deck', 'bin'), { recursive: true });
+    writeFileSync(settingsPath, JSON.stringify({
+      hooks: {
+        SessionStart: [deckHookGroup(scriptPath)],
+        ObsoleteDeckEvent: [deckHookGroup(scriptPath)],
+      },
+    }, null, 2), 'utf8');
+    writeFileSync(scriptPath, renderAgentHookScript(join(root, '.local', 'share', 'deck', 'hooks'), 'claude'), 'utf8');
+    const installer = new HookInstaller({
+      claudeSettingsPath: settingsPath,
+      codexHooksPath: join(root, '.codex', 'hooks.json'),
+      hookScriptPath: scriptPath,
+      codexHookScriptPath: join(root, '.local', 'share', 'deck', 'bin', 'deck-codex-hook.sh'),
+      sidecarDir: join(root, '.local', 'share', 'deck', 'hooks'),
+    });
+
+    await expect(installer.reconcileInstalledHooks()).resolves.toEqual([
+      { agent: 'claude', configPath: settingsPath },
+    ]);
+
+    expect(JSON.parse(readFileSync(settingsPath, 'utf8'))).toEqual({
+      hooks: claudeDeckHooks(scriptPath),
+    });
+  });
+
+  it('reconciles Codex installs through the same activation path', async () => {
+    const root = tempRoot();
+    const hooksPath = join(root, '.codex', 'hooks.json');
+    const scriptPath = join(root, '.local', 'share', 'deck', 'bin', 'deck-codex-hook.sh');
+    const sidecarDir = join(root, '.local', 'share', 'deck', 'hooks');
+    mkdirSync(join(root, '.codex'), { recursive: true });
+    mkdirSync(join(root, '.local', 'share', 'deck', 'bin'), { recursive: true });
+    writeFileSync(hooksPath, JSON.stringify({
+      hooks: {
+        SessionStart: [codexDeckHookGroup(scriptPath)],
+      },
+    }), 'utf8');
+    writeFileSync(scriptPath, '#!/bin/sh\n# stale codex script\n', 'utf8');
+    const originalHooks = readFileSync(hooksPath, 'utf8');
+    const installer = new HookInstaller({
+      claudeSettingsPath: join(root, '.claude', 'settings.json'),
+      codexHooksPath: hooksPath,
+      hookScriptPath: join(root, '.local', 'share', 'deck', 'bin', 'deck-claude-hook.sh'),
+      codexHookScriptPath: scriptPath,
+      sidecarDir,
+    });
+
+    await expect(installer.reconcileInstalledHooks()).resolves.toEqual([
+      { agent: 'codex', configPath: hooksPath },
+    ]);
+
+    expect(JSON.parse(readFileSync(hooksPath, 'utf8'))).toEqual({
+      hooks: {
+        SessionStart: [codexDeckHookGroup(scriptPath)],
+        UserPromptSubmit: [codexDeckHookGroup(scriptPath)],
+      },
+    });
+    expect(readFileSync(`${hooksPath}.deck.bak`, 'utf8')).toBe(originalHooks);
+    expect(readFileSync(scriptPath, 'utf8')).toBe(renderAgentHookScript(sidecarDir, 'codex'));
+  });
+
+  it('leaves a current install untouched and never touches an uninstalled agent', async () => {
     const root = tempRoot();
     const claudeScriptPath = join(root, '.local', 'share', 'deck', 'bin', 'deck-claude-hook.sh');
     const codexScriptPath = join(root, '.local', 'share', 'deck', 'bin', 'deck-codex-hook.sh');
+    const settingsPath = join(root, '.claude', 'settings.json');
     const installer = new HookInstaller({
-      claudeSettingsPath: join(root, '.claude', 'settings.json'),
+      claudeSettingsPath: settingsPath,
       codexHooksPath: join(root, '.codex', 'hooks.json'),
       hookScriptPath: claudeScriptPath,
       codexHookScriptPath: codexScriptPath,
       sidecarDir: join(root, '.local', 'share', 'deck', 'hooks'),
     });
     await installer.install(['claude']); // codex deliberately not installed
+    const originalSettings = readFileSync(settingsPath, 'utf8');
+    const originalScript = readFileSync(claudeScriptPath, 'utf8');
 
-    await expect(installer.refreshInstalledScripts()).resolves.toEqual([]);
+    await expect(installer.reconcileInstalledHooks()).resolves.toEqual([]);
+
+    expect(readFileSync(settingsPath, 'utf8')).toBe(originalSettings);
+    expect(readFileSync(claudeScriptPath, 'utf8')).toBe(originalScript);
+    expect(existsSync(`${settingsPath}.deck.bak`)).toBe(false);
     expect(existsSync(codexScriptPath)).toBe(false);
   });
 });

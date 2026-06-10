@@ -110,14 +110,11 @@ agent-aware tree decoration ADR-0021 §10 deferred — a separate, larger featur
   then names `codex`. Our `UserPromptSubmit` rename coincides, so no extra work is
   needed — but there is no way to name a Codex window before its first turn. Not a
   bug; a Codex trait.
-- **Deck keeps its own hook scripts current on activation.** The hook *script*
-  lives in Deck's data dir, not user config, so a Deck upgrade that changes the
-  script body (e.g. adding the rename step) is reconciled silently on activation
-  (`HookInstaller.refreshInstalledScripts`) — no reinstall, no re-consent, and
-  Codex's trust hash (over the command string, not the script body) stays valid.
-  This was added after QA found an upgraded install still running the pre-rename
-  script, invisible to the install gate because its events were unchanged. Hook
-  *event-set* changes still flow through the consented install path.
+- **Deck keeps its own hook entries current on activation.** The hook command
+  string is stable, so a Deck upgrade can reconcile Deck-owned config groups and
+  the generated script in lockstep without re-consent. The config is backed up
+  first and the post-upgrade toast can open the backup-vs-current diff. This
+  supersedes the earlier script-only refresh path.
 - **Corrects ADR-0021 §10** — see the note added there.
 
 ## Status

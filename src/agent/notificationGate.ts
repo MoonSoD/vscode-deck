@@ -10,7 +10,7 @@ export class NotificationGate {
     return input.detected
       .filter((agent) => {
         if (input.currentInstalls.has(agent.agent)) return false;
-        if (input.deckHookInstalls.has(agent.agent)) return true;
+        if (input.deckHookInstalls.has(agent.agent)) return false;
         return !input.dismissed;
       })
       .map((agent) => agent.agent);

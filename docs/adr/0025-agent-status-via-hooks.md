@@ -46,6 +46,17 @@ decisions from issues #91-#95.
    Sending keys into a TUI dialog through tmux is brittle and can approve the
    wrong thing if the dialog changes or focus moves.
 
+6. **Reconcile Deck-owned hook entries on activation.** The PRD's earlier
+   "upgrade through consent and diff review" path is superseded. Once an agent
+   already has Deck hooks, activation compares the config Deck would render for
+   this build plus the generated hook script against what is installed. Drift in
+   either one triggers the existing backed-up install path, replacing only Deck's
+   hook groups and writing the current script in lockstep. The hook command
+   string stays stable, so prior consent still applies. Transparency happens
+   after the write: Deck shows an informational toast with Review Changes, which
+   opens the `.deck.bak` backup against the current config. There is no Revert
+   action; uninstalling Deck hooks is the opt-out.
+
 ## Considered Options
 
 - **Pattern matching terminal output, a la tuicommander** - rejected. It is
@@ -62,6 +73,10 @@ decisions from issues #91-#95.
 - **Allow/approve from the notification** - rejected. It would require tmux
   send-keys into Claude's interactive permission UI, which Deck cannot make
   robust.
+- **Asking before hook upgrades** - rejected. While consent is pending or
+  declined, Deck-owned event lists and scripts can sit mismatched. Reconcile then
+  notify keeps Deck's own hook entries internally consistent while preserving the
+  backup, Review Changes diff, and uninstall escape hatch.
 
 ## Consequences
 
@@ -78,7 +93,9 @@ decisions from issues #91-#95.
   NeedsInput counts, but it does not sort Terminals.
 - **AgentSession resume stays isolated.** Status cleanup, pruning, or parse
   failure cannot break ADR-0021's resume sidecar or TerminalSnapshot restore.
+- **Setup prompts stay fresh-install only.** Agents with any Deck hook entries
+  are reconciled on activation and are not offered through the setup prompt.
 
 ## Status
 
-Accepted — shipped by PRD #90 issues #91-#95.
+Accepted — shipped by PRD #90 issues #91-#95 and amended by issue #99.

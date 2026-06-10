@@ -78,7 +78,7 @@ describe('AgentSetupPrompt', () => {
     expect(prompt.installer.install).not.toHaveBeenCalled();
   });
 
-  it('offers a legacy Claude hook upgrade even after setup was dismissed', async () => {
+  it('does not offer setup for agents that already have Deck hooks', async () => {
     const prompt = createPrompt({
       detected: [{ agent: 'claude', configPath: '/home/me/.claude/settings.json' }],
       deckHooks: new Set(['claude']),
@@ -88,7 +88,8 @@ describe('AgentSetupPrompt', () => {
 
     await prompt.run();
 
-    expect(prompt.installer.install).toHaveBeenCalledWith(['claude']);
+    expect(prompt.notifications.showInformationMessage).not.toHaveBeenCalled();
+    expect(prompt.installer.install).not.toHaveBeenCalled();
     expect(prompt.values[AGENT_HOOK_SETUP_DISMISSED_KEY]).toBe(true);
   });
 

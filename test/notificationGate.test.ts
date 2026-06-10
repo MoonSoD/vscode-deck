@@ -14,13 +14,13 @@ describe('NotificationGate', () => {
     })).toEqual(['codex']);
   });
 
-  it('offers detected legacy installs even when dismissed', () => {
+  it('stays quiet for detected agents that already have Deck hooks', () => {
     expect(NotificationGate.shouldPrompt({
       detected: [{ agent: 'claude', configPath: '/home/me/.claude/settings.json' }],
       currentInstalls: new Set(),
       deckHookInstalls: new Set(['claude']),
       dismissed: true,
-    })).toEqual(['claude']);
+    })).toEqual([]);
   });
 
   it('stays quiet when no agent is detected, hooks are current, or fresh setup is dismissed', () => {

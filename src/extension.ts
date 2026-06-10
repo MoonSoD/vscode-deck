@@ -45,8 +45,8 @@ import {
 import { AgentStatusStore } from './agent/agentStatusStore';
 import { countNeedsInputStatuses, describeNeedsInputBadge } from './agent/agentStatusRollups';
 import { AgentDetection } from './agent/agentDetection';
-import { AgentSetupPrompt } from './agent/agentSetupPrompt';
-import { HookInstaller } from './agent/hookInstaller';
+import { AgentSetupPrompt, type AgentConfigChange } from './agent/agentSetupPrompt';
+import { HookInstaller, type HookReconcileResult } from './agent/hookInstaller';
 import { rewriteTerminalSnapshotAgentSessions } from './agent/terminalSnapshotAgentSessions';
 import { ResumeTemplate } from './agent/resumeTemplate';
 import { SnapshotRewriter } from './agent/snapshotRewriter';
@@ -82,20 +82,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     globalState: context.globalState,
     notifications: vscode.window,
     reviewer: {
-      async showChanges(configs) {
-        for (const { agent, configPath } of configs) {
-          const current = vscode.Uri.file(configPath);
-          const backup = vscode.Uri.file(`${configPath}.deck.bak`);
-          const title = `Deck ${agent === 'claude' ? 'Claude' : 'Codex'} hooks (before ↔ after)`;
-          try {
-            await vscode.workspace.fs.stat(backup);
-            await vscode.commands.executeCommand('vscode.diff', backup, current, title);
-          } catch {
-            // No backup (config was absent before) — just open the new file.
-            await vscode.window.showTextDocument(current);
-          }
-        }
-      },
+      showChanges: showAgentHookConfigChanges,
     },
   });
 
@@ -363,11 +350,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     } catch (error) {
       console.warn('Deck: listing sessions for agent cleanup failed', error);
     }
-    // Keep installed agents' hook scripts current with this Deck build — a
-    // script changed by an upgrade (e.g. gaining the rename step) won't trip
-    // the install gate (its events are unchanged), so refresh it silently.
-    hookInstaller.refreshInstalledScripts().catch((error) =>
-      console.warn('Deck: refreshing agent hook scripts failed', error),
+    hookInstaller.reconcileInstalledHooks().then(showAgentHookUpgradeNotifications).catch((error) =>
+      console.warn('Deck: reconciling agent hooks failed', error),
     );
     // Agent resume rides on the tmux-backed snapshot machinery, so only offer
     // setup when that's available.
@@ -492,6 +476,36 @@ async function registeredCommonDirs(
     ),
   );
   return new Set(commonDirs.filter((commonDir): commonDir is string => commonDir !== null));
+}
+
+async function showAgentHookUpgradeNotifications(configs: readonly HookReconcileResult[]): Promise<void> {
+  for (const config of configs) {
+    const reviewChanges = 'Review Changes';
+    const choice = await vscode.window.showInformationMessage(
+      `Deck updated its ${agentHookProductName(config.agent)} hooks for this Deck version`,
+      reviewChanges,
+    );
+    if (choice === reviewChanges) await showAgentHookConfigChanges([config]);
+  }
+}
+
+async function showAgentHookConfigChanges(configs: readonly AgentConfigChange[]): Promise<void> {
+  for (const { agent, configPath } of configs) {
+    const current = vscode.Uri.file(configPath);
+    const backup = vscode.Uri.file(`${configPath}.deck.bak`);
+    const title = `Deck ${agent === 'claude' ? 'Claude' : 'Codex'} hooks (before ↔ after)`;
+    try {
+      await vscode.workspace.fs.stat(backup);
+      await vscode.commands.executeCommand('vscode.diff', backup, current, title);
+    } catch {
+      // No backup (config was absent before) — just open the new file.
+      await vscode.window.showTextDocument(current);
+    }
+  }
+}
+
+function agentHookProductName(agent: HookReconcileResult['agent']): string {
+  return agent === 'claude' ? 'Claude Code' : 'Codex';
 }
 
 // Mirrors the Explorer's delete confirmation (a modal warning gated by a

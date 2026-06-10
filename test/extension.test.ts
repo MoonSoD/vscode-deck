@@ -30,6 +30,7 @@ const vscodeState = vi.hoisted(() => ({
   agentStatusStoreChangeListeners: [] as Array<() => void>,
   agentStatusStoreChangeListener: undefined as (() => void) | undefined,
   hookInstallerArgs: undefined as unknown[] | undefined,
+  hookInstallerReconcile: vi.fn(async () => [] as Array<{ agent: 'claude' | 'codex'; configPath: string }>),
   hookInstallerRemove: vi.fn(),
   configUpdate: vi.fn(),
   externalWatchDisposables: [] as Array<{ dispose: ReturnType<typeof vi.fn> }>,
@@ -101,6 +102,8 @@ const vscodeState = vi.hoisted(() => ({
   rewriteTerminalSnapshotAgentSessions: vi.fn(async () => undefined),
   showWarningMessage: vi.fn(),
   showInformationMessage: vi.fn(),
+  showTextDocument: vi.fn(),
+  workspaceFsStat: vi.fn(async () => ({})),
   treeViewSelection: [] as unknown[],
 }));
 
@@ -120,6 +123,7 @@ vi.mock('vscode', () => ({
     registerCommand: vscodeState.registerCommand,
   },
   Uri: {
+    file: (path: string) => ({ fsPath: path }),
     joinPath: (base: unknown, ...paths: string[]) => ({ base, paths }),
     from(value: { scheme: string; authority: string; path: string; query: string }) {
       return value;
@@ -131,6 +135,7 @@ vi.mock('vscode', () => ({
     registerCustomEditorProvider: vscodeState.registerCustomEditorProvider,
     showWarningMessage: vscodeState.showWarningMessage,
     showInformationMessage: vscodeState.showInformationMessage,
+    showTextDocument: vscodeState.showTextDocument,
     state: {
       get focused() {
         return true;
@@ -171,6 +176,9 @@ vi.mock('vscode', () => ({
       },
       update: vscodeState.configUpdate,
     }),
+    fs: {
+      stat: vscodeState.workspaceFsStat,
+    },
     onDidChangeConfiguration: (listener: (event: { affectsConfiguration(section: string): boolean }) => unknown) => {
       vscodeState.onDidChangeConfiguration(listener);
       vscodeState.configListeners.push(listener);
@@ -335,7 +343,7 @@ vi.mock('../src/agent/hookInstaller', () => ({
     }
 
     remove = vscodeState.hookInstallerRemove;
-    refreshInstalledScripts = vi.fn(async () => []);
+    reconcileInstalledHooks = vscodeState.hookInstallerReconcile;
   },
 }));
 
@@ -418,6 +426,8 @@ describe('activate', () => {
     vscodeState.agentStatusStorePrune.mockResolvedValue(undefined);
     vscodeState.agentStatusStoreStart.mockResolvedValue({ dispose: vi.fn() });
     vscodeState.hookInstallerArgs = undefined;
+    vscodeState.hookInstallerReconcile.mockResolvedValue([]);
+    vscodeState.hookInstallerReconcile.mockClear();
     vscodeState.hookInstallerRemove.mockResolvedValue([]);
     vscodeState.externalWatchDisposables = [];
     vscodeState.terminalRemovalArgs = undefined;
@@ -449,6 +459,10 @@ describe('activate', () => {
     vscodeState.tmuxPreflight.mockResolvedValue({ available: true });
     vscodeState.configListeners = [];
     vscodeState.showWarningMessage.mockClear();
+    vscodeState.showInformationMessage.mockReset();
+    vscodeState.showTextDocument.mockClear();
+    vscodeState.workspaceFsStat.mockResolvedValue({});
+    vscodeState.workspaceFsStat.mockClear();
     vi.mocked(resolveCommonDirSafe).mockResolvedValue(null);
   });
 
@@ -776,6 +790,32 @@ describe('activate', () => {
     await registration[1]();
 
     expect(vscodeState.agentSetupPromptRun).toHaveBeenCalledWith({ explicit: true });
+  });
+
+  it('notifies after activation reconciles installed agent hooks and reviews the backup diff', async () => {
+    const context = createContext();
+    vscodeState.hookInstallerReconcile.mockResolvedValue([
+      { agent: 'claude', configPath: '/home/me/.claude/settings.json' },
+    ]);
+    vscodeState.showInformationMessage.mockResolvedValue('Review Changes');
+
+    await activate(context as never);
+
+    await vi.waitFor(() => {
+      expect(vscodeState.hookInstallerReconcile).toHaveBeenCalledOnce();
+      expect(vscodeState.showInformationMessage).toHaveBeenCalledWith(
+        'Deck updated its Claude Code hooks for this Deck version',
+        'Review Changes',
+      );
+    });
+    await vi.waitFor(() => {
+      expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
+        'vscode.diff',
+        { fsPath: '/home/me/.claude/settings.json.deck.bak' },
+        { fsPath: '/home/me/.claude/settings.json' },
+        'Deck Claude hooks (before ↔ after)',
+      );
+    });
   });
 
   it('registers deck.removeAgentHooks through the setup prompt uninstall flow', async () => {
