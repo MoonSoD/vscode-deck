@@ -35,7 +35,7 @@ describe('TmuxControlClient', () => {
       '/work/repo',
     ], { cwd: '/work/repo', stdio: 'pipe' });
     expect(child.writes).toEqual([
-      'list-panes -s -t =wt-_work_repo__term-1 -F "#{pane_id} #{cursor_y} #{cursor_x}"\n',
+      'list-panes -s -t =wt-_work_repo__term-1 -F "#{pane_id} #{cursor_y} #{cursor_x} #{alternate_on}"\n',
       'capture-pane -p -e -q -J -N -S -5000\n',
     ]);
   });
@@ -91,6 +91,26 @@ describe('TmuxControlClient', () => {
 
     // content first, then an absolute reposition (CUP) to 1-based row 4, col 8.
     expect(seeds).toEqual(['history', '\x1b[4;8H']);
+  });
+
+  it('enters the alternate screen before the seed when a TUI is active', async () => {
+    const child = fakeChild();
+    const client = new TmuxControlClient('/ext/resources/deck.conf', vi.fn(() => child));
+    const seeds: string[] = [];
+    client.onSeed((seed) => seeds.push(seed));
+
+    const started = client.start('wt-_work_repo__term-1', '/work/repo', 5000);
+    child.emitStdout('%begin 1 1 0\n%end 1 1 0\n');
+    await untilWrites(child, 1);
+    // pane id + cursor_y + cursor_x + alternate_on=1
+    child.emitStdout('%begin 1 2 1\n%0 3 7 1\n%end 1 2 1\n');
+    await untilWrites(child, 2);
+    child.emitStdout('%begin 1 3 1\nframe\n%end 1 3 1\n');
+    await started;
+
+    // Alt-screen enter first (so the captured frame fills xterm's alternate
+    // buffer, not the normal one), then the frame, then the cursor reposition.
+    expect(seeds).toEqual(['\x1b[?1049h\x1b[H', 'frame', '\x1b[4;8H']);
   });
 
   it('opens the output gate even when the seed capture errors', async () => {
