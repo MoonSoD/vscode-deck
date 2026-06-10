@@ -302,6 +302,18 @@ describe('TerminalEditorProvider', () => {
     expect(terminalPanel.webview.html).not.toContain('rgba(');
   });
 
+  it('maps Shift+Enter to an ESC+CR newline sequence', () => {
+    const terminalPanel = panel();
+    const { provider, document } = providerDocument();
+
+    provider.resolveCustomEditor(document, terminalPanel as never);
+
+    // The legacy encoding has no Shift bit on Enter; agents read ESC+CR as a
+    // literal newline. The double-escaped source emits '\x1b\r' into the script.
+    expect(terminalPanel.webview.html).toContain("event.key === 'Enter'");
+    expect(terminalPanel.webview.html).toContain("payload: '\\x1b\\r'");
+  });
+
   it('rejects a duplicate same-session panel without starting a second bridge', () => {
     const firstPanel = panelStub();
     const duplicatePanel = panelStub();
