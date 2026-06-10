@@ -33,13 +33,17 @@ describe('TerminalCascade', () => {
       ]),
       killSession: vi.fn(async () => undefined),
     };
-    const cascade = new TerminalCascade(tmux);
+    const onSessionKilled = vi.fn(async () => undefined);
+    const cascade = new TerminalCascade(tmux, undefined, onSessionKilled);
 
     await cascade.killWorktree('/repo/feature');
 
     expect(tmux.killSession).toHaveBeenCalledTimes(2);
     expect(tmux.killSession).toHaveBeenNthCalledWith(1, 'wt-_repo_feature__term-1');
     expect(tmux.killSession).toHaveBeenNthCalledWith(2, 'wt-_repo_feature__term-2');
+    expect(onSessionKilled).toHaveBeenCalledTimes(2);
+    expect(onSessionKilled).toHaveBeenNthCalledWith(1, 'wt-_repo_feature__term-1');
+    expect(onSessionKilled).toHaveBeenNthCalledWith(2, 'wt-_repo_feature__term-2');
   });
 
   it('swallows kill failures and continues killing matching sessions', async () => {

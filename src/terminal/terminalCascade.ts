@@ -12,6 +12,7 @@ export class TerminalCascade {
   constructor(
     private readonly tmux: TmuxLike,
     private readonly sessionUriCodec: SessionUriCodec = new SessionUriCodec(),
+    private readonly onSessionKilled: (sessionName: string) => Promise<void> = async () => undefined,
   ) {}
 
   async killWorktree(worktreePath: string): Promise<void> {
@@ -22,6 +23,7 @@ export class TerminalCascade {
       if (!session.sessionName.startsWith(prefix)) continue;
       try {
         await this.tmux.killSession(session.sessionName);
+        await this.onSessionKilled(session.sessionName);
       } catch {
         // Cascade cleanup is best-effort; removal must still proceed.
       }

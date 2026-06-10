@@ -21,6 +21,7 @@ export class TerminalRemovalCommand {
     private readonly refresh: () => void = () => undefined,
     private readonly confirm: ConfirmTerminalRemoval = async () => true,
     private readonly sessionUriCodec: SessionUriCodec = new SessionUriCodec(),
+    private readonly onSessionKilled: (sessionName: string) => Promise<void> = async () => undefined,
   ) {}
 
   async run(node: TerminalNodeLike | undefined): Promise<void> {
@@ -32,6 +33,7 @@ export class TerminalRemovalCommand {
     if (!(await this.confirm(node?.terminal?.windowName ?? session))) return;
 
     await this.tmux.killSession(session);
+    await this.onSessionKilled(session);
     await this.closeMatchingEditorTab(session);
     this.refresh();
   }

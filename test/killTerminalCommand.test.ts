@@ -56,6 +56,20 @@ describe('TerminalRemovalCommand', () => {
     expect(refresh).toHaveBeenCalledOnce();
   });
 
+  it('discards the agent status for the killed Terminal', async () => {
+    const tmux = { killSession: vi.fn(async () => undefined) };
+    const onSessionKilled = vi.fn(async () => undefined);
+    await new TerminalRemovalCommand(
+      tmux,
+      undefined,
+      undefined,
+      undefined,
+      onSessionKilled,
+    ).run({ terminal: { sessionName: 'wt-_work_repo__term-1' } });
+
+    expect(onSessionKilled).toHaveBeenCalledWith('wt-_work_repo__term-1');
+  });
+
   it('skips deletion when the confirmation is declined', async () => {
     const tmux = {
       killSession: vi.fn(async () => undefined),
