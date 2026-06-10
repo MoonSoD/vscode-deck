@@ -8,7 +8,18 @@ export interface NeedsInputBadgeDescription {
 export function countNeedsInputStatuses(statuses: Iterable<AgentStatus | undefined>): number {
   let count = 0;
   for (const status of statuses) {
-    if (status?.status === 'needsInput') count += 1;
+    if (isNeedsInput(status)) count += 1;
+  }
+  return count;
+}
+
+export function countNeedsInputStatusesForSessionPrefix(
+  statuses: Iterable<readonly [string, AgentStatus]>,
+  sessionNamePrefix: string,
+): number {
+  let count = 0;
+  for (const [sessionName, status] of statuses) {
+    if (sessionName.startsWith(sessionNamePrefix) && isNeedsInput(status)) count += 1;
   }
   return count;
 }
@@ -19,4 +30,8 @@ export function describeNeedsInputBadge(count: number): NeedsInputBadgeDescripti
     value: count,
     tooltip: count === 1 ? '1 agent needs input' : `${count} agents need input`,
   };
+}
+
+function isNeedsInput(status: AgentStatus | undefined): boolean {
+  return status?.status === 'needsInput';
 }

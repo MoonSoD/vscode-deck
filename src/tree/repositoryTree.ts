@@ -13,6 +13,7 @@ import {
   toCachedTerminalSessions,
 } from '../terminal/terminalSession';
 import type { AgentStatus } from '../agent/agentStatusStore';
+import { countNeedsInputStatusesForSessionPrefix } from '../agent/agentStatusRollups';
 import { excludePending } from './excludePending';
 import { reconcileWorktreeOrder } from './reconcileWorktreeOrder';
 import {
@@ -432,12 +433,10 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
   }
 
   private worktreeNeedsInputCount(worktreePath: string): number {
-    const prefix = terminalSessionPrefix(worktreePath);
-    let count = 0;
-    for (const [sessionName, status] of this.agentStatuses?.entries() ?? []) {
-      if (sessionName.startsWith(prefix) && status.status === 'needsInput') count += 1;
-    }
-    return count;
+    return countNeedsInputStatusesForSessionPrefix(
+      this.agentStatuses?.entries() ?? [],
+      terminalSessionPrefix(worktreePath),
+    );
   }
 
   private visibleWorktrees(
