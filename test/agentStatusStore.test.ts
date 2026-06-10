@@ -6,6 +6,9 @@ import { AgentStatusStore } from '../src/agent/agentStatusStore';
 
 const tempRoots: string[] = [];
 const disposables: Array<{ dispose(): void }> = [];
+// fs.watch event delivery can exceed vi.waitFor's 1s default when the full
+// suite runs in parallel; these tests pass in isolation but flake under load.
+const WATCH_EVENT_WAIT = { timeout: 5000 };
 
 describe('AgentStatusStore', () => {
   afterEach(() => {
@@ -36,7 +39,7 @@ describe('AgentStatusStore', () => {
         statusAt: 1710000000,
         unread: true,
       });
-    });
+    }, WATCH_EVENT_WAIT);
 
     writeFileSync(
       join(root, 'wt-_work_repo__term-1.json'),
@@ -50,7 +53,7 @@ describe('AgentStatusStore', () => {
         statusAt: 1710000001,
         unread: true,
       });
-    });
+    }, WATCH_EVENT_WAIT);
     expect(changes).toHaveBeenCalled();
   });
 
@@ -92,7 +95,7 @@ describe('AgentStatusStore', () => {
         statusAt: 1710000001,
         unread: true,
       });
-    });
+    }, WATCH_EVENT_WAIT);
   });
 
   it('persists completed read state through injected storage', async () => {
