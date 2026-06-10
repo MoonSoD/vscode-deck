@@ -144,6 +144,28 @@ describe('renderAgentHookScript', () => {
     expect(existsSync(sidecarDir)).toBe(false);
     expect(existsSync(tmuxLogPath)).toBe(false);
   });
+
+  it('writes the sidecar even when hook_event_name is absent, and issues no rename', async () => {
+    const root = tempRoot();
+    const sidecarDir = join(root, 'hooks');
+    const scriptPath = writeScript(root, renderAgentHookScript(sidecarDir));
+    const tmuxLogPath = writeTmuxStub(root);
+
+    await runScript(scriptPath, {
+      env: {
+        ...process.env,
+        DECK_SESSION: 'wt-_work_repo__term-1',
+        PATH: `${join(root, 'bin')}:${process.env.PATH ?? ''}`,
+      },
+      input: '{"session_id":"abc-123"}',
+    });
+
+    expect(JSON.parse(readFileSync(join(sidecarDir, 'wt-_work_repo__term-1.json'), 'utf8'))).toEqual({
+      agent: 'claude',
+      session_id: 'abc-123',
+    });
+    expect(existsSync(tmuxLogPath)).toBe(false);
+  });
 });
 
 function tempRoot(): string {

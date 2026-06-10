@@ -26,14 +26,17 @@ export function renderAgentHookScript(sidecarDir: string, agent: AgentName = 'cl
     'if [ -z "$session_id" ]; then',
     '  exit 0',
     'fi',
-    'case "$hook_event_name" in',
-    '  SessionStart|UserPromptSubmit) tmux -L deck rename-window -t "$DECK_SESSION" "$agent" || true ;;',
-    '  *) exit 0 ;;',
-    'esac',
     '',
     `sidecar_dir='${quoteForSingleQuotedShell(sidecarDir)}'`,
     'mkdir -p "$sidecar_dir"',
     'printf \'{"agent":"%s","session_id":"%s"}\\n\' "$agent" "$session_id" > "$sidecar_dir/$DECK_SESSION.json"',
+    '',
+    // Rename last: the sidecar write above is what AgentSession resume depends on,
+    // so a naming failure (or a future event missing hook_event_name) must never
+    // pre-empt it.
+    'case "$hook_event_name" in',
+    '  SessionStart|UserPromptSubmit) tmux -L deck rename-window -t "$DECK_SESSION" "$agent" || true ;;',
+    'esac',
     '',
   ].join('\n');
 }
