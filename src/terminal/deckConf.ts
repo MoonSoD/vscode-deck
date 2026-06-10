@@ -1,4 +1,5 @@
 import { resolveDeckTmuxOptions, type DeckTmuxOptions } from './deckTmuxOptions';
+import { TERMINAL_SCROLLBACK_LINES } from './terminalScrollback';
 
 export interface DeckConfPaths {
   pluginPath: string;
@@ -17,6 +18,7 @@ export function renderDeckConf(
   return template
     .replaceAll('__DECK_RESURRECT_PLUGIN__', paths.pluginPath)
     .replaceAll('__DECK_RESURRECT_DIR__', paths.resurrectDir)
+    .replaceAll('__DECK_HISTORY_LIMIT__', String(TERMINAL_SCROLLBACK_LINES))
     .replaceAll(
       '__DECK_AUTOMATIC_RENAME_FORMAT__',
       renderAutomaticRenameFormat(automaticRenameFormat),

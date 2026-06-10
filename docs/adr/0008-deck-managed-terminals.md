@@ -154,7 +154,7 @@ state, not the user's whole tmux. Sanctel solved this with `-L sanctel -f
     disarm block:
     ```
     set -g automatic-rename on
-    set -g history-limit 50000
+    set -g history-limit 5000
     set -g destroy-unattached off
     set -g status off
     set -g prefix None

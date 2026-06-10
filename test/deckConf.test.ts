@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { renderDeckConf } from '../src/terminal/deckConf';
 import { resolveDeckTmuxOptions } from '../src/terminal/deckTmuxOptions';
+import { TERMINAL_SCROLLBACK_LINES } from '../src/terminal/terminalScrollback';
 
 describe('renderDeckConf', () => {
   it('substitutes resurrect paths in the shipped DeckSocket tmux template', () => {
@@ -14,7 +15,7 @@ describe('renderDeckConf', () => {
     }, resolveDeckTmuxOptions({}))).toBe(
       [
         'set -g automatic-rename on',
-        'set -g history-limit 50000',
+        `set -g history-limit ${TERMINAL_SCROLLBACK_LINES}`,
         'set -g destroy-unattached off',
         'set -g status off',
         'set -g prefix None',
@@ -42,7 +43,7 @@ describe('renderDeckConf', () => {
       [
         'set -g automatic-rename on',
         "set -g automatic-rename-format 'cmd '\\''#{pane_current_command}'\\'''",
-        'set -g history-limit 50000',
+        `set -g history-limit ${TERMINAL_SCROLLBACK_LINES}`,
         'set -g destroy-unattached off',
         'set -g status off',
         'set -g prefix None',

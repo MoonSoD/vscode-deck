@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { SessionUriCodec } from './sessionUriCodec';
+import { TERMINAL_SCROLLBACK_LINES } from './terminalScrollback';
 import { TerminalTransport } from './terminalTransport';
 
 export const terminalEditorViewType = 'deck.terminal';
@@ -390,7 +391,7 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
         // proposed API in xterm 6.
         allowProposedApi: true,
         cursorBlink: true,
-        scrollback: 5000,
+        scrollback: ${TERMINAL_SCROLLBACK_LINES},
         theme: readVsCodeTheme(),
         fontFamily: initialConfig.fontFamily,
         fontSize: initialConfig.fontSize,

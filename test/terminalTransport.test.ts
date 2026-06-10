@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { TerminalTransport, type TmuxControlClientFactory } from '../src/terminal/terminalTransport';
+import { TERMINAL_SCROLLBACK_LINES } from '../src/terminal/terminalScrollback';
 
 describe('TerminalTransport', () => {
   it('starts a tmux control client with the seed depth and applies the initial size', () => {
@@ -10,7 +11,11 @@ describe('TerminalTransport', () => {
     transport.start('wt-_work_repo__term-1', '/work/repo', 120, 32);
 
     expect(factory).toHaveBeenCalledWith('/ext/resources/deck.conf');
-    expect(client.start).toHaveBeenCalledWith('wt-_work_repo__term-1', '/work/repo', 5000);
+    expect(client.start).toHaveBeenCalledWith(
+      'wt-_work_repo__term-1',
+      '/work/repo',
+      TERMINAL_SCROLLBACK_LINES,
+    );
     expect(client.resize).toHaveBeenCalledWith(120, 32);
   });
 

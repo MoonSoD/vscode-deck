@@ -2,6 +2,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { TERMINAL_SCROLLBACK_LINES } from '../src/terminal/terminalScrollback';
 
 const tempRoots: string[] = [];
 
@@ -514,7 +515,7 @@ describe('activate', () => {
     const deckDir = join(context.xdgDataHome, 'deck');
     const generatedConf = join(deckDir, 'deck.conf');
     expect(readFileSync(generatedConf, 'utf8')).toContain(
-      "set -g automatic-rename-format '#{pane_current_command}:#{pane_current_path}'\nset -g history-limit 50000",
+      `set -g automatic-rename-format '#{pane_current_command}:#{pane_current_path}'\nset -g history-limit ${TERMINAL_SCROLLBACK_LINES}`,
     );
     expect(vscodeState.tmuxInstances[0].setOption).toHaveBeenCalledWith(
       'automatic-rename-format',
