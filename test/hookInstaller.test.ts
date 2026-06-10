@@ -31,6 +31,7 @@ describe('HookInstaller', () => {
       hooks: {
         SessionStart: [deckHookGroup(scriptPath)],
         UserPromptSubmit: [deckHookGroup(scriptPath)],
+        SessionEnd: [deckHookGroup(scriptPath)],
       },
     });
   });
@@ -55,6 +56,7 @@ describe('HookInstaller', () => {
         hooks: {
           SessionStart: [deckHookGroup(scriptPath)],
           UserPromptSubmit: [deckHookGroup(scriptPath)],
+          SessionEnd: [deckHookGroup(scriptPath)],
         },
       }, null, 2)}\n`,
     }]);
@@ -143,6 +145,7 @@ describe('HookInstaller', () => {
           deckHookGroup(scriptPath),
         ],
         UserPromptSubmit: [deckHookGroup(scriptPath)],
+        SessionEnd: [deckHookGroup(scriptPath)],
       },
     });
   });
@@ -281,6 +284,7 @@ describe('HookInstaller', () => {
           },
         ],
         UserPromptSubmit: [deckHookGroup(claudeScriptPath)],
+        SessionEnd: [deckHookGroup(claudeScriptPath)],
       },
     }), 'utf8');
     writeFileSync(codexHooksPath, JSON.stringify({

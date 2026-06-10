@@ -4,7 +4,10 @@ import { renderAgentHookScript } from './agentHookScript';
 import type { AgentName } from './agentTypes';
 
 const DECK_HOOK_TOKEN = '--deck-agent-session-hook';
-const HOOK_EVENTS = ['SessionStart', 'UserPromptSubmit'] as const;
+const HOOK_EVENTS_BY_AGENT = {
+  claude: ['SessionStart', 'UserPromptSubmit', 'SessionEnd'],
+  codex: ['SessionStart', 'UserPromptSubmit'],
+} as const satisfies Record<AgentName, readonly string[]>;
 
 export interface HookInstallerPaths {
   claudeSettingsPath: string;
@@ -80,7 +83,7 @@ export class HookInstaller {
   async isInstalled(agent: AgentName): Promise<boolean> {
     const config = this.configFor(agent);
     const settings = await this.readSettings(config.configPath);
-    return HOOK_EVENTS.every((event) =>
+    return HOOK_EVENTS_BY_AGENT[agent].every((event) =>
       (settings.hooks?.[event] ?? []).some((group) =>
         (group.hooks ?? []).some(isDeckHook),
       ),
@@ -104,7 +107,7 @@ export class HookInstaller {
   ): Promise<string> {
     const settings = await this.readSettings(configPath);
     settings.hooks = settings.hooks ?? {};
-    for (const event of HOOK_EVENTS) {
+    for (const event of HOOK_EVENTS_BY_AGENT[agent]) {
       settings.hooks[event] = [
         ...removeDeckHookGroups(settings.hooks[event] ?? []).groups,
         deckHookGroup(scriptPath, agent),

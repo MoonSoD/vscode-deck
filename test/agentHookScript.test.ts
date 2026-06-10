@@ -1,4 +1,4 @@
-import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { execFile } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -30,6 +30,67 @@ describe('renderAgentHookScript', () => {
     });
   });
 
+  it('renames the Deck tmux window to the agent on SessionStart', async () => {
+    const root = tempRoot();
+    const sidecarDir = join(root, 'hooks');
+    const scriptPath = writeScript(root, renderAgentHookScript(sidecarDir));
+    const tmuxLogPath = writeTmuxStub(root);
+
+    await runScript(scriptPath, {
+      env: {
+        ...process.env,
+        DECK_SESSION: 'wt-_work_repo__term-1',
+        PATH: `${join(root, 'bin')}:${process.env.PATH ?? ''}`,
+      },
+      input: '{"session_id":"abc-123","hook_event_name":"SessionStart"}',
+    });
+
+    expect(readFileSync(tmuxLogPath, 'utf8')).toBe(
+      '-L deck rename-window -t wt-_work_repo__term-1 claude\n',
+    );
+  });
+
+  it('renames the Deck tmux window to the agent on UserPromptSubmit', async () => {
+    const root = tempRoot();
+    const sidecarDir = join(root, 'hooks');
+    const scriptPath = writeScript(root, renderAgentHookScript(sidecarDir, 'codex'));
+    const tmuxLogPath = writeTmuxStub(root);
+
+    await runScript(scriptPath, {
+      env: {
+        ...process.env,
+        DECK_SESSION: 'wt-_work_repo__term-2',
+        PATH: `${join(root, 'bin')}:${process.env.PATH ?? ''}`,
+      },
+      input: '{"session_id":"codex-123","hook_event_name":"UserPromptSubmit"}',
+    });
+
+    expect(readFileSync(tmuxLogPath, 'utf8')).toBe(
+      '-L deck rename-window -t wt-_work_repo__term-2 codex\n',
+    );
+  });
+
+  it('restores automatic rename on SessionEnd without writing a sidecar', async () => {
+    const root = tempRoot();
+    const sidecarDir = join(root, 'hooks');
+    const scriptPath = writeScript(root, renderAgentHookScript(sidecarDir));
+    const tmuxLogPath = writeTmuxStub(root);
+
+    await runScript(scriptPath, {
+      env: {
+        ...process.env,
+        DECK_SESSION: 'wt-_work_repo__term-1',
+        PATH: `${join(root, 'bin')}:${process.env.PATH ?? ''}`,
+      },
+      input: '{"hook_event_name":"SessionEnd"}',
+    });
+
+    expect(readFileSync(tmuxLogPath, 'utf8')).toBe(
+      '-L deck set -w -t wt-_work_repo__term-1 automatic-rename on\n',
+    );
+    expect(existsSync(sidecarDir)).toBe(false);
+  });
+
   it('writes a Codex sidecar keyed by DECK_SESSION', async () => {
     const root = tempRoot();
     const sidecarDir = join(root, 'hooks');
@@ -50,13 +111,38 @@ describe('renderAgentHookScript', () => {
     const root = tempRoot();
     const sidecarDir = join(root, 'hooks');
     const scriptPath = writeScript(root, renderAgentHookScript(sidecarDir));
+    const tmuxLogPath = writeTmuxStub(root);
 
     await runScript(scriptPath, {
-      env: { ...process.env, DECK_SESSION: undefined },
+      env: {
+        ...process.env,
+        DECK_SESSION: undefined,
+        PATH: `${join(root, 'bin')}:${process.env.PATH ?? ''}`,
+      },
       input: '{"session_id":"abc-123","hook_event_name":"SessionStart"}',
     });
 
     expect(existsSync(sidecarDir)).toBe(false);
+    expect(existsSync(tmuxLogPath)).toBe(false);
+  });
+
+  it('no-ops when a start event has no session id', async () => {
+    const root = tempRoot();
+    const sidecarDir = join(root, 'hooks');
+    const scriptPath = writeScript(root, renderAgentHookScript(sidecarDir));
+    const tmuxLogPath = writeTmuxStub(root);
+
+    await runScript(scriptPath, {
+      env: {
+        ...process.env,
+        DECK_SESSION: 'wt-_work_repo__term-1',
+        PATH: `${join(root, 'bin')}:${process.env.PATH ?? ''}`,
+      },
+      input: '{"hook_event_name":"SessionStart"}',
+    });
+
+    expect(existsSync(sidecarDir)).toBe(false);
+    expect(existsSync(tmuxLogPath)).toBe(false);
   });
 });
 
@@ -71,6 +157,16 @@ function writeScript(root: string, text: string): string {
   writeFileSync(scriptPath, text, 'utf8');
   chmodSync(scriptPath, 0o755);
   return scriptPath;
+}
+
+function writeTmuxStub(root: string): string {
+  const binDir = join(root, 'bin');
+  const logPath = join(root, 'tmux.log');
+  mkdirSync(binDir, { recursive: true });
+  const tmuxPath = join(binDir, 'tmux');
+  writeFileSync(tmuxPath, `#!/bin/sh\nprintf '%s\\n' "$*" >> '${logPath}'\n`, 'utf8');
+  chmodSync(tmuxPath, 0o755);
+  return logPath;
 }
 
 function runScript(
