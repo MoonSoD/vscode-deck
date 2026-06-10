@@ -529,6 +529,7 @@ describe('RepositoryTreeProvider', () => {
           ? { status: 'completed' as const, statusAt: 1710000000 }
           : undefined,
       ),
+      entries: vi.fn(() => new Map().entries()),
       onDidChange: vi.fn((listener: () => void) => {
         statusChange = listener;
         return { dispose: vi.fn() };
@@ -568,6 +569,7 @@ describe('RepositoryTreeProvider', () => {
     };
     const agentStatuses = {
       get: vi.fn(() => ({ status: 'needsInput' as const, statusAt: 1710000000 })),
+      entries: vi.fn(() => new Map().entries()),
       onDidChange: vi.fn(() => ({ dispose: vi.fn() })),
     };
     const provider = new RepositoryTreeProvider(
@@ -596,6 +598,45 @@ describe('RepositoryTreeProvider', () => {
           color: { id: 'list.warningForeground' },
         },
       }));
+  });
+
+  it('rolls needs-input agent statuses into Repository and Worktree descriptions', async () => {
+    const statuses = new Map([
+      ['wt-_work_alpha-main__term-1', { status: 'needsInput' as const, statusAt: 1710000000 }],
+      ['wt-_work_alpha-feature__term-1', { status: 'completed' as const, statusAt: 1710000001 }],
+      ['wt-_work_alpha-feature__term-2', { status: 'needsInput' as const, statusAt: 1710000002 }],
+      ['wt-_work_beta-main__term-1', { status: 'needsInput' as const, statusAt: 1710000003 }],
+    ]);
+    const agentStatuses = {
+      get: vi.fn((sessionName: string) => statuses.get(sessionName)),
+      entries: vi.fn(() => statuses.entries()),
+      onDidChange: vi.fn(() => ({ dispose: vi.fn() })),
+    };
+    const provider = new RepositoryTreeProvider(
+      registry(['/work/alpha-main']),
+      { get: vi.fn() } as unknown as ActiveWorktreeStore,
+      { get: vi.fn() } as unknown as WorktreeOrderStore,
+      { get: vi.fn(() => [alphaMainWorktree, alphaFeatureWorktree]), set: vi.fn(async () => undefined) } as unknown as WorktreeListCacheStore,
+      {
+        get: vi.fn((path: string) => (path === '/work/alpha-main' ? '/git/alpha' : '/git/beta')),
+        set: vi.fn(async () => undefined),
+      } as unknown as RepositoryCommonDirCache,
+      { listSessions: vi.fn(async () => []) },
+      true,
+      new Set(),
+      agentStatuses,
+    );
+
+    const repositories = provider.getChildren();
+    if (!Array.isArray(repositories)) throw new Error('expected sync repository roots');
+    const worktrees = provider.getChildren(repositories[0]);
+    if (!Array.isArray(worktrees)) throw new Error('expected cached worktree children');
+
+    expect(repositories[0].description).toBe('· 2 needs input');
+    expect(worktrees.map((worktree) => worktree.description)).toEqual([
+      '/work/alpha-main · 1 needs input',
+      '/work/alpha-feature · 1 needs input',
+    ]);
   });
 
   it('returns parent rows for Worktree and Terminal rows', async () => {

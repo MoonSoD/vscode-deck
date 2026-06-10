@@ -39,6 +39,7 @@ import { TerminalSnapshotRuntime } from './terminal/terminalSnapshotRuntime';
 import { createRestoreGate } from './terminal/restoreGate';
 import { AgentSidecarStore } from './agent/agentSidecarStore';
 import { AgentStatusStore } from './agent/agentStatusStore';
+import { countNeedsInputStatuses, describeNeedsInputBadge } from './agent/agentStatusRollups';
 import { AgentDetection } from './agent/agentDetection';
 import { AgentSetupPrompt } from './agent/agentSetupPrompt';
 import { HookInstaller } from './agent/hookInstaller';
@@ -229,6 +230,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     dragAndDropController,
     canSelectMany: false,
   });
+  function syncAgentStatusBadge(): void {
+    treeView.badge = describeNeedsInputBadge(
+      countNeedsInputStatuses(Array.from(agentStatuses.entries(), ([, status]) => status)),
+    );
+  }
+  syncAgentStatusBadge();
+  const agentStatusBadgeWatch = agentStatuses.onDidChange(syncAgentStatusBadge);
   const addRepository = new AddRepositoryCommand(
     new VsCodeRepositoryFolderPicker(),
     repositoryRegistry,
@@ -257,6 +265,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     treeView,
     agentStatusWatch,
     activeTerminalReadWatch,
+    agentStatusBadgeWatch,
     externalGitWatch,
     vscode.window.registerCustomEditorProvider(terminalEditorViewType, terminalEditorProvider, {
       webviewOptions: {

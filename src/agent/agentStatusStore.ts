@@ -49,6 +49,10 @@ export class AgentStatusStore {
     return this.withReadState(sessionName, this.statuses.get(sessionName));
   }
 
+  entries(): IterableIterator<[string, AgentStatus]> {
+    return this.statuses.entries();
+  }
+
   onDidChange(listener: () => void): Disposable {
     this.listeners.add(listener);
     return {

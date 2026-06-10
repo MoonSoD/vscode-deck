@@ -19,6 +19,12 @@ describe('describeRepositoryTreeItem', () => {
       iconId: 'folder',
     });
   });
+
+  it('rolls needs-input counts into the repository description', () => {
+    expect(describeRepositoryTreeItem('/work/alpha', false, 2).description).toBe('· 2 needs input');
+    expect(describeRepositoryTreeItem('/work/alpha', true, 1).description).toBe('active · 1 needs input');
+    expect(describeRepositoryTreeItem('/work/alpha', false, 0).description).toBe('');
+  });
 });
 
 describe('describeWorktreeTreeItem', () => {
@@ -67,6 +73,21 @@ describe('describeWorktreeTreeItem', () => {
       describeWorktreeTreeItem(worktrees[1], '/work/alpha-main', '/work/other')
         .contextValue,
     ).toBe('deck.worktree');
+  });
+
+  it('rolls needs-input counts into the worktree description', () => {
+    const worktree = {
+      path: '/work/alpha-feature',
+      head: 'b',
+      bare: false,
+      detached: false,
+      branch: 'feature',
+    };
+
+    expect(describeWorktreeTreeItem(worktree, '/work/alpha-main', '/work/alpha-main', 3).description)
+      .toBe('/work/alpha-feature · 3 needs input');
+    expect(describeWorktreeTreeItem(worktree, '/work/alpha-main', '/work/alpha-main', 0).description)
+      .toBe('/work/alpha-feature');
   });
 });
 
