@@ -728,6 +728,9 @@ describe('RepositoryTreeProvider', () => {
       worktreePath: '/work/alpha-feature',
       terminal: { windowName: 'claude' },
     });
+    // Worktrees that cannot own the session are skipped before the tmux query.
+    expect(tmux.listSessions).toHaveBeenCalledTimes(1);
+    expect(tmux.listSessions).toHaveBeenCalledWith('wt-_work_alpha-feature__term-');
   });
 
   it('marks terminals in the current workspace folder as active', async () => {

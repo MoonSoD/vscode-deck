@@ -205,18 +205,18 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
     worktreePath: string,
   ): Promise<RepositoryTreeNode | undefined> {
     return this.findTerminalNode(
-      (terminal, worktree) =>
-        terminal.terminal.sessionName === sessionName &&
-        path.resolve(worktree.worktree.path) === path.resolve(worktreePath),
+      sessionName,
+      (worktree) => path.resolve(worktree.worktree.path) === path.resolve(worktreePath),
     );
   }
 
   async findTerminalBySessionName(sessionName: string): Promise<RepositoryTreeNode | undefined> {
-    return this.findTerminalNode((terminal) => terminal.terminal.sessionName === sessionName);
+    return this.findTerminalNode(sessionName);
   }
 
   private async findTerminalNode(
-    matches: (terminal: TerminalNode, worktree: WorktreeNode) => boolean,
+    sessionName: string,
+    worktreeMatches: (worktree: WorktreeNode) => boolean = () => true,
   ): Promise<TerminalNode | undefined> {
     const repositories = await this.resolveChildren();
     for (const repository of repositories) {
@@ -224,9 +224,15 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
       const worktrees = await this.resolveChildren(repository);
       for (const worktree of worktrees) {
         if (!(worktree instanceof WorktreeNode)) continue;
+        // The session name embeds the worktree prefix — skip before the
+        // per-worktree tmux query.
+        if (!sessionName.startsWith(terminalSessionPrefix(worktree.worktree.path))) continue;
+        if (!worktreeMatches(worktree)) continue;
         const terminals = await this.resolveChildren(worktree);
         for (const terminal of terminals) {
-          if (terminal instanceof TerminalNode && matches(terminal, worktree)) return terminal;
+          if (terminal instanceof TerminalNode && terminal.terminal.sessionName === sessionName) {
+            return terminal;
+          }
         }
       }
     }
