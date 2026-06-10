@@ -482,6 +482,22 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
         // webview can't resolve keybindings, so we don't try to mirror the full
         // commandsToSkipShell set. Before the isMac guard so it's all-platform.
         if (event.type === 'keydown' && event.ctrlKey && event.key === 'Tab') return false;
+        // Shift+Enter inserts a newline instead of submitting. The legacy
+        // encoding has no Shift bit on Enter — both send CR — so agents (Claude
+        // Code, Codex) read ESC+CR as a literal newline, the sequence VS Code's
+        // /terminal-setup binds. All-platform, before the isMac guard.
+        if (
+          event.type === 'keydown' &&
+          event.shiftKey &&
+          !event.ctrlKey &&
+          !event.altKey &&
+          !event.metaKey &&
+          event.key === 'Enter'
+        ) {
+          event.preventDefault();
+          vscode.postMessage({ type: 'input', payload: '\\x1b\\r' });
+          return false;
+        }
         if (!isMac || event.type !== 'keydown' || event.ctrlKey || event.shiftKey) return true;
         let seq;
         if (event.metaKey && !event.altKey) {
