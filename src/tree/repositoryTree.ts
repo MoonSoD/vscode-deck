@@ -30,6 +30,7 @@ interface TerminalSessionLister {
 
 interface AgentStatusLookup {
   get(sessionName: string): AgentStatus | undefined;
+  entries(): IterableIterator<[string, AgentStatus]>;
   onDidChange(listener: () => void): { dispose(): void };
 }
 
@@ -37,8 +38,12 @@ interface AgentStatusLookup {
 // across reloads (it stores state per id under workbench.tree.<viewId>).
 
 class RepositoryNode extends vscode.TreeItem {
-  constructor(public readonly repositoryPath: string, isActiveRepository: boolean) {
-    const item = describeRepositoryTreeItem(repositoryPath, isActiveRepository);
+  constructor(
+    public readonly repositoryPath: string,
+    isActiveRepository: boolean,
+    needsInputCount = 0,
+  ) {
+    const item = describeRepositoryTreeItem(repositoryPath, isActiveRepository, needsInputCount);
     super(item.label, vscode.TreeItemCollapsibleState.Expanded);
     this.id = `repository::${repositoryPath}`;
     this.contextValue = 'deck.repository';
@@ -54,8 +59,9 @@ class WorktreeNode extends vscode.TreeItem {
     public readonly worktree: Worktree,
     activeWorktreePath: string | undefined,
     public readonly mainWorktreePath: string | undefined,
+    needsInputCount = 0,
   ) {
-    const item = describeWorktreeTreeItem(worktree, activeWorktreePath, mainWorktreePath);
+    const item = describeWorktreeTreeItem(worktree, activeWorktreePath, mainWorktreePath, needsInputCount);
     super(item.label, vscode.TreeItemCollapsibleState.Expanded);
     this.id = `worktree::${worktree.path}`;
     this.contextValue = item.contextValue;
@@ -157,7 +163,11 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
 
   getParent(element: RepositoryTreeNode): RepositoryTreeNode | undefined {
     if (element instanceof WorktreeNode) {
-      return new RepositoryNode(element.repositoryPath, this.isActiveRepository(element.repositoryPath));
+      return new RepositoryNode(
+        element.repositoryPath,
+        this.isActiveRepository(element.repositoryPath),
+        this.repositoryNeedsInputCount(element.repositoryPath),
+      );
     }
     if (element instanceof TerminalNode) {
       return this.toParentWorktreeNode(element.worktreeNode);
@@ -176,7 +186,7 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
       this.resolveActiveRepository();
       return repositories.map((p) => {
         this.resolveRepositoryCommonDir(p);
-        return new RepositoryNode(p, this.isActiveRepository(p));
+        return new RepositoryNode(p, this.isActiveRepository(p), this.repositoryNeedsInputCount(p));
       });
     }
     if (element instanceof RepositoryNode) {
@@ -236,6 +246,7 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
       worktreeNode.worktree,
       this.currentWorktreePath(),
       worktreeNode.mainWorktreePath,
+      this.worktreeNeedsInputCount(worktreeNode.worktree.path),
     );
   }
 
@@ -395,7 +406,38 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
       ),
     );
     const mainWorktreePath = gitWorktrees.find((w) => !w.bare)?.path;
-    return worktrees.map((w) => new WorktreeNode(repositoryPath, w, activeWorktreePath, mainWorktreePath));
+    return worktrees.map((w) => new WorktreeNode(
+      repositoryPath,
+      w,
+      activeWorktreePath,
+      mainWorktreePath,
+      this.worktreeNeedsInputCount(w.path),
+    ));
+  }
+
+  private repositoryNeedsInputCount(repositoryPath: string): number {
+    const commonDir =
+      this.repositoryCommonDirCache.get(repositoryPath) ??
+      this.repositoryCommonDirs.get(repositoryPath) ??
+      undefined;
+    if (commonDir === undefined) return 0;
+
+    const worktrees = this.worktreeListCache.get(commonDir);
+    if (worktrees === undefined) return 0;
+
+    return worktrees.reduce(
+      (count, worktree) => count + this.worktreeNeedsInputCount(worktree.path),
+      0,
+    );
+  }
+
+  private worktreeNeedsInputCount(worktreePath: string): number {
+    const prefix = terminalSessionPrefix(worktreePath);
+    let count = 0;
+    for (const [sessionName, status] of this.agentStatuses?.entries() ?? []) {
+      if (sessionName.startsWith(prefix) && status.status === 'needsInput') count += 1;
+    }
+    return count;
   }
 
   private visibleWorktrees(

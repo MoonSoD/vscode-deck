@@ -32,10 +32,11 @@ export interface TmuxUnavailableTreeItemDescription {
 export function describeRepositoryTreeItem(
   repositoryPath: string,
   isActiveRepository: boolean,
+  needsInputCount = 0,
 ): RepositoryTreeItemDescription {
   return {
     label: repositoryPath.split('/').pop() ?? repositoryPath,
-    description: isActiveRepository ? 'active' : '',
+    description: withNeedsInputCount(isActiveRepository ? 'active' : '', needsInputCount),
     iconId: 'folder',
   };
 }
@@ -44,6 +45,7 @@ export function describeWorktreeTreeItem(
   worktree: Worktree,
   activeWorktreePath: string | undefined,
   mainWorktreePath?: string,
+  needsInputCount = 0,
 ): WorktreeTreeItemDescription {
   const isActive = worktree.path === activeWorktreePath;
   const isMain = worktree.path === mainWorktreePath;
@@ -56,7 +58,7 @@ export function describeWorktreeTreeItem(
 
   return {
     label: worktree.branch ?? worktree.path,
-    description: worktree.path,
+    description: withNeedsInputCount(worktree.path, needsInputCount),
     iconId: isActive ? 'check' : 'git-branch',
     contextValue,
   };
@@ -118,4 +120,10 @@ export function describeTmuxUnavailableTreeItem(): TmuxUnavailableTreeItemDescri
     contextValue: 'deck.tmux.unavailable',
     tooltip: 'Install tmux 3.1 or newer to use Deck-managed Terminals.',
   };
+}
+
+function withNeedsInputCount(description: string, count: number): string {
+  if (count <= 0) return description;
+  const suffix = `· ${count} needs input`;
+  return description ? `${description} ${suffix}` : suffix;
 }

@@ -15,6 +15,8 @@ const vscodeState = vi.hoisted(() => ({
   agentSetupPromptRun: vi.fn(),
   agentSetupPromptUninstall: vi.fn(),
   agentStatusStoreArgs: undefined as unknown[] | undefined,
+  agentStatusStoreChange: undefined as (() => void) | undefined,
+  agentStatusStoreEntries: [] as Array<[string, { status: 'inProgress' | 'needsInput' | 'completed' | 'failed'; statusAt: number }]>,
   agentStatusStorePrune: vi.fn(async () => undefined),
   agentStatusStoreStart: vi.fn(async () => ({ dispose: vi.fn() })),
   hookInstallerArgs: undefined as unknown[] | undefined,
@@ -279,7 +281,11 @@ vi.mock('../src/agent/terminalSnapshotAgentSessions', () => ({
 vi.mock('../src/agent/agentStatusStore', () => ({
   AgentStatusStore: class {
     get = vi.fn();
-    onDidChange = vi.fn(() => ({ dispose: vi.fn() }));
+    entries = vi.fn(() => vscodeState.agentStatusStoreEntries.values());
+    onDidChange = vi.fn((listener: () => void) => {
+      vscodeState.agentStatusStoreChange = listener;
+      return { dispose: vi.fn() };
+    });
     prune = vscodeState.agentStatusStorePrune;
     start = vscodeState.agentStatusStoreStart;
 
@@ -371,6 +377,8 @@ describe('activate', () => {
     vscodeState.agentSetupPromptRun.mockResolvedValue(undefined);
     vscodeState.agentSetupPromptUninstall.mockResolvedValue(undefined);
     vscodeState.agentStatusStoreArgs = undefined;
+    vscodeState.agentStatusStoreChange = undefined;
+    vscodeState.agentStatusStoreEntries = [];
     vscodeState.agentStatusStorePrune.mockResolvedValue(undefined);
     vscodeState.agentStatusStoreStart.mockResolvedValue({ dispose: vi.fn() });
     vscodeState.hookInstallerArgs = undefined;
@@ -457,6 +465,40 @@ describe('activate', () => {
       }),
     );
     expect(context.subscriptions[0]).toBe(vscodeState.createTreeView.mock.results[0].value);
+  });
+
+  it('updates the Deck view badge from needs-input agent statuses', async () => {
+    vscodeState.agentStatusStoreEntries = [
+      ['wt-_work_alpha-main__term-1', { status: 'needsInput', statusAt: 1710000000 }],
+      ['wt-_work_alpha-main__term-2', { status: 'completed', statusAt: 1710000001 }],
+    ];
+    const context = createContext();
+
+    await activate(context as never);
+    const treeView = vscodeState.createTreeView.mock.results[0].value as { badge?: unknown };
+
+    expect(treeView.badge).toEqual({
+      value: 1,
+      tooltip: '1 agent needs input',
+    });
+
+    vscodeState.agentStatusStoreEntries = [
+      ['wt-_work_alpha-main__term-1', { status: 'needsInput', statusAt: 1710000002 }],
+      ['wt-_work_beta-main__term-1', { status: 'needsInput', statusAt: 1710000003 }],
+    ];
+    vscodeState.agentStatusStoreChange?.();
+
+    expect(treeView.badge).toEqual({
+      value: 2,
+      tooltip: '2 agents need input',
+    });
+
+    vscodeState.agentStatusStoreEntries = [
+      ['wt-_work_alpha-main__term-1', { status: 'completed', statusAt: 1710000004 }],
+    ];
+    vscodeState.agentStatusStoreChange?.();
+
+    expect(treeView.badge).toBeUndefined();
   });
 
   it('uses RepositoryRegistryStore without migrating legacy settings', async () => {
