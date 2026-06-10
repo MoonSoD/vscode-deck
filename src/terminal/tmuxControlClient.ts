@@ -97,15 +97,25 @@ export class TmuxControlClient {
     // without this the cursor sits at end-of-content until the next redraw. The
     // canonical control-mode client (iTerm2) likewise reads cursor_x/cursor_y as
     // pane state apart from the content.
-    const fields = (await this.command(`list-panes -s -t =${sessionName} -F "#{pane_id} #{cursor_y} #{cursor_x}"`))
+    const fields = (await this.command(`list-panes -s -t =${sessionName} -F "#{pane_id} #{cursor_y} #{cursor_x} #{alternate_on}"`))
       .trim()
       .split('\n')
       .filter(Boolean);
     if (fields.length !== 1) {
       throw new Error(`expected exactly one tmux pane, got ${fields.length}`);
     }
-    const [paneId, cursorRow, cursorColumn] = fields[0].split(/\s+/);
+    const [paneId, cursorRow, cursorColumn, alternateOn] = fields[0].split(/\s+/);
     this.paneId = paneId;
+
+    // A full-screen TUI (Claude, vim, …) runs in the terminal's alternate screen.
+    // capture-pane grabs the *visible* screen, so when one is active the seed is a
+    // snapshot of the alt screen. Enter the alt screen here, before the seed, so it
+    // fills xterm's alternate buffer; otherwise the snapshot lands in the normal
+    // buffer and bleeds through (stale, with its colours) when the TUI exits the
+    // alt screen. The matching exit (\x1b[?1049l) arrives live when the TUI quits.
+    if (alternateOn === '1') {
+      for (const handler of this.seedHandlers) handler('\x1b[?1049h\x1b[H');
+    }
     // -q: a pane that died between attach and capture is not a startup error.
     // -N: preserve trailing spaces (tmux >= 3.1, our preflight floor).
     // A failed capture costs history, not the terminal: the gate still opens
