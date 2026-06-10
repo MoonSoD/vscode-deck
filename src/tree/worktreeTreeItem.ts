@@ -16,8 +16,9 @@ export interface WorktreeTreeItemDescription {
 
 export interface TerminalTreeItemDescription {
   label: string;
-  iconId: 'terminal' | 'circle-filled';
-  iconColorId?: 'textLink.foreground';
+  description?: string;
+  iconId: 'terminal' | 'loading~spin' | 'circle-filled' | 'error';
+  iconColorId?: 'textLink.foreground' | 'list.warningForeground' | 'errorForeground';
   contextValue: 'deck.terminal.active' | 'deck.terminal.foreign';
 }
 
@@ -67,11 +68,38 @@ export function describeTerminalTreeItem(
   status?: AgentStatus,
 ): TerminalTreeItemDescription {
   const contextValue = isActive ? 'deck.terminal.active' : 'deck.terminal.foreign';
+  if (status?.status === 'inProgress') {
+    return {
+      label: windowName,
+      description: 'Working...',
+      iconId: 'loading~spin',
+      iconColorId: 'textLink.foreground',
+      contextValue,
+    };
+  }
+  if (status?.status === 'needsInput') {
+    return {
+      label: windowName,
+      description: 'Input needed.',
+      iconId: 'circle-filled',
+      iconColorId: 'list.warningForeground',
+      contextValue,
+    };
+  }
   if (status?.status === 'completed') {
     return {
       label: windowName,
       iconId: 'circle-filled',
       iconColorId: 'textLink.foreground',
+      contextValue,
+    };
+  }
+  if (status?.status === 'failed') {
+    return {
+      label: windowName,
+      description: 'Failed',
+      iconId: 'error',
+      iconColorId: 'errorForeground',
       contextValue,
     };
   }

@@ -1,10 +1,11 @@
 import { watch } from 'node:fs';
-import { mkdir, readdir, readFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 
 export interface AgentStatus {
-  status: 'completed';
+  status: 'inProgress' | 'needsInput' | 'completed' | 'failed';
   statusAt: number;
+  message?: string;
 }
 
 export interface Disposable {
@@ -49,6 +50,28 @@ export class AgentStatusStore {
         watcher.close();
       },
     };
+  }
+
+  async prune(liveSessionNames: ReadonlySet<string>): Promise<void> {
+    let files: string[];
+    try {
+      files = await readdir(this.root);
+    } catch (error) {
+      if (isNotFound(error)) return;
+      throw error;
+    }
+
+    for (const file of files) {
+      if (!file.endsWith('.json')) continue;
+      const sessionName = file.slice(0, -'.json'.length);
+      if (liveSessionNames.has(sessionName)) continue;
+      try {
+        await unlink(join(this.root, file));
+      } catch (error) {
+        if (!isNotFound(error)) throw error;
+      }
+    }
+    await this.reload();
   }
 
   private scheduleReload(): void {
@@ -104,19 +127,34 @@ function parseStatus(text: string): AgentStatus | undefined {
   if (
     typeof value === 'object' &&
     value !== null &&
-    (value as { status?: unknown }).status === 'completed' &&
-    typeof (value as { statusAt?: unknown }).statusAt === 'number'
+    isAgentStatusValue((value as { status?: unknown }).status) &&
+    typeof (value as { statusAt?: unknown }).statusAt === 'number' &&
+    (
+      (value as { message?: unknown }).message === undefined ||
+      typeof (value as { message?: unknown }).message === 'string'
+    )
   ) {
     return value as AgentStatus;
   }
   return undefined;
 }
 
+function isAgentStatusValue(value: unknown): value is AgentStatus['status'] {
+  return value === 'inProgress' || value === 'needsInput' || value === 'completed' || value === 'failed';
+}
+
 function sameStatuses(left: ReadonlyMap<string, AgentStatus>, right: ReadonlyMap<string, AgentStatus>): boolean {
   if (left.size !== right.size) return false;
   for (const [sessionName, status] of left) {
     const other = right.get(sessionName);
-    if (!other || other.status !== status.status || other.statusAt !== status.statusAt) return false;
+    if (
+      !other ||
+      other.status !== status.status ||
+      other.statusAt !== status.statusAt ||
+      other.message !== status.message
+    ) {
+      return false;
+    }
   }
   return true;
 }

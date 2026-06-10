@@ -560,6 +560,44 @@ describe('RepositoryTreeProvider', () => {
     expect(vscodeState.emitters[0].fire).toHaveBeenCalledWith(undefined);
   });
 
+  it('copies agent status descriptions onto Terminal tree rows', async () => {
+    const tmux = {
+      listSessions: vi.fn(async () => [
+        { sessionName: 'wt-_work_alpha-main__term-1', windowName: 'claude' },
+      ]),
+    };
+    const agentStatuses = {
+      get: vi.fn(() => ({ status: 'needsInput' as const, statusAt: 1710000000 })),
+      onDidChange: vi.fn(() => ({ dispose: vi.fn() })),
+    };
+    const provider = new RepositoryTreeProvider(
+      registry(['/work/alpha-main']),
+      { get: vi.fn() } as unknown as ActiveWorktreeStore,
+      { get: vi.fn() } as unknown as WorktreeOrderStore,
+      { get: vi.fn(), set: vi.fn(async () => undefined) } as unknown as WorktreeListCacheStore,
+      { get: vi.fn(() => '/git/alpha'), set: vi.fn(async () => undefined) } as unknown as RepositoryCommonDirCache,
+      tmux,
+      true,
+      new Set(),
+      agentStatuses,
+    );
+    const repositories = provider.getChildren();
+    if (!Array.isArray(repositories)) throw new Error('expected sync repository roots');
+    const worktrees = await provider.getChildren(repositories[0]);
+    if (!Array.isArray(worktrees)) throw new Error('expected worktree children');
+
+    const terminalRows = await provider.getChildren(worktrees[0]);
+
+    expect((terminalRows as Array<{ description?: string; iconPath: { id: string; color?: { id: string } } }>)[0])
+      .toEqual(expect.objectContaining({
+        description: 'Input needed.',
+        iconPath: {
+          id: 'circle-filled',
+          color: { id: 'list.warningForeground' },
+        },
+      }));
+  });
+
   it('returns parent rows for Worktree and Terminal rows', async () => {
     const tmux = {
       listSessions: vi.fn(async () => [

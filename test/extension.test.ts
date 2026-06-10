@@ -15,6 +15,7 @@ const vscodeState = vi.hoisted(() => ({
   agentSetupPromptRun: vi.fn(),
   agentSetupPromptUninstall: vi.fn(),
   agentStatusStoreArgs: undefined as unknown[] | undefined,
+  agentStatusStorePrune: vi.fn(async () => undefined),
   agentStatusStoreStart: vi.fn(async () => ({ dispose: vi.fn() })),
   hookInstallerArgs: undefined as unknown[] | undefined,
   hookInstallerRemove: vi.fn(),
@@ -279,6 +280,7 @@ vi.mock('../src/agent/agentStatusStore', () => ({
   AgentStatusStore: class {
     get = vi.fn();
     onDidChange = vi.fn(() => ({ dispose: vi.fn() }));
+    prune = vscodeState.agentStatusStorePrune;
     start = vscodeState.agentStatusStoreStart;
 
     constructor(...args: unknown[]) {
@@ -369,6 +371,7 @@ describe('activate', () => {
     vscodeState.agentSetupPromptRun.mockResolvedValue(undefined);
     vscodeState.agentSetupPromptUninstall.mockResolvedValue(undefined);
     vscodeState.agentStatusStoreArgs = undefined;
+    vscodeState.agentStatusStorePrune.mockResolvedValue(undefined);
     vscodeState.agentStatusStoreStart.mockResolvedValue({ dispose: vi.fn() });
     vscodeState.hookInstallerArgs = undefined;
     vscodeState.hookInstallerRemove.mockResolvedValue([]);
@@ -662,8 +665,11 @@ describe('activate', () => {
     expect(vscodeState.onDidChangeActiveTerminal).not.toHaveBeenCalled();
     // Tab restoration is now VS Code's native custom-editor restore — Deck no
     // longer replays a snapshot. Two list-sessions run here: the pending-intent
-    // open, then the agent-sidecar prune.
+    // open, then agent sidecar/status pruning share one live-session list.
     expect(vscodeState.lifecycleOrder).toEqual(['pending-list', 'pending-list']);
+    expect(vscodeState.agentStatusStorePrune).toHaveBeenCalledWith(
+      new Set(['wt-_work_alpha-main__term-1']),
+    );
   });
 
   it('registers deck.addTerminal through AddTerminalCommand', async () => {

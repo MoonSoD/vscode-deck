@@ -29,16 +29,11 @@ describe('HookInstaller', () => {
     expect(existsSync(scriptPath)).toBe(true);
     expect(statSync(scriptPath).mode & 0o111).not.toBe(0);
     expect(JSON.parse(readFileSync(join(root, '.claude', 'settings.json'), 'utf8'))).toEqual({
-      hooks: {
-        SessionStart: [deckHookGroup(scriptPath)],
-        UserPromptSubmit: [deckHookGroup(scriptPath)],
-        SessionEnd: [deckHookGroup(scriptPath)],
-        Stop: [deckHookGroup(scriptPath)],
-      },
+      hooks: claudeDeckHooks(scriptPath),
     });
   });
 
-  it('treats a legacy Claude install without Stop as not installed', async () => {
+  it('treats a legacy Claude install without full status events as not installed', async () => {
     const root = tempRoot();
     const settingsPath = join(root, '.claude', 'settings.json');
     const scriptPath = join(root, '.local', 'share', 'deck', 'bin', 'deck-claude-hook.sh');
@@ -48,6 +43,7 @@ describe('HookInstaller', () => {
         SessionStart: [deckHookGroup(scriptPath)],
         UserPromptSubmit: [deckHookGroup(scriptPath)],
         SessionEnd: [deckHookGroup(scriptPath)],
+        Stop: [deckHookGroup(scriptPath)],
       },
     }), 'utf8');
     const installer = new HookInstaller({
@@ -77,12 +73,7 @@ describe('HookInstaller', () => {
       agent: 'claude',
       configPath: settingsPath,
       contents: `${JSON.stringify({
-        hooks: {
-          SessionStart: [deckHookGroup(scriptPath)],
-          UserPromptSubmit: [deckHookGroup(scriptPath)],
-          SessionEnd: [deckHookGroup(scriptPath)],
-          Stop: [deckHookGroup(scriptPath)],
-        },
+        hooks: claudeDeckHooks(scriptPath),
       }, null, 2)}\n`,
     }]);
     expect(existsSync(settingsPath)).toBe(false);
@@ -169,9 +160,7 @@ describe('HookInstaller', () => {
           },
           deckHookGroup(scriptPath),
         ],
-        UserPromptSubmit: [deckHookGroup(scriptPath)],
-        SessionEnd: [deckHookGroup(scriptPath)],
-        Stop: [deckHookGroup(scriptPath)],
+        ...claudeDeckHooksWithoutSessionStart(scriptPath),
       },
     });
   });
@@ -309,9 +298,7 @@ describe('HookInstaller', () => {
             hooks: [{ type: 'command', command: '/other/claude-session-start.sh' }],
           },
         ],
-        UserPromptSubmit: [deckHookGroup(claudeScriptPath)],
-        SessionEnd: [deckHookGroup(claudeScriptPath)],
-        Stop: [deckHookGroup(claudeScriptPath)],
+        ...claudeDeckHooksWithoutSessionStart(claudeScriptPath),
       },
     }), 'utf8');
     writeFileSync(codexHooksPath, JSON.stringify({
@@ -472,6 +459,26 @@ function deckHookGroup(scriptPath: string) {
       command: `'${scriptPath}' --deck-agent-session-hook claude`,
     }],
   };
+}
+
+function claudeDeckHooks(scriptPath: string) {
+  return {
+    SessionStart: [deckHookGroup(scriptPath)],
+    UserPromptSubmit: [deckHookGroup(scriptPath)],
+    PreToolUse: [deckHookGroup(scriptPath)],
+    PermissionRequest: [deckHookGroup(scriptPath)],
+    PostToolUse: [deckHookGroup(scriptPath)],
+    PostToolUseFailure: [deckHookGroup(scriptPath)],
+    Notification: [deckHookGroup(scriptPath)],
+    Stop: [deckHookGroup(scriptPath)],
+    StopFailure: [deckHookGroup(scriptPath)],
+    SessionEnd: [deckHookGroup(scriptPath)],
+  };
+}
+
+function claudeDeckHooksWithoutSessionStart(scriptPath: string) {
+  const { SessionStart: _sessionStart, ...hooks } = claudeDeckHooks(scriptPath);
+  return hooks;
 }
 
 function codexDeckHookGroup(scriptPath: string) {

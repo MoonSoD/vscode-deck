@@ -75,6 +75,7 @@ class TerminalNode extends vscode.TreeItem {
     super(item.label, vscode.TreeItemCollapsibleState.None);
     this.id = `terminal::${terminal.sessionName}`;
     this.contextValue = item.contextValue;
+    this.description = item.description;
     this.iconPath = item.iconColorId
       ? new vscode.ThemeIcon(item.iconId, new vscode.ThemeColor(item.iconColorId))
       : new vscode.ThemeIcon(item.iconId);

@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -62,6 +62,46 @@ describe('AgentStatusStore', () => {
 
     expect(store.get('partial')).toBeUndefined();
     expect(store.get('unknown')).toBeUndefined();
+  });
+
+  it('loads all hook statuses and keeps the needs-input message', async () => {
+    const root = tempRoot();
+    mkdirSync(root, { recursive: true });
+    writeFileSync(join(root, 'working.json'), '{"status":"inProgress","statusAt":1710000000}', 'utf8');
+    writeFileSync(
+      join(root, 'waiting.json'),
+      '{"status":"needsInput","statusAt":1710000001,"message":"Allow Bash?"}',
+      'utf8',
+    );
+    writeFileSync(join(root, 'done.json'), '{"status":"completed","statusAt":1710000002}', 'utf8');
+    writeFileSync(join(root, 'failed.json'), '{"status":"failed","statusAt":1710000003}', 'utf8');
+    const store = new AgentStatusStore(root, 10);
+    disposables.push(await store.start());
+
+    expect(store.get('working')).toEqual({ status: 'inProgress', statusAt: 1710000000 });
+    expect(store.get('waiting')).toEqual({
+      status: 'needsInput',
+      statusAt: 1710000001,
+      message: 'Allow Bash?',
+    });
+    expect(store.get('done')).toEqual({ status: 'completed', statusAt: 1710000002 });
+    expect(store.get('failed')).toEqual({ status: 'failed', statusAt: 1710000003 });
+  });
+
+  it('removes status files for Terminal sessions that no longer exist', async () => {
+    const root = tempRoot();
+    mkdirSync(root, { recursive: true });
+    writeFileSync(join(root, 'live.json'), '{"status":"inProgress","statusAt":1710000000}', 'utf8');
+    writeFileSync(join(root, 'dead.json'), '{"status":"completed","statusAt":1710000001}', 'utf8');
+    const store = new AgentStatusStore(root, 10);
+    disposables.push(await store.start());
+
+    await store.prune(new Set(['live']));
+
+    expect(store.get('live')).toEqual({ status: 'inProgress', statusAt: 1710000000 });
+    expect(store.get('dead')).toBeUndefined();
+    expect(existsSync(join(root, 'live.json'))).toBe(true);
+    expect(existsSync(join(root, 'dead.json'))).toBe(false);
   });
 });
 

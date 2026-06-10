@@ -313,9 +313,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     await openPendingTerminalForCurrentWorktree(pendingTerminalOpens, tmux);
     try {
       const liveSessions = new Set((await tmux.listSessions()).map((session) => session.sessionName));
-      await agentSidecars.prune(liveSessions);
+      try {
+        await agentSidecars.prune(liveSessions);
+      } catch (error) {
+        console.warn('Deck: pruning agent sidecars failed', error);
+      }
+      try {
+        await agentStatuses.prune(liveSessions);
+      } catch (error) {
+        console.warn('Deck: pruning agent statuses failed', error);
+      }
     } catch (error) {
-      console.warn('Deck: pruning agent sidecars failed', error);
+      console.warn('Deck: listing sessions for agent cleanup failed', error);
     }
     // Keep installed agents' hook scripts current with this Deck build — a
     // script changed by an upgrade (e.g. gaining the rename step) won't trip

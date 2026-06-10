@@ -71,11 +71,41 @@ describe('describeWorktreeTreeItem', () => {
 });
 
 describe('describeTerminalTreeItem', () => {
+  it('renders in-progress agent status as a blue loading row', () => {
+    expect(describeTerminalTreeItem('claude', false, { status: 'inProgress', statusAt: 1710000000 })).toEqual({
+      label: 'claude',
+      description: 'Working...',
+      iconId: 'loading~spin',
+      iconColorId: 'textLink.foreground',
+      contextValue: 'deck.terminal.foreign',
+    });
+  });
+
+  it('renders needs-input agent status as a warning filled dot', () => {
+    expect(describeTerminalTreeItem('claude', false, { status: 'needsInput', statusAt: 1710000000 })).toEqual({
+      label: 'claude',
+      description: 'Input needed.',
+      iconId: 'circle-filled',
+      iconColorId: 'list.warningForeground',
+      contextValue: 'deck.terminal.foreign',
+    });
+  });
+
   it('renders completed agent status as a blue filled dot', () => {
     expect(describeTerminalTreeItem('claude', false, { status: 'completed', statusAt: 1710000000 })).toEqual({
       label: 'claude',
       iconId: 'circle-filled',
       iconColorId: 'textLink.foreground',
+      contextValue: 'deck.terminal.foreign',
+    });
+  });
+
+  it('renders failed agent status as a red error icon', () => {
+    expect(describeTerminalTreeItem('claude', false, { status: 'failed', statusAt: 1710000000 })).toEqual({
+      label: 'claude',
+      description: 'Failed',
+      iconId: 'error',
+      iconColorId: 'errorForeground',
       contextValue: 'deck.terminal.foreign',
     });
   });

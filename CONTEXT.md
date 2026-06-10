@@ -78,6 +78,13 @@ _Avoid_: backup, session dump
 The resumable AI-agent conversation (Claude Code or Codex) a Terminal was running, identified by the agent's own session id. Deck only *observes* it — the user starts the agent — and captures it in the TerminalSnapshot so that on restore the Terminal relaunches the agent (`claude --resume` / `codex resume`) instead of returning to a bare shell. Discovered via a Deck hook installed in the agent's config, keyed to the Terminal by an injected `DECK_SESSION` env var.
 _Avoid_: agent chat session (implies a separate chat surface; this is an attribute of a Terminal), conversation, thread, agent process
 
+**AgentStatus**:
+The observed state of an AgentSession in a Terminal: InProgress, NeedsInput,
+Completed, or Failed. Absence means there is no current status to show. Deck
+derives Claude statuses from hooks and stores them in disposable per-Terminal
+status files, separate from AgentSession resume sidecars.
+_Avoid_: terminal status (the Terminal itself can be healthy while the agent is blocked), process status
+
 **Terminal**:
 A persistent shell owned by Deck — one tmux session on the DeckSocket — shown as a row under a Worktree and opened as an xterm.js editor tab addressed by `deck-terminal:/<worktree>/term-N`. Like a file, the Terminal is the durable thing and its tab is just a view onto it: closing the tab leaves the Terminal running, and any Terminal can be opened from any mounted Worktree without a Switch.
 _Avoid_: tmux session, tmux window, pane (the backing mechanism); tab (a disposable view, not the Terminal itself)
