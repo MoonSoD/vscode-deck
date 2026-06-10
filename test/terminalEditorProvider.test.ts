@@ -302,6 +302,22 @@ describe('TerminalEditorProvider', () => {
     expect(terminalPanel.webview.html).not.toContain('rgba(');
   });
 
+  it('renders image-aware paste forwarding while leaving text paste to xterm', () => {
+    const terminalPanel = panel();
+    const { provider, document } = providerDocument();
+
+    provider.resolveCustomEditor(document, terminalPanel as never);
+
+    expect(terminalPanel.webview.html).toContain("payload: '\\x16'");
+    expect(terminalPanel.webview.html).toContain("event.clipboardData?.items || []");
+    expect(terminalPanel.webview.html).toContain("item.type.startsWith('image/')");
+    expect(terminalPanel.webview.html).toContain("event.preventDefault()");
+    expect(terminalPanel.webview.html).toContain("terminalElement.addEventListener('paste'");
+    expect(terminalPanel.webview.html).toContain("navigator.clipboard.read()");
+    expect(terminalPanel.webview.html).toContain("item.types.some((type) => type.startsWith('image/'))");
+    expect(terminalPanel.webview.html).toContain("navigator.clipboard.readText()");
+  });
+
   it('rejects a duplicate same-session panel without starting a second bridge', () => {
     const firstPanel = panelStub();
     const duplicatePanel = panelStub();
@@ -328,55 +344,30 @@ describe('TerminalEditorProvider', () => {
     expect(bridgeFactory).toHaveBeenCalledOnce();
   });
 
-  it('routes resize messages to the terminal transport', () => {
+  it('routes input, resize, and clear-history messages to the terminal transport', () => {
     let receiveMessage:
       | ((message: { type: string; cols?: number; rows?: number; payload?: string }) => void)
       | undefined;
-    const panel = {
-      webview: {
-        options: {},
-        html: '',
-        cspSource: 'vscode-resource:',
-        asWebviewUri: (uri: unknown) => uri,
-        postMessage: vi.fn(async () => true),
-        onDidReceiveMessage: vi.fn(
-          (handler: (message: { type: string; cols?: number; rows?: number }) => void) => {
-            receiveMessage = handler;
-            return { dispose: vi.fn() };
-          },
-        ),
+    const terminalPanel = panel();
+    terminalPanel.webview.onDidReceiveMessage.mockImplementation(
+      (handler: (message: { type: string; cols?: number; rows?: number; payload?: string }) => void) => {
+        receiveMessage = handler;
+        return { dispose: vi.fn() };
       },
-      onDidDispose: vi.fn(() => ({ dispose: vi.fn() })),
-    };
-    const bridge = {
-      start: vi.fn(),
-      write: vi.fn(),
-      resize: vi.fn(),
-      clearHistory: vi.fn(),
-      onData: vi.fn(() => ({ dispose: vi.fn() })),
-      onExit: vi.fn(() => ({ dispose: vi.fn() })),
-    onRename: vi.fn(() => ({ dispose: vi.fn() })),
-      dispose: vi.fn(),
-    };
-    const provider = new TerminalEditorProvider(
-      { fsPath: '/extension' } as never,
-      '/extension/resources/deck.conf',
-      undefined,
-      () => bridge,
     );
-    const document = provider.openCustomDocument({
-      scheme: 'deck-terminal',
-      path: '/work/alpha-main/term-1',
-    } as never);
+    const terminalBridge = bridge();
+    const { provider, document } = providerDocument(terminalBridge);
 
-    provider.resolveCustomEditor(document, panel as never);
+    provider.resolveCustomEditor(document, terminalPanel as never);
+    receiveMessage?.({ type: 'input', payload: '\x16' });
     receiveMessage?.({ type: 'resize', cols: 132, rows: 41 });
     receiveMessage?.({ type: 'clearHistory' });
 
-    expect(bridge.resize).toHaveBeenCalledWith(132, 41);
+    expect(terminalBridge.write).toHaveBeenCalledWith('\x16');
+    expect(terminalBridge.resize).toHaveBeenCalledWith(132, 41);
     // Clear must reach tmux (clear-history) so it survives reload, not just
     // clear the local xterm buffer.
-    expect(bridge.clearHistory).toHaveBeenCalledOnce();
+    expect(terminalBridge.clearHistory).toHaveBeenCalledOnce();
   });
 
   it('does not use webview scrollback snapshots and renders a debounced fit resize observer before ready', () => {
