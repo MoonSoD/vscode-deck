@@ -302,6 +302,22 @@ describe('TerminalEditorProvider', () => {
     expect(terminalPanel.webview.html).not.toContain('rgba(');
   });
 
+  it('renders image-aware paste forwarding while leaving text paste to xterm', () => {
+    const terminalPanel = panel();
+    const { provider, document } = providerDocument();
+
+    provider.resolveCustomEditor(document, terminalPanel as never);
+
+    expect(terminalPanel.webview.html).toContain("payload: '\\x16'");
+    expect(terminalPanel.webview.html).toContain("event.clipboardData?.items || []");
+    expect(terminalPanel.webview.html).toContain("item.type.startsWith('image/')");
+    expect(terminalPanel.webview.html).toContain("event.preventDefault()");
+    expect(terminalPanel.webview.html).toContain("terminalElement.addEventListener('paste'");
+    expect(terminalPanel.webview.html).toContain("navigator.clipboard.read()");
+    expect(terminalPanel.webview.html).toContain("item.types.some((type) => type.startsWith('image/'))");
+    expect(terminalPanel.webview.html).toContain("navigator.clipboard.readText()");
+  });
+
   it('rejects a duplicate same-session panel without starting a second bridge', () => {
     const firstPanel = panelStub();
     const duplicatePanel = panelStub();
@@ -328,7 +344,7 @@ describe('TerminalEditorProvider', () => {
     expect(bridgeFactory).toHaveBeenCalledOnce();
   });
 
-  it('routes resize messages to the terminal transport', () => {
+  it('routes input and resize messages to the terminal transport', () => {
     let receiveMessage:
       | ((message: { type: string; cols?: number; rows?: number; payload?: string }) => void)
       | undefined;
@@ -370,9 +386,11 @@ describe('TerminalEditorProvider', () => {
     } as never);
 
     provider.resolveCustomEditor(document, panel as never);
+    receiveMessage?.({ type: 'input', payload: '\x16' });
     receiveMessage?.({ type: 'resize', cols: 132, rows: 41 });
     receiveMessage?.({ type: 'clearHistory' });
 
+    expect(bridge.write).toHaveBeenCalledWith('\x16');
     expect(bridge.resize).toHaveBeenCalledWith(132, 41);
     // Clear must reach tmux (clear-history) so it survives reload, not just
     // clear the local xterm buffer.

@@ -523,6 +523,16 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
       }
 
       async function pasteClipboard() {
+        try {
+          if (navigator.clipboard.read) {
+            const items = await navigator.clipboard.read();
+            if (items.some((item) => item.types.some((type) => type.startsWith('image/')))) {
+              vscode.postMessage({ type: 'input', payload: '\\x16' });
+              return;
+            }
+          }
+        } catch (_) {
+        }
         const text = await navigator.clipboard.readText();
         if (text) vscode.postMessage({ type: 'input', payload: text });
       }
@@ -557,6 +567,12 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
         contextMenu.style.left = Math.min(event.clientX, maxLeft) + 'px';
         contextMenu.style.top = Math.min(event.clientY, maxTop) + 'px';
       });
+      terminalElement.addEventListener('paste', (event) => {
+        const items = Array.from(event.clipboardData?.items || []);
+        if (!items.some((item) => item.type.startsWith('image/'))) return;
+        event.preventDefault();
+        vscode.postMessage({ type: 'input', payload: '\\x16' });
+      }, true);
       document.addEventListener('click', hideContextMenu);
       document.addEventListener('keydown', (event) => {
         if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'f') {
