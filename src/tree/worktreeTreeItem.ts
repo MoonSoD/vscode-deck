@@ -66,11 +66,20 @@ export function describeTerminalTreeItem(
   isActive: boolean,
   status?: AgentStatus,
 ): TerminalTreeItemDescription {
+  const contextValue = isActive ? 'deck.terminal.active' : 'deck.terminal.foreign';
+  if (status?.status === 'completed') {
+    return {
+      label: windowName,
+      iconId: 'circle-filled',
+      iconColorId: 'textLink.foreground',
+      contextValue,
+    };
+  }
+
   return {
     label: windowName,
-    iconId: status?.status === 'completed' ? 'circle-filled' : 'terminal',
-    ...(status?.status === 'completed' ? { iconColorId: 'textLink.foreground' as const } : {}),
-    contextValue: isActive ? 'deck.terminal.active' : 'deck.terminal.foreign',
+    iconId: 'terminal',
+    contextValue,
   };
 }
 
