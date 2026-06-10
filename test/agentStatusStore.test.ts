@@ -122,6 +122,26 @@ describe('AgentStatusStore', () => {
     });
   });
 
+  it('merges read marks from two windows sharing the same storage', async () => {
+    const root = tempRoot();
+    mkdirSync(root, { recursive: true });
+    writeFileSync(join(root, 'term-1.json'), '{"status":"completed","statusAt":1710000000}', 'utf8');
+    writeFileSync(join(root, 'term-2.json'), '{"status":"completed","statusAt":1710000000}', 'utf8');
+    const storage = new MemoryMemento();
+    const windowA = new AgentStatusStore(root, 10, storage);
+    const windowB = new AgentStatusStore(root, 10, storage);
+    disposables.push(await windowA.start());
+    disposables.push(await windowB.start());
+
+    await windowA.markRead('term-1');
+    await windowB.markRead('term-2');
+
+    expect(windowA.get('term-1')?.unread).toBe(false);
+    expect(windowA.get('term-2')?.unread).toBe(false);
+    expect(windowB.get('term-1')?.unread).toBe(false);
+    expect(windowB.get('term-2')?.unread).toBe(false);
+  });
+
   it('ignores malformed and invalid status files', async () => {
     const root = tempRoot();
     mkdirSync(root, { recursive: true });
@@ -132,6 +152,20 @@ describe('AgentStatusStore', () => {
 
     expect(store.get('partial')).toBeUndefined();
     expect(store.get('unknown')).toBeUndefined();
+  });
+
+  it('treats an empty message as absent', async () => {
+    const root = tempRoot();
+    mkdirSync(root, { recursive: true });
+    writeFileSync(
+      join(root, 'term-1.json'),
+      '{"status":"needsInput","statusAt":1710000000,"message":""}',
+      'utf8',
+    );
+    const store = new AgentStatusStore(root, 10);
+    disposables.push(await store.start());
+
+    expect(store.get('term-1')).toEqual({ status: 'needsInput', statusAt: 1710000000 });
   });
 
   it('loads all hook statuses and keeps the needs-input message', async () => {
@@ -156,6 +190,41 @@ describe('AgentStatusStore', () => {
     });
     expect(store.get('done')).toEqual({ status: 'completed', statusAt: 1710000002, unread: true });
     expect(store.get('failed')).toEqual({ status: 'failed', statusAt: 1710000003 });
+  });
+
+  it('stays silent on statusAt-only churn for non-completed statuses', async () => {
+    const root = tempRoot();
+    mkdirSync(root, { recursive: true });
+    writeFileSync(join(root, 'term-1.json'), '{"status":"inProgress","statusAt":1710000000}', 'utf8');
+    const store = new AgentStatusStore(root, 10);
+    const changes = vi.fn();
+    disposables.push(store.onDidChange(changes));
+    disposables.push(await store.start());
+
+    writeFileSync(join(root, 'term-1.json'), '{"status":"inProgress","statusAt":1710000050}', 'utf8');
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    expect(changes).not.toHaveBeenCalled();
+
+    writeFileSync(join(root, 'term-1.json'), '{"status":"completed","statusAt":1710000060}', 'utf8');
+    await vi.waitFor(() => expect(changes).toHaveBeenCalled(), WATCH_EVENT_WAIT);
+  });
+
+  it('removes a single session status on Deck-owned kills and notifies listeners', async () => {
+    const root = tempRoot();
+    mkdirSync(root, { recursive: true });
+    writeFileSync(join(root, 'killed.json'), '{"status":"needsInput","statusAt":1710000000}', 'utf8');
+    const store = new AgentStatusStore(root, 10);
+    const changes = vi.fn();
+    disposables.push(store.onDidChange(changes));
+    disposables.push(await store.start());
+
+    await store.remove('killed');
+
+    expect(store.get('killed')).toBeUndefined();
+    expect(existsSync(join(root, 'killed.json'))).toBe(false);
+    expect(changes).toHaveBeenCalled();
+
+    await expect(store.remove('killed')).resolves.toBeUndefined();
   });
 
   it('removes status files for Terminal sessions that no longer exist', async () => {

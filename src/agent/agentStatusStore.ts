@@ -37,7 +37,6 @@ export class AgentStatusStore {
   private statuses = new Map<string, AgentStatus>();
   private readonly listeners = new Set<() => void>();
   private debounceTimer: NodeJS.Timeout | undefined;
-  private readState: AgentStatusReads | undefined;
 
   constructor(
     private readonly root: string,
@@ -101,6 +100,19 @@ export class AgentStatusStore {
     await this.reload();
   }
 
+  // For Deck-owned kills (TerminalRemoval, WorktreeRemoval cascade): the agent
+  // never fires SessionEnd under tmux kill-session, so the file must go here.
+  async remove(sessionName: string): Promise<void> {
+    try {
+      await unlink(join(this.root, `${sessionName}.json`));
+    } catch (error) {
+      if (!isNotFound(error)) throw error;
+    }
+    if (this.statuses.delete(sessionName)) {
+      for (const listener of this.listeners) listener();
+    }
+  }
+
   async markRead(sessionName: string): Promise<void> {
     const status = this.statuses.get(sessionName);
     if (status?.status !== 'completed') return;
@@ -114,7 +126,6 @@ export class AgentStatusStore {
         [sessionName]: status.statusAt,
       },
     };
-    this.readState = next;
     await this.writeReads(next);
 
     for (const listener of this.listeners) listener();
@@ -176,15 +187,15 @@ export class AgentStatusStore {
     };
   }
 
+  // Always read fresh: globalState is shared across VS Code windows, and a
+  // cached copy here would let one window's merge-write wipe read marks
+  // another window persisted after the cache was taken.
   private reads(): AgentStatusReads {
-    if (this.readState !== undefined) return this.readState;
     const raw = this.readStorage.get<AgentStatusReads | undefined>(AGENT_STATUS_READS_KEY, undefined);
     if (!isAgentStatusReads(raw)) {
-      this.readState = { schemaVersion: AGENT_STATUS_READS_SCHEMA_VERSION, completed: {} };
-      return this.readState;
+      return { schemaVersion: AGENT_STATUS_READS_SCHEMA_VERSION, completed: {} };
     }
-    this.readState = raw;
-    return this.readState;
+    return raw;
   }
 
   private async writeReads(reads: AgentStatusReads): Promise<void> {
@@ -204,7 +215,9 @@ function parseStatus(text: string): AgentStatus | undefined {
       typeof (value as { message?: unknown }).message === 'string'
     )
   ) {
-    return value as AgentStatus;
+    const status = value as AgentStatus;
+    // An empty message defeats ?? fallbacks downstream; treat it as absent.
+    return status.message === '' ? { ...status, message: undefined } : status;
   }
   return undefined;
 }
@@ -226,6 +239,9 @@ function isAgentStatusReads(value: unknown): value is AgentStatusReads {
   return Object.values((value as AgentStatusReads).completed).every((statusAt) => typeof statusAt === 'number');
 }
 
+// "Same" means rendering-equivalent: statusAt only shows through the unread
+// bit on completed, so an inProgress statusAt bump (every tool call) is not a
+// change — treating it as one re-renders the whole tree once per tool call.
 function sameStatuses(left: ReadonlyMap<string, AgentStatus>, right: ReadonlyMap<string, AgentStatus>): boolean {
   if (left.size !== right.size) return false;
   for (const [sessionName, status] of left) {
@@ -233,8 +249,8 @@ function sameStatuses(left: ReadonlyMap<string, AgentStatus>, right: ReadonlyMap
     if (
       !other ||
       other.status !== status.status ||
-      other.statusAt !== status.statusAt ||
-      other.message !== status.message
+      other.message !== status.message ||
+      (status.status === 'completed' && other.statusAt !== status.statusAt)
     ) {
       return false;
     }
