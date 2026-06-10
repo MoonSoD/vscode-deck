@@ -177,6 +177,99 @@ describe('renderAgentHookScript', () => {
     expect(status.message).toBe(expectedMessage);
   });
 
+  it('keeps escaped quotes intact in the needs-input message', async () => {
+    const root = tempRoot();
+    const sidecarDir = join(root, 'hooks');
+    const scriptPath = writeScript(root, renderAgentHookScript(sidecarDir));
+
+    await runScript(scriptPath, {
+      env: { ...process.env, DECK_SESSION: 'wt-_work_repo__term-1' },
+      input: JSON.stringify({
+        session_id: 'abc-123',
+        hook_event_name: 'PermissionRequest',
+        message: 'Allow Bash(echo "hi")?',
+      }),
+    });
+
+    const status = JSON.parse(readFileSync(join(root, 'status', 'wt-_work_repo__term-1.json'), 'utf8'));
+    expect(status.message).toBe('Allow Bash(echo "hi")?');
+  });
+
+  it('extracts the top-level message, not tool_input lookalikes', async () => {
+    const root = tempRoot();
+    const sidecarDir = join(root, 'hooks');
+    const scriptPath = writeScript(root, renderAgentHookScript(sidecarDir));
+
+    await runScript(scriptPath, {
+      env: { ...process.env, DECK_SESSION: 'wt-_work_repo__term-1' },
+      input: JSON.stringify({
+        session_id: 'abc-123',
+        hook_event_name: 'PermissionRequest',
+        // Escaped "message" lookalike ahead of the real field.
+        tool_input: { command: 'printf %s {"message":"decoy"}' },
+        message: 'Allow Edit?',
+        // Unescaped nested message after the real field.
+        tool_response: { message: 'trailing decoy' },
+      }),
+    });
+
+    const status = JSON.parse(readFileSync(join(root, 'status', 'wt-_work_repo__term-1.json'), 'utf8'));
+    expect(status.message).toBe('Allow Edit?');
+  });
+
+  it('omits the message key when PermissionRequest carries none', async () => {
+    const root = tempRoot();
+    const sidecarDir = join(root, 'hooks');
+    const scriptPath = writeScript(root, renderAgentHookScript(sidecarDir));
+
+    await runScript(scriptPath, {
+      env: { ...process.env, DECK_SESSION: 'wt-_work_repo__term-1' },
+      input: '{"session_id":"abc-123","hook_event_name":"PermissionRequest"}',
+    });
+
+    const raw = readFileSync(join(root, 'status', 'wt-_work_repo__term-1.json'), 'utf8');
+    expect(raw).not.toContain('"message"');
+    expect(JSON.parse(raw).status).toBe('needsInput');
+  });
+
+  it('keeps the Stop statusAt when idle_prompt later confirms the completion', async () => {
+    const root = tempRoot();
+    const sidecarDir = join(root, 'hooks');
+    const statusPath = join(root, 'status', 'wt-_work_repo__term-1.json');
+    const scriptPath = writeScript(root, renderAgentHookScript(sidecarDir));
+    const env = { ...process.env, DECK_SESSION: 'wt-_work_repo__term-1' };
+
+    await runScript(scriptPath, {
+      env,
+      input: '{"session_id":"abc-123","hook_event_name":"Stop"}',
+    });
+    const afterStop = readFileSync(statusPath, 'utf8');
+
+    await runScript(scriptPath, {
+      env,
+      input: '{"session_id":"abc-123","hook_event_name":"Notification","notification_type":"idle_prompt"}',
+    });
+
+    expect(readFileSync(statusPath, 'utf8')).toBe(afterStop);
+  });
+
+  it('writes completed on idle_prompt when the recorded status is not completed', async () => {
+    const root = tempRoot();
+    const sidecarDir = join(root, 'hooks');
+    const statusDir = join(root, 'status');
+    mkdirSync(statusDir, { recursive: true });
+    const statusPath = join(statusDir, 'wt-_work_repo__term-1.json');
+    writeFileSync(statusPath, '{"status":"inProgress","statusAt":1710000000}\n', 'utf8');
+    const scriptPath = writeScript(root, renderAgentHookScript(sidecarDir));
+
+    await runScript(scriptPath, {
+      env: { ...process.env, DECK_SESSION: 'wt-_work_repo__term-1' },
+      input: '{"session_id":"abc-123","hook_event_name":"Notification","notification_type":"idle_prompt"}',
+    });
+
+    expect(JSON.parse(readFileSync(statusPath, 'utf8')).status).toBe('completed');
+  });
+
   it('leaves status unchanged on unknown Notification types', async () => {
     const root = tempRoot();
     const sidecarDir = join(root, 'hooks');
