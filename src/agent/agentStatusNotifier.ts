@@ -24,11 +24,18 @@ interface AgentStatusNotifications {
   showInformationMessage(message: string, ...items: string[]): Thenable<string | undefined>;
 }
 
+interface AgentStatusOsNotifications {
+  notify(sessionName: string, message: string, deepLink: string, sound?: 'default'): PromiseLike<void>;
+  clear(sessionName: string): PromiseLike<void>;
+}
+
 interface AgentStatusNotifierOptions {
   store: AgentStatusStoreLike;
   settings: AgentStatusNotificationSettings;
   windowState: AgentStatusWindowState;
   notifications: AgentStatusNotifications;
+  osNotifications?: AgentStatusOsNotifications;
+  deepLink?: (sessionName: string) => string;
   openTerminal(sessionName: string): void | PromiseLike<void>;
 }
 
@@ -51,15 +58,26 @@ export class AgentStatusNotifier {
       if (status.status === 'needsInput' && previousStatus !== 'needsInput') {
         this.notifyNeedsInput(sessionName, status);
       }
+      if (status.status !== 'needsInput' && previousStatus === 'needsInput') {
+        this.clearOsNotification(sessionName);
+      }
       if (status.status === 'completed' && previousStatus !== 'completed') {
         this.notifyCompleted(sessionName, status);
       }
+    }
+    for (const sessionName of this.previous.keys()) {
+      if (current.has(sessionName)) continue;
+      if (this.previous.get(sessionName) === 'needsInput') this.clearOsNotification(sessionName);
     }
     this.previous = current;
   }
 
   private notifyNeedsInput(sessionName: string, status: AgentStatus): void {
     if (!this.shouldNotify(sessionName, this.options.settings.notifyOnNeedsInput())) return;
+    if (!this.options.windowState.isFocused()) {
+      this.showOsNotification(sessionName, status.message ?? 'Agent needs input', 'default');
+      return;
+    }
     this.show(
       this.options.notifications.showWarningMessage(status.message ?? 'Agent needs input', OPEN_TERMINAL),
       sessionName,
@@ -68,6 +86,10 @@ export class AgentStatusNotifier {
 
   private notifyCompleted(sessionName: string, status: AgentStatus): void {
     if (!this.shouldNotify(sessionName, this.options.settings.notifyOnCompleted())) return;
+    if (!this.options.windowState.isFocused()) {
+      this.showOsNotification(sessionName, status.message ?? 'Agent completed');
+      return;
+    }
     this.show(
       this.options.notifications.showInformationMessage(status.message ?? 'Agent completed', OPEN_TERMINAL),
       sessionName,
@@ -76,8 +98,9 @@ export class AgentStatusNotifier {
 
   private shouldNotify(sessionName: string, mode: AgentStatusNotificationMode): boolean {
     if (mode === 'off') return false;
-    if (this.options.windowState.activeTerminalSessionName() === sessionName) return false;
-    return mode === 'always' || !this.options.windowState.isFocused();
+    const focused = this.options.windowState.isFocused();
+    if (focused && this.options.windowState.activeTerminalSessionName() === sessionName) return false;
+    return mode === 'always' || !focused;
   }
 
   private show(choice: Thenable<string | undefined>, sessionName: string): void {
@@ -85,6 +108,17 @@ export class AgentStatusNotifier {
       if (selected !== OPEN_TERMINAL) return;
       return this.options.openTerminal(sessionName);
     });
+  }
+
+  private showOsNotification(sessionName: string, message: string, sound?: 'default'): void {
+    const osNotifications = this.options.osNotifications;
+    const deepLink = this.options.deepLink;
+    if (!osNotifications || !deepLink) return;
+    void osNotifications.notify(sessionName, message, deepLink(sessionName), sound);
+  }
+
+  private clearOsNotification(sessionName: string): void {
+    void this.options.osNotifications?.clear(sessionName);
   }
 
   private snapshot(): Map<string, AgentStatus['status']> {
