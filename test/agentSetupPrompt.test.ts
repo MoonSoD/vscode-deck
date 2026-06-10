@@ -17,7 +17,7 @@ describe('AgentSetupPrompt', () => {
         { agent: 'claude', configPath: '/home/me/.claude/settings.json' },
         { agent: 'codex', configPath: '/home/me/.codex/hooks.json' },
       ],
-      installed: new Set(['claude']),
+      currentInstalls: new Set(['claude']),
       infoChoices: ['Set Up Codex'],
     });
 
@@ -140,7 +140,7 @@ describe('AgentSetupPrompt', () => {
   it('reports instead of silently doing nothing when explicit and all installed', async () => {
     const prompt = createPrompt({
       detected: [{ agent: 'claude', configPath: '/home/me/.claude/settings.json' }],
-      installed: new Set(['claude']),
+      currentInstalls: new Set(['claude']),
     });
 
     await prompt.run({ explicit: true });
@@ -161,7 +161,7 @@ describe('AgentSetupPrompt', () => {
   it('clears a prior dismissal when install is invoked explicitly', async () => {
     const prompt = createPrompt({
       detected: [{ agent: 'claude', configPath: '/home/me/.claude/settings.json' }],
-      installed: new Set(['claude']),
+      currentInstalls: new Set(['claude']),
       dismissed: true,
     });
 
@@ -171,7 +171,7 @@ describe('AgentSetupPrompt', () => {
   });
 
   it('uninstall reports when no agent hooks are installed', async () => {
-    const prompt = createPrompt({ detected: [], installed: new Set() });
+    const prompt = createPrompt({ detected: [], currentInstalls: new Set() });
 
     await prompt.uninstall();
 
@@ -182,7 +182,7 @@ describe('AgentSetupPrompt', () => {
   it('uninstall removes legacy Claude hooks that are not current installs', async () => {
     const prompt = createPrompt({
       detected: [],
-      installed: new Set(),
+      currentInstalls: new Set(),
       deckHooks: new Set(['claude']),
     });
 
@@ -193,7 +193,7 @@ describe('AgentSetupPrompt', () => {
   });
 
   it('uninstall removes a single installed agent without prompting or dismissing', async () => {
-    const prompt = createPrompt({ detected: [], installed: new Set(['claude']) });
+    const prompt = createPrompt({ detected: [], currentInstalls: new Set(['claude']) });
 
     await prompt.uninstall();
 
@@ -203,7 +203,7 @@ describe('AgentSetupPrompt', () => {
   });
 
   it('uninstall quick-picks multiple installed agents and removes the selection', async () => {
-    const prompt = createPrompt({ detected: [], installed: new Set(['claude', 'codex']) });
+    const prompt = createPrompt({ detected: [], currentInstalls: new Set(['claude', 'codex']) });
 
     await prompt.uninstall();
 
@@ -222,7 +222,7 @@ describe('AgentSetupPrompt', () => {
   it('uninstall removes only the selected agent and stays active when one remains', async () => {
     const prompt = createPrompt({
       detected: [],
-      installed: new Set(['claude', 'codex']),
+      currentInstalls: new Set(['claude', 'codex']),
       pick: ['codex'],
     });
 
@@ -235,7 +235,7 @@ describe('AgentSetupPrompt', () => {
 
 function createPrompt(input: {
   detected: Array<{ agent: AgentName; configPath: string }>;
-  installed?: ReadonlySet<AgentName>;
+  currentInstalls?: ReadonlySet<AgentName>;
   deckHooks?: ReadonlySet<AgentName>;
   infoChoice?: string;
   infoChoices?: Array<string | undefined>;
@@ -253,9 +253,9 @@ function createPrompt(input: {
     ),
   };
   const installer = {
-    isCurrentInstall: vi.fn(async (agent: AgentName) => input.installed?.has(agent) ?? false),
+    isCurrentInstall: vi.fn(async (agent: AgentName) => input.currentInstalls?.has(agent) ?? false),
     hasDeckHooks: vi.fn(async (agent: AgentName) =>
-      input.deckHooks?.has(agent) ?? input.installed?.has(agent) ?? false),
+      input.deckHooks?.has(agent) ?? input.currentInstalls?.has(agent) ?? false),
     install: vi.fn(async () => undefined),
     remove: vi.fn(async (agents: readonly AgentName[]) => [...agents]),
   };

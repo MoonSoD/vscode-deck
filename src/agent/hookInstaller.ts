@@ -113,10 +113,6 @@ export class HookInstaller {
     return refreshed;
   }
 
-  async isInstalled(agent: AgentName): Promise<boolean> {
-    return this.isCurrentInstall(agent);
-  }
-
   async hasDeckHooks(agent: AgentName): Promise<boolean> {
     const config = this.configFor(agent);
     const settings = await this.readSettings(config.configPath);

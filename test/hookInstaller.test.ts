@@ -260,8 +260,8 @@ describe('HookInstaller', () => {
         UserPromptSubmit: [codexDeckHookGroup(codexScriptPath)],
       },
     });
-    await expect(installer.isInstalled('codex')).resolves.toBe(true);
-    await expect(installer.isInstalled('claude')).resolves.toBe(false);
+    await expect(installer.isCurrentInstall('codex')).resolves.toBe(true);
+    await expect(installer.isCurrentInstall('claude')).resolves.toBe(false);
   });
 
   it('removes hooks for only the requested agent', async () => {
@@ -277,8 +277,8 @@ describe('HookInstaller', () => {
 
     await expect(installer.remove(['codex'])).resolves.toEqual(['codex']);
 
-    await expect(installer.isInstalled('claude')).resolves.toBe(true);
-    await expect(installer.isInstalled('codex')).resolves.toBe(false);
+    await expect(installer.isCurrentInstall('claude')).resolves.toBe(true);
+    await expect(installer.isCurrentInstall('codex')).resolves.toBe(false);
   });
 
   it('removes only Deck hooks from Claude and Codex config files', async () => {

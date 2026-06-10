@@ -171,27 +171,27 @@ export class AgentSetupPrompt {
   }
 
   private async currentInstallAgents(detected: readonly DetectedAgent[]): Promise<Set<AgentName>> {
-    const installed = new Set<AgentName>();
+    const currentInstalls = new Set<AgentName>();
     await Promise.all(detected.map(async ({ agent }) => {
-      if (await this.deps.installer.isCurrentInstall(agent)) installed.add(agent);
+      if (await this.deps.installer.isCurrentInstall(agent)) currentInstalls.add(agent);
     }));
-    return installed;
+    return currentInstalls;
   }
 
   private async deckHookAgents(agents: readonly AgentName[]): Promise<Set<AgentName>> {
-    const installed = new Set<AgentName>();
+    const deckHookInstalls = new Set<AgentName>();
     await Promise.all(agents.map(async (agent) => {
-      if (await this.deps.installer.hasDeckHooks(agent)) installed.add(agent);
+      if (await this.deps.installer.hasDeckHooks(agent)) deckHookInstalls.add(agent);
     }));
-    return installed;
+    return deckHookInstalls;
   }
 
   private async deckHookAgentList(): Promise<AgentName[]> {
-    const installed: AgentName[] = [];
+    const deckHookInstalls: AgentName[] = [];
     for (const agent of ALL_AGENTS) {
-      if (await this.deps.installer.hasDeckHooks(agent)) installed.push(agent);
+      if (await this.deps.installer.hasDeckHooks(agent)) deckHookInstalls.push(agent);
     }
-    return installed;
+    return deckHookInstalls;
   }
 }
 
