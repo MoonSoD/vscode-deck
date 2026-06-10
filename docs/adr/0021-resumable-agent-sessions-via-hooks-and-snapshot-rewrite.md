@@ -158,6 +158,13 @@ by id. Two findings shaped the design:
     automatic-rename (ADR-0014 live read). No modal, no Deck banner, no dedicated
     "agent-backed" tree decoration in v1.
 
+    > **Correction (ADR-0023):** the claim that the row "already reads
+    > `claude`/`codex` via automatic-rename" is **false**. `automatic-rename`
+    > follows `#{pane_current_command}`, which is Claude's *version string* and
+    > Codex's `codex-aarch64-…` binary name — never a clean agent identity.
+    > Agent-aware naming is handled by ADR-0023 (a hook-driven `rename-window`),
+    > not by automatic-rename. The rest of this point stands.
+
 11. **`@resurrect-processes` is `:all:`, clamped by the rewriter — superseding
     ADR-0019 §1.** Snapshot-rewrite resume only works if resurrect actually
     restores a pane's command, so `deck.conf` sets `@resurrect-processes ':all:'`
