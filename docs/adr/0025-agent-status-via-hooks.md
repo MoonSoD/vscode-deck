@@ -35,11 +35,15 @@ decisions from issues #91-#95.
 
 4. **Use VS Code-shaped notification settings with Deck-specific defaults.**
    Both notification settings support `off`, `windowNotFocused`, and `always`,
-   but the defaults intentionally differ from VS Code: `always` for NeedsInput
-   and `off` for Completed. VS Code extensions get in-window toasts, not OS
-   toasts or dock/taskbar attention, so a focused-window toast for a background
-   Terminal is useful. Completed remains ambient by default through the unread
-   dot.
+   but both default to `always`, unlike VS Code. VS Code extensions get
+   in-window toasts, not OS toasts or dock/taskbar attention, so a
+   focused-window toast for a background Terminal is useful — and
+   `windowNotFocused` is self-defeating with in-window toasts (the focused
+   window skips the toast you could see; the unfocused one shows the toast you
+   can't). Completed also defaults to `always` because the unread dot alone is
+   too weak a signal across windows: a Terminal left as the active tab is
+   auto-marked read, so without a toast another window gets no signal at all.
+   The tab-active suppression keeps turns you watched finish from toasting.
 
 5. **Expose Open Terminal only; no Allow action.** A notification can open and
    reveal the Terminal. It does not try to approve a Claude permission prompt.

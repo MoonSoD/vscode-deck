@@ -909,6 +909,26 @@ describe('activate', () => {
     );
   });
 
+  it('explains instead of silently no-opping when the notified Terminal is not in this window', async () => {
+    const context = createContext();
+    vscodeState.showWarningMessage.mockResolvedValue('Open Terminal');
+
+    await activate(context as never);
+    vscodeState.repositoryTreeInstances[0].findTerminalBySessionName.mockResolvedValue(undefined);
+    vscodeState.agentStatusStoreEntries = [
+      ['wt-_elsewhere_repo__term-1', { status: 'needsInput', statusAt: 1710000000 }],
+    ];
+    vscodeState.agentStatusStoreChangeListeners.at(-1)?.();
+    await Promise.resolve();
+
+    await vi.waitFor(() => {
+      expect(vscodeState.showInformationMessage).toHaveBeenCalledWith(
+        "This Terminal's repository isn't registered in this window. Add the repository to Deck to open it.",
+      );
+    });
+    expect(vscodeState.openTerminalRun).not.toHaveBeenCalled();
+  });
+
   it('reveals the active Deck Terminal tab in the tree without taking focus', async () => {
     const context = createContext();
     const terminalNode = {

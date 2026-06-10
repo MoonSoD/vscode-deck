@@ -68,7 +68,7 @@
             "windowNotFocused",
             "always"
           ],
-          "default": "off",
+          "default": "always",
           "description": "Controls when Deck notifies that an agent has completed a turn."
         },
         "deck.tmux.automaticRenameFormat": {

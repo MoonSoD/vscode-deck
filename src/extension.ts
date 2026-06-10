@@ -178,12 +178,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     terminalPanels: terminalEditorProvider,
   });
   const openTerminalInNewWindow = new OpenTerminalInNewWindowCommand(pendingTerminalOpens);
+  const removeAgentStatus = (sessionName: string) => agentStatuses.remove(sessionName);
   const terminalRemoval = new TerminalRemovalCommand(
     tmux,
     refreshTree,
     confirmTerminalRemoval,
+    undefined,
+    removeAgentStatus,
   );
-  const terminalCascade = new TerminalCascade(tmux);
+  const terminalCascade = new TerminalCascade(tmux, undefined, removeAgentStatus);
   const addWorktree = new AddWorktreeCommand(
     switcher,
     detachedOpener,
@@ -232,7 +235,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     store: agentStatuses,
     settings: {
       notifyOnNeedsInput: () => agentStatusNotificationModeFromSettings('notifyOnNeedsInput', 'always'),
-      notifyOnCompleted: () => agentStatusNotificationModeFromSettings('notifyOnCompleted', 'off'),
+      notifyOnCompleted: () => agentStatusNotificationModeFromSettings('notifyOnCompleted', 'always'),
     },
     windowState: {
       isFocused: () => vscode.window.state.focused,
@@ -554,7 +557,14 @@ async function openAgentStatusTerminal(
 ): Promise<void> {
   try {
     const terminalNode = await tree.findTerminalBySessionName(sessionName);
-    if (!terminalNode || !('terminal' in terminalNode)) return;
+    if (!terminalNode || !('terminal' in terminalNode)) {
+      // Status files are machine-global; this window's tree only shows
+      // registered repositories (e.g. another VS Code install owns this one).
+      await vscode.window.showInformationMessage(
+        "This Terminal's repository isn't registered in this window. Add the repository to Deck to open it.",
+      );
+      return;
+    }
     await openTerminal.run(terminalNode);
     await treeView.reveal(terminalNode, { select: true, focus: false });
   } catch (error) {

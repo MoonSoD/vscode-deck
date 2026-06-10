@@ -99,7 +99,7 @@ describe('package contributions', () => {
     expect(pkg.contributes.configuration?.properties?.['deck.notifyOnCompleted']).toMatchObject({
       type: 'string',
       enum: ['off', 'windowNotFocused', 'always'],
-      default: 'off',
+      default: 'always',
     });
   });
 
