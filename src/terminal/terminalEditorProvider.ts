@@ -247,6 +247,7 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
   <link rel="stylesheet" href="${xtermCss}">
   <style>
     html, body, #terminal {
+      box-sizing: border-box;
       width: 100%;
       height: 100%;
       margin: 0;
@@ -256,9 +257,10 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
     body {
       color: var(--vscode-editor-foreground);
       font-family: var(--vscode-font-family);
-    }
-    #terminal {
-      box-sizing: border-box;
+      /* Override VS Code's injected 0 20px padding. The right side already
+         carries xterm's ~14px scrollbar-lane reserve, so 6px there + 14px lane
+         visually balances the 20px on the left. */
+      padding: 0 6px 0 20px;
     }
     #context-menu {
       position: fixed;
