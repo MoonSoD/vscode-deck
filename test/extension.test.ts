@@ -67,13 +67,6 @@ const vscodeState = vi.hoisted(() => ({
   }>,
   registerCommand: vi.fn(() => ({ dispose: vi.fn() })),
   registerCustomEditorProvider: vi.fn(() => ({ dispose: vi.fn() })),
-  registerUriHandler: vi.fn(() => ({ dispose: vi.fn() })),
-  osNotifierCreate: vi.fn(async () => ({
-    notify: vscodeState.osNotify,
-    clear: vscodeState.osClear,
-  })),
-  osNotify: vi.fn(async () => undefined),
-  osClear: vi.fn(async () => undefined),
   removeWorktreeArgs: undefined as unknown[] | undefined,
   settingsRepositories: ['/settings/repo'],
   settingsAgentResumeTemplates: {} as Record<string, string | undefined>,
@@ -110,7 +103,6 @@ const vscodeState = vi.hoisted(() => ({
   showWarningMessage: vi.fn(),
   showInformationMessage: vi.fn(),
   showTextDocument: vi.fn(),
-  windowFocused: true,
   workspaceFsStat: vi.fn(async () => ({})),
   treeViewSelection: [] as unknown[],
 }));
@@ -137,20 +129,16 @@ vi.mock('vscode', () => ({
       return value;
     },
   },
-  env: {
-    uriScheme: 'vscode',
-  },
   window: {
     activeColorTheme: { kind: 2 },
     createTreeView: vscodeState.createTreeView,
     registerCustomEditorProvider: vscodeState.registerCustomEditorProvider,
-    registerUriHandler: vscodeState.registerUriHandler,
     showWarningMessage: vscodeState.showWarningMessage,
     showInformationMessage: vscodeState.showInformationMessage,
     showTextDocument: vscodeState.showTextDocument,
     state: {
       get focused() {
-        return vscodeState.windowFocused;
+        return true;
       },
     },
     onDidCloseTerminal: vscodeState.onDidCloseTerminal,
@@ -348,12 +336,6 @@ vi.mock('../src/agent/agentStatusStore', () => ({
   },
 }));
 
-vi.mock('../src/agent/osNotifier', () => ({
-  OsNotifier: {
-    create: vscodeState.osNotifierCreate,
-  },
-}));
-
 vi.mock('../src/agent/hookInstaller', () => ({
   HookInstaller: class {
     constructor(...args: unknown[]) {
@@ -454,10 +436,6 @@ describe('activate', () => {
     vscodeState.openTerminalArgs = undefined;
     vscodeState.repositoryTreeArgs = undefined;
     vscodeState.repositoryTreeInstances = [];
-    vscodeState.registerUriHandler.mockClear();
-    vscodeState.osNotifierCreate.mockClear();
-    vscodeState.osNotify.mockClear();
-    vscodeState.osClear.mockClear();
     vscodeState.removeWorktreeArgs = undefined;
     vscodeState.settingsRepositories = ['/settings/repo'];
     vscodeState.settingsAgentResumeTemplates = {};
@@ -483,7 +461,6 @@ describe('activate', () => {
     vscodeState.showWarningMessage.mockClear();
     vscodeState.showInformationMessage.mockReset();
     vscodeState.showTextDocument.mockClear();
-    vscodeState.windowFocused = true;
     vscodeState.workspaceFsStat.mockResolvedValue({});
     vscodeState.workspaceFsStat.mockClear();
     vi.mocked(resolveCommonDirSafe).mockResolvedValue(null);
@@ -518,7 +495,6 @@ describe('activate', () => {
         }),
       },
       subscriptions: [] as Array<{ dispose(): void }>,
-      extension: { id: 'a9a4k.deck' },
       extensionPath: process.cwd(),
       extensionUri: { fsPath: process.cwd() },
       globalStorageUri: { fsPath: globalStoragePath },
@@ -931,76 +907,6 @@ describe('activate', () => {
       terminalNode,
       { select: true, focus: false },
     );
-  });
-
-  it('posts an OS banner with a Deck deep link when an unfocused window sees needs input', async () => {
-    const context = createContext();
-    vscodeState.windowFocused = false;
-
-    await activate(context as never);
-    vscodeState.agentStatusStoreEntries = [
-      ['wt-_work_alpha-feature__term-1', {
-        status: 'needsInput',
-        statusAt: 1710000000,
-        message: 'Allow Bash(ls)?',
-      }],
-    ];
-    vscodeState.agentStatusStoreChangeListeners.at(-1)?.();
-    await Promise.resolve();
-
-    expect(vscodeState.showWarningMessage).not.toHaveBeenCalled();
-    expect(vscodeState.osNotify).toHaveBeenCalledWith(
-      'wt-_work_alpha-feature__term-1',
-      'Allow Bash(ls)?',
-      'vscode://a9a4k.deck/open-terminal?session=wt-_work_alpha-feature__term-1',
-      'default',
-    );
-  });
-
-  it('routes Deck deep links to the existing agent status Terminal opener', async () => {
-    const context = createContext();
-    const terminalNode = {
-      terminal: { sessionName: 'wt-_work_alpha-feature__term-1', windowName: 'claude' },
-      worktreePath: '/work/alpha-feature',
-    };
-
-    await activate(context as never);
-    vscodeState.repositoryTreeInstances[0].findTerminalBySessionName.mockResolvedValue(terminalNode);
-    const handler = vscodeState.registerUriHandler.mock.calls[0]?.[0];
-    if (!handler) throw new Error('missing URI handler registration');
-
-    await handler.handleUri({
-      path: '/open-terminal',
-      query: 'session=wt-_work_alpha-feature__term-1',
-    });
-
-    expect(vscodeState.repositoryTreeInstances[0].findTerminalBySessionName).toHaveBeenCalledWith(
-      'wt-_work_alpha-feature__term-1',
-    );
-    expect(vscodeState.openTerminalRun).toHaveBeenCalledWith(terminalNode);
-    expect(vscodeState.createTreeView.mock.results[0].value.reveal).toHaveBeenCalledWith(
-      terminalNode,
-      { select: true, focus: false },
-    );
-  });
-
-  it('explains when a Deck deep link targets a Terminal outside this window', async () => {
-    const context = createContext();
-
-    await activate(context as never);
-    vscodeState.repositoryTreeInstances[0].findTerminalBySessionName.mockResolvedValue(undefined);
-    const handler = vscodeState.registerUriHandler.mock.calls[0]?.[0];
-    if (!handler) throw new Error('missing URI handler registration');
-
-    await handler.handleUri({
-      path: '/open-terminal',
-      query: 'session=wt-_elsewhere_repo__term-1',
-    });
-
-    expect(vscodeState.showInformationMessage).toHaveBeenCalledWith(
-      "This Terminal's repository isn't registered in this window. Add the repository to Deck to open it.",
-    );
-    expect(vscodeState.openTerminalRun).not.toHaveBeenCalled();
   });
 
   it('explains instead of silently no-opping when the notified Terminal is not in this window', async () => {

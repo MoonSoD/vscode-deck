@@ -29,8 +29,7 @@
     "Other"
   ],
   "activationEvents": [
-    "onView:deck.repositories",
-    "onUri"
+    "onView:deck.repositories"
   ],
   "main": "./dist/extension.js",
   "contributes": {

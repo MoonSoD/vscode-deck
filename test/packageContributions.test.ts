@@ -37,7 +37,7 @@ describe('package contributions', () => {
   });
 
   it('contributes Deck to the secondary sidebar with first-install walkthrough', () => {
-    expect(pkg.activationEvents).toEqual(['onView:deck.repositories', 'onUri']);
+    expect(pkg.activationEvents).toEqual(['onView:deck.repositories']);
     expect(pkg.engines.vscode).toBe('^1.106.0');
     expect(pkg.contributes.viewsContainers.activitybar).toBeUndefined();
     expect(pkg.contributes.viewsContainers.secondarySidebar).toEqual([{

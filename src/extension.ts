@@ -42,7 +42,6 @@ import {
   AgentStatusNotifier,
   type AgentStatusNotificationMode,
 } from './agent/agentStatusNotifier';
-import { OsNotifier } from './agent/osNotifier';
 import { AgentStatusStore } from './agent/agentStatusStore';
 import { countNeedsInputStatuses, describeNeedsInputBadge } from './agent/agentStatusRollups';
 import { AgentDetection } from './agent/agentDetection';
@@ -66,7 +65,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const agentSidecars = new AgentSidecarStore(join(deckDir, 'hooks'));
   const agentStatuses = new AgentStatusStore(join(deckDir, 'status'), 100, context.globalState);
   const agentStatusWatch = await agentStatuses.start();
-  const osNotifier = await OsNotifier.create();
   const activeTerminalReadWatch = agentStatuses.onDidChange(() => {
     void markActiveTerminalRead(agentStatuses);
   });
@@ -247,18 +245,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       showWarningMessage: (message, ...items) => vscode.window.showWarningMessage(message, ...items),
       showInformationMessage: (message, ...items) => vscode.window.showInformationMessage(message, ...items),
     },
-    osNotifications: osNotifier,
-    deepLink: (sessionName) => agentStatusTerminalDeepLink(context.extension.id, sessionName),
     openTerminal: (sessionName) => openAgentStatusTerminal(tree, treeView, openTerminal, sessionName),
   }).start();
-  const agentStatusUriHandler = vscode.window.registerUriHandler({
-    handleUri(uri) {
-      if (uri.path !== '/open-terminal') return;
-      const sessionName = new URLSearchParams(uri.query).get('session');
-      if (!sessionName) return;
-      return openAgentStatusTerminal(tree, treeView, openTerminal, sessionName);
-    },
-  });
   const addRepository = new AddRepositoryCommand(
     new VsCodeRepositoryFolderPicker(),
     repositoryRegistry,
@@ -289,7 +277,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     activeTerminalReadWatch,
     agentStatusBadgeWatch,
     agentStatusNotifierWatch,
-    agentStatusUriHandler,
     externalGitWatch,
     vscode.window.registerCustomEditorProvider(terminalEditorViewType, terminalEditorProvider, {
       webviewOptions: {
@@ -476,10 +463,6 @@ function agentStatusNotificationModeFromSettings(
 
 function isAgentStatusNotificationMode(value: unknown): value is AgentStatusNotificationMode {
   return value === 'off' || value === 'windowNotFocused' || value === 'always';
-}
-
-function agentStatusTerminalDeepLink(extensionId: string, sessionName: string): string {
-  return `${vscode.env.uriScheme}://${extensionId}/open-terminal?session=${encodeURIComponent(sessionName)}`;
 }
 
 interface RepositoryRegistryReader {

@@ -37,9 +37,7 @@ describe('domain docs', () => {
     expect(normalizedAdr).toContain('tmux user options');
     expect(normalizedAdr).toContain('Extending the AgentSession sidecar');
     expect(normalizedAdr).toContain('Codex has a parity gap');
-    expect(normalizedAdr).toContain('terminal-notifier');
-    expect(normalizedAdr).toContain('Deck URI handler');
-    expect(normalizedAdr).toContain('Multi-window notifications can be redundant');
+    expect(normalizedAdr).toContain('stale toast');
   });
 });
 

@@ -82,20 +82,17 @@ describe('AgentStatusNotifier', () => {
   it.each([
     ['off', true, false],
     ['windowNotFocused', true, false],
-    ['windowNotFocused', false, false],
+    ['windowNotFocused', false, true],
     ['always', true, true],
-    ['always', false, false],
   ] as const)(
-    'applies in-window notifyOnNeedsInput=%s while focused=%s',
+    'applies notifyOnNeedsInput=%s while focused=%s',
     (mode, focused, expectedToast) => {
       const statuses = new Map<string, AgentStatus>();
       const store = new FakeStatusStore(statuses);
       const notifications = fakeNotifications();
-      const osNotifications = fakeOsNotifications();
       const notifier = createNotifier({
         store,
         notifications,
-        osNotifications,
         notifyOnNeedsInput: () => mode,
         isFocused: () => focused,
       });
@@ -105,42 +102,9 @@ describe('AgentStatusNotifier', () => {
       store.fire();
 
       expect(notifications.showWarningMessage).toHaveBeenCalledTimes(expectedToast ? 1 : 0);
-      expect(osNotifications.notify).toHaveBeenCalledTimes(!focused && mode !== 'off' ? 1 : 0);
       disposable.dispose();
     },
   );
-
-  it('posts a default-sound OS banner instead of a toast for needs input when the window is not focused', async () => {
-    const statuses = new Map<string, AgentStatus>();
-    const store = new FakeStatusStore(statuses);
-    const notifications = fakeNotifications();
-    const osNotifications = fakeOsNotifications();
-    const notifier = createNotifier({
-      store,
-      notifications,
-      osNotifications,
-      notifyOnNeedsInput: () => 'windowNotFocused',
-      isFocused: () => false,
-    });
-    const disposable = notifier.start();
-
-    statuses.set('wt-_work_repo__term-1', {
-      status: 'needsInput',
-      statusAt: 1710000000,
-      message: 'Allow Bash(ls)?',
-    });
-    store.fire();
-    await Promise.resolve();
-
-    expect(notifications.showWarningMessage).not.toHaveBeenCalled();
-    expect(osNotifications.notify).toHaveBeenCalledWith(
-      'wt-_work_repo__term-1',
-      'Allow Bash(ls)?',
-      'vscode://a9a4k.deck/open-terminal?session=wt-_work_repo__term-1',
-      'default',
-    );
-    disposable.dispose();
-  });
 
   it('keeps completed notifications off by default and sends info toasts when enabled', () => {
     const statuses = new Map<string, AgentStatus>();
@@ -181,20 +145,17 @@ describe('AgentStatusNotifier', () => {
   it.each([
     ['off', true, false],
     ['windowNotFocused', true, false],
-    ['windowNotFocused', false, false],
+    ['windowNotFocused', false, true],
     ['always', true, true],
-    ['always', false, false],
   ] as const)(
-    'applies in-window notifyOnCompleted=%s while focused=%s',
+    'applies notifyOnCompleted=%s while focused=%s',
     (mode, focused, expectedToast) => {
       const statuses = new Map<string, AgentStatus>();
       const store = new FakeStatusStore(statuses);
       const notifications = fakeNotifications();
-      const osNotifications = fakeOsNotifications();
       const notifier = createNotifier({
         store,
         notifications,
-        osNotifications,
         notifyOnCompleted: () => mode,
         isFocused: () => focused,
       });
@@ -204,74 +165,9 @@ describe('AgentStatusNotifier', () => {
       store.fire();
 
       expect(notifications.showInformationMessage).toHaveBeenCalledTimes(expectedToast ? 1 : 0);
-      expect(osNotifications.notify).toHaveBeenCalledTimes(!focused && mode !== 'off' ? 1 : 0);
       disposable.dispose();
     },
   );
-
-  it('posts a silent OS banner for completed when the window is not focused', async () => {
-    const statuses = new Map<string, AgentStatus>();
-    const store = new FakeStatusStore(statuses);
-    const notifications = fakeNotifications();
-    const osNotifications = fakeOsNotifications();
-    const notifier = createNotifier({
-      store,
-      notifications,
-      osNotifications,
-      notifyOnCompleted: () => 'always',
-      isFocused: () => false,
-    });
-    const disposable = notifier.start();
-
-    statuses.set('wt-_work_repo__term-1', {
-      status: 'completed',
-      statusAt: 1710000000,
-      message: 'Claude stopped',
-    });
-    store.fire();
-    await Promise.resolve();
-
-    expect(notifications.showInformationMessage).not.toHaveBeenCalled();
-    expect(osNotifications.notify).toHaveBeenCalledWith(
-      'wt-_work_repo__term-1',
-      'Claude stopped',
-      'vscode://a9a4k.deck/open-terminal?session=wt-_work_repo__term-1',
-      undefined,
-    );
-    disposable.dispose();
-  });
-
-  it('clears the OS banner when a Terminal leaves needs input', () => {
-    const statuses = new Map<string, AgentStatus>();
-    const store = new FakeStatusStore(statuses);
-    const osNotifications = fakeOsNotifications();
-    const notifier = createNotifier({ store, osNotifications });
-    const disposable = notifier.start();
-
-    statuses.set('wt-_work_repo__term-1', { status: 'needsInput', statusAt: 1710000000 });
-    store.fire();
-    statuses.set('wt-_work_repo__term-1', { status: 'inProgress', statusAt: 1710000001 });
-    store.fire();
-
-    expect(osNotifications.clear).toHaveBeenCalledWith('wt-_work_repo__term-1');
-    disposable.dispose();
-  });
-
-  it('clears the OS banner when a needs-input Terminal disappears', () => {
-    const statuses = new Map<string, AgentStatus>();
-    const store = new FakeStatusStore(statuses);
-    const osNotifications = fakeOsNotifications();
-    const notifier = createNotifier({ store, osNotifications });
-    const disposable = notifier.start();
-
-    statuses.set('wt-_work_repo__term-1', { status: 'needsInput', statusAt: 1710000000 });
-    store.fire();
-    statuses.delete('wt-_work_repo__term-1');
-    store.fire();
-
-    expect(osNotifications.clear).toHaveBeenCalledWith('wt-_work_repo__term-1');
-    disposable.dispose();
-  });
 
   it('opens the Terminal from a stale toast after the status has cleared', async () => {
     const statuses = new Map<string, AgentStatus>();
@@ -304,7 +200,6 @@ describe('AgentStatusNotifier', () => {
 function createNotifier(options: {
   store: FakeStatusStore;
   notifications?: ReturnType<typeof fakeNotifications>;
-  osNotifications?: ReturnType<typeof fakeOsNotifications>;
   openTerminal?: (sessionName: string) => void | PromiseLike<void>;
   notifyOnNeedsInput?: () => 'off' | 'windowNotFocused' | 'always';
   notifyOnCompleted?: () => 'off' | 'windowNotFocused' | 'always';
@@ -322,8 +217,6 @@ function createNotifier(options: {
       activeTerminalSessionName: options.activeTerminalSessionName ?? (() => undefined),
     },
     notifications: options.notifications ?? fakeNotifications(),
-    osNotifications: options.osNotifications ?? fakeOsNotifications(),
-    deepLink: (sessionName) => `vscode://a9a4k.deck/open-terminal?session=${sessionName}`,
     openTerminal: options.openTerminal ?? (async () => undefined),
   });
 }
@@ -332,13 +225,6 @@ function fakeNotifications(choice?: string) {
   return {
     showWarningMessage: vi.fn(async () => choice),
     showInformationMessage: vi.fn(async () => choice),
-  };
-}
-
-function fakeOsNotifications() {
-  return {
-    notify: vi.fn(async () => undefined),
-    clear: vi.fn(async () => undefined),
   };
 }
 

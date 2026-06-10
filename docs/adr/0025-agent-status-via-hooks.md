@@ -33,20 +33,17 @@ decisions from issues #91-#95.
    remains the resume-critical sidecar and is written before status work. Losing
    status must never prevent a TerminalSnapshot from resuming an AgentSession.
 
-4. **Use focus to choose the notification channel.** Both notification settings
-   support `off`, `windowNotFocused`, and `always`, and both default to
-   `always`. The setting still answers when Deck should interrupt; window focus
-   answers how. A focused window uses the existing VS Code in-window toast path
-   and keeps tab-active suppression. An unfocused window posts a macOS banner
-   through `terminal-notifier`, with `-open` pointing at a Deck URI handler that
-   opens and reveals the Terminal. NeedsInput banners use the default sound;
-   Completed banners are silent. Leaving NeedsInput removes the grouped banner.
-
-   Deck detects `terminal-notifier` once on activation and otherwise silently
-   no-ops; non-macOS hosts also no-op. Deck does not bundle `node-notifier` or a
-   Mach-O binary: that would add VSIX weight and risk Gatekeeper quarantine for
-   a binary the user did not install. `osascript` is not a fallback because it
-   has no reliable click action or grouped removal.
+4. **Use VS Code-shaped notification settings with Deck-specific defaults.**
+   Both notification settings support `off`, `windowNotFocused`, and `always`,
+   but both default to `always`, unlike VS Code. VS Code extensions get
+   in-window toasts, not OS toasts or dock/taskbar attention, so a
+   focused-window toast for a background Terminal is useful — and
+   `windowNotFocused` is self-defeating with in-window toasts (the focused
+   window skips the toast you could see; the unfocused one shows the toast you
+   can't). Completed also defaults to `always` because the unread dot alone is
+   too weak a signal across windows: a Terminal left as the active tab is
+   auto-marked read, so without a toast another window gets no signal at all.
+   The tab-active suppression keeps turns you watched finish from toasting.
 
 5. **Expose Open Terminal only; no Allow action.** A notification can open and
    reveal the Terminal. It does not try to approve a Claude permission prompt.
@@ -80,17 +77,19 @@ decisions from issues #91-#95.
 - **Allow/approve from the notification** - rejected. It would require tmux
   send-keys into Claude's interactive permission UI, which Deck cannot make
   robust.
-- **Suppressing banners when any window is focused** - rejected for now.
-  Cross-window focus requires liveness. A stale "focused" heartbeat would
-  suppress the OS banner while the user is away, which fails silently. If banner
-  redundancy is annoying in practice, add a focused-window heartbeat file:
-  focused windows touch it about every 5 seconds, other windows trust it only
-  while it is fresher than about 10 seconds, and stale state fails toward
-  redundancy.
 - **Asking before hook upgrades** - rejected. While consent is pending or
   declined, Deck-owned event lists and scripts can sit mismatched. Reconcile then
   notify keeps Deck's own hook entries internally consistent while preserving the
   backup, Review Changes diff, and uninstall escape hatch.
+- **OS banners via terminal-notifier** - implemented (issue #101) and reverted.
+  It made notification delivery depend on a user-installed, macOS-only binary:
+  Linux and WSL users get nothing while every user gains an install step, and
+  the silent-degradation contract proved leaky in review. Native OS
+  notifications belong in a future Deck companion app (cctop-style: a single
+  process watching the machine-global status dir), which can own delivery,
+  click-through, sounds, and cross-window dedup without the extension API's
+  limits. The status-file transport is already companion-ready — any process
+  can watch it.
 
 ## Consequences
 
@@ -99,17 +98,10 @@ decisions from issues #91-#95.
 - **Status is best-effort observability, not source-of-truth state.** If a status
   record is missing or stale, Deck prefers to show nothing current rather than
   infer from output.
-- **Multi-window notifications can be redundant.** A focused window may show an
-  in-window toast while an unfocused window posts an OS banner for the same
-  Terminal. The banner group (`deck-<session>`) deduplicates across unfocused
-  windows, but Deck deliberately avoids cross-window focused-state suppression
-  until it has a liveness mechanism.
-- **macOS permission is owned by terminal-notifier.** The first banner can
-  trigger a system notification permission prompt for `terminal-notifier`, not
-  VS Code.
-- **Remote hosts lose OS banners.** If Deck runs over Remote SSH, the
-  `terminal-notifier` process runs on the remote host. Deck's tmux model is
-  local, so remote OS notification delivery is out of scope.
+- **Multi-window notifications can leave a stale toast.** Each VS Code window
+  observes transitions independently. A NeedsInput toast in one window can remain
+  after the user handles the prompt from another window, but clicking it still
+  opens the Terminal, which is safe.
 - **The tree keeps stable Terminal ordering.** Status decorates rows and rolls up
   NeedsInput counts, but it does not sort Terminals.
 - **AgentSession resume stays isolated.** Status cleanup, pruning, or parse
@@ -119,5 +111,4 @@ decisions from issues #91-#95.
 
 ## Status
 
-Accepted — shipped by PRD #90 issues #91-#95 and amended by issues #99 and
-#101.
+Accepted — shipped by PRD #90 issues #91-#95 and amended by issue #99.
