@@ -280,6 +280,7 @@ vi.mock('../src/agent/hookInstaller', () => ({
     }
 
     remove = vscodeState.hookInstallerRemove;
+    refreshInstalledScripts = vi.fn(async () => []);
   },
 }));
 

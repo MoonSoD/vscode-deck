@@ -80,6 +80,28 @@ export class HookInstaller {
     return removed;
   }
 
+  // Keep each installed agent's Deck hook *script* current with the bundled
+  // renderer. The script lives in Deck's own data dir (not user config), so a
+  // drift after a Deck upgrade can be rewritten silently — the hooks.json
+  // command is unchanged, so no re-consent and (for Codex) the trust hash,
+  // which is over the command string not the script body, stays valid. Returns
+  // the agents whose script was rewritten.
+  async refreshInstalledScripts(agents: readonly AgentName[] = ['claude', 'codex']): Promise<AgentName[]> {
+    const refreshed: AgentName[] = [];
+    for (const agent of agents) {
+      if (agent === 'codex' && (!this.paths.codexHooksPath || !this.paths.codexHookScriptPath)) continue;
+      if (!(await this.isInstalled(agent))) continue;
+
+      const { scriptPath } = this.configFor(agent);
+      const expected = renderAgentHookScript(this.paths.sidecarDir, agent);
+      if (await this.readFileOrUndefined(scriptPath) === expected) continue;
+
+      await this.writeHookScript(scriptPath, agent);
+      refreshed.push(agent);
+    }
+    return refreshed;
+  }
+
   async isInstalled(agent: AgentName): Promise<boolean> {
     const config = this.configFor(agent);
     const settings = await this.readSettings(config.configPath);
@@ -121,6 +143,15 @@ export class HookInstaller {
     await mkdir(dirname(scriptPath), { recursive: true });
     await writeFile(scriptPath, renderAgentHookScript(this.paths.sidecarDir, agent), 'utf8');
     await chmod(scriptPath, 0o755);
+  }
+
+  private async readFileOrUndefined(path: string): Promise<string | undefined> {
+    try {
+      return await readFile(path, 'utf8');
+    } catch (error) {
+      if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return undefined;
+      throw error;
+    }
   }
 
   private async readSettings(configPath: string): Promise<HookSettings> {

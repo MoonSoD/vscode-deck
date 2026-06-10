@@ -102,6 +102,22 @@ agent-aware tree decoration ADR-0021 §10 deferred — a separate, larger featur
 - Composes with ADR-0022's `automaticRenameFormat`: the manual name overrides the
   user's format while the agent runs (intended); `SessionEnd` re-enables the
   format afterward (Claude).
+- **Naming timing differs per agent, dictated by the platform.** Claude runs
+  `SessionStart` hooks at launch, so its window names immediately. **Codex defers
+  `SessionStart` (and all turn-scoped) hooks to the first turn** (verified in
+  source: the source is queued in `session.rs` and drained from `run_turn`), so a
+  Codex window stays command-named (`codex-aarch64-…`) until the **first prompt**,
+  then names `codex`. Our `UserPromptSubmit` rename coincides, so no extra work is
+  needed — but there is no way to name a Codex window before its first turn. Not a
+  bug; a Codex trait.
+- **Deck keeps its own hook scripts current on activation.** The hook *script*
+  lives in Deck's data dir, not user config, so a Deck upgrade that changes the
+  script body (e.g. adding the rename step) is reconciled silently on activation
+  (`HookInstaller.refreshInstalledScripts`) — no reinstall, no re-consent, and
+  Codex's trust hash (over the command string, not the script body) stays valid.
+  This was added after QA found an upgraded install still running the pre-rename
+  script, invisible to the install gate because its events were unchanged. Hook
+  *event-set* changes still flow through the consented install path.
 - **Corrects ADR-0021 §10** — see the note added there.
 
 ## Status

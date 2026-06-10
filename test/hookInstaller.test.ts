@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { HookInstaller } from '../src/agent/hookInstaller';
+import { renderAgentHookScript } from '../src/agent/agentHookScript';
 
 const tempRoots: string[] = [];
 
@@ -391,6 +392,43 @@ describe('HookInstaller', () => {
     await installer.install(['codex']);
 
     expect(existsSync(`${codexHooksPath}.deck.bak`)).toBe(false);
+  });
+
+  it('refreshes an installed agent whose hook script drifted from the current build', async () => {
+    const root = tempRoot();
+    const scriptPath = join(root, '.local', 'share', 'deck', 'bin', 'deck-claude-hook.sh');
+    const sidecarDir = join(root, '.local', 'share', 'deck', 'hooks');
+    const installer = new HookInstaller({
+      claudeSettingsPath: join(root, '.claude', 'settings.json'),
+      codexHooksPath: join(root, '.codex', 'hooks.json'),
+      hookScriptPath: scriptPath,
+      codexHookScriptPath: join(root, '.local', 'share', 'deck', 'bin', 'deck-codex-hook.sh'),
+      sidecarDir,
+    });
+    await installer.install(['claude']);
+    writeFileSync(scriptPath, '#!/bin/sh\n# stale pre-upgrade script\n', 'utf8');
+
+    await expect(installer.refreshInstalledScripts()).resolves.toEqual(['claude']);
+
+    expect(readFileSync(scriptPath, 'utf8')).toBe(renderAgentHookScript(sidecarDir, 'claude'));
+    expect(statSync(scriptPath).mode & 0o111).not.toBe(0);
+  });
+
+  it('leaves a current script untouched and never touches an uninstalled agent', async () => {
+    const root = tempRoot();
+    const claudeScriptPath = join(root, '.local', 'share', 'deck', 'bin', 'deck-claude-hook.sh');
+    const codexScriptPath = join(root, '.local', 'share', 'deck', 'bin', 'deck-codex-hook.sh');
+    const installer = new HookInstaller({
+      claudeSettingsPath: join(root, '.claude', 'settings.json'),
+      codexHooksPath: join(root, '.codex', 'hooks.json'),
+      hookScriptPath: claudeScriptPath,
+      codexHookScriptPath: codexScriptPath,
+      sidecarDir: join(root, '.local', 'share', 'deck', 'hooks'),
+    });
+    await installer.install(['claude']); // codex deliberately not installed
+
+    await expect(installer.refreshInstalledScripts()).resolves.toEqual([]);
+    expect(existsSync(codexScriptPath)).toBe(false);
   });
 });
 

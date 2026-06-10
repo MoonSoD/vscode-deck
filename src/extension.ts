@@ -312,6 +312,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     } catch (error) {
       console.warn('Deck: pruning agent sidecars failed', error);
     }
+    // Keep installed agents' hook scripts current with this Deck build — a
+    // script changed by an upgrade (e.g. gaining the rename step) won't trip
+    // the install gate (its events are unchanged), so refresh it silently.
+    hookInstaller.refreshInstalledScripts().catch((error) =>
+      console.warn('Deck: refreshing agent hook scripts failed', error),
+    );
     // Agent resume rides on the tmux-backed snapshot machinery, so only offer
     // setup when that's available.
     void agentSetupPrompt.run();
