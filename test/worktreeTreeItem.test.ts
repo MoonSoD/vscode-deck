@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   describeRepositoryTreeItem,
+  describeTerminalTreeItem,
   describeWorktreeTreeItem,
 } from '../src/tree/worktreeTreeItem';
 
@@ -66,5 +67,16 @@ describe('describeWorktreeTreeItem', () => {
       describeWorktreeTreeItem(worktrees[1], '/work/alpha-main', '/work/other')
         .contextValue,
     ).toBe('deck.worktree');
+  });
+});
+
+describe('describeTerminalTreeItem', () => {
+  it('renders completed agent status as a blue filled dot', () => {
+    expect(describeTerminalTreeItem('claude', false, { status: 'completed', statusAt: 1710000000 })).toEqual({
+      label: 'claude',
+      iconId: 'circle-filled',
+      iconColorId: 'textLink.foreground',
+      contextValue: 'deck.terminal.foreign',
+    });
   });
 });

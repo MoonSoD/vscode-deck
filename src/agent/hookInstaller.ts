@@ -5,7 +5,7 @@ import type { AgentName } from './agentTypes';
 
 const DECK_HOOK_TOKEN = '--deck-agent-session-hook';
 const HOOK_EVENTS_BY_AGENT = {
-  claude: ['SessionStart', 'UserPromptSubmit', 'SessionEnd'],
+  claude: ['SessionStart', 'UserPromptSubmit', 'SessionEnd', 'Stop'],
   codex: ['SessionStart', 'UserPromptSubmit'],
 } as const satisfies Record<AgentName, readonly string[]>;
 

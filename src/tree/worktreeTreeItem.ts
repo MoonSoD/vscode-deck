@@ -1,4 +1,5 @@
 import { Worktree } from '../git/worktrees';
+import type { AgentStatus } from '../agent/agentStatusStore';
 
 export interface RepositoryTreeItemDescription {
   label: string;
@@ -15,7 +16,8 @@ export interface WorktreeTreeItemDescription {
 
 export interface TerminalTreeItemDescription {
   label: string;
-  iconId: 'terminal';
+  iconId: 'terminal' | 'circle-filled';
+  iconColorId?: 'textLink.foreground';
   contextValue: 'deck.terminal.active' | 'deck.terminal.foreign';
 }
 
@@ -62,10 +64,12 @@ export function describeWorktreeTreeItem(
 export function describeTerminalTreeItem(
   windowName: string,
   isActive: boolean,
+  status?: AgentStatus,
 ): TerminalTreeItemDescription {
   return {
     label: windowName,
-    iconId: 'terminal',
+    iconId: status?.status === 'completed' ? 'circle-filled' : 'terminal',
+    ...(status?.status === 'completed' ? { iconColorId: 'textLink.foreground' as const } : {}),
     contextValue: isActive ? 'deck.terminal.active' : 'deck.terminal.foreign',
   };
 }

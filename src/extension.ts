@@ -38,6 +38,7 @@ import { resolveDeckTmuxOptions, type DeckTmuxOptions } from './terminal/deckTmu
 import { TerminalSnapshotRuntime } from './terminal/terminalSnapshotRuntime';
 import { createRestoreGate } from './terminal/restoreGate';
 import { AgentSidecarStore } from './agent/agentSidecarStore';
+import { AgentStatusStore } from './agent/agentStatusStore';
 import { AgentDetection } from './agent/agentDetection';
 import { AgentSetupPrompt } from './agent/agentSetupPrompt';
 import { HookInstaller } from './agent/hookInstaller';
@@ -57,6 +58,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   await applyDeckTmuxOptionsIfServerRunning(tmux, initialTmuxOptions, tmuxAvailability.available);
   const deckDir = deckDataDir();
   const agentSidecars = new AgentSidecarStore(join(deckDir, 'hooks'));
+  const agentStatuses = new AgentStatusStore(join(deckDir, 'status'));
+  const agentStatusWatch = await agentStatuses.start();
   const hookInstaller = new HookInstaller({
     claudeSettingsPath: join(process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude'), 'settings.json'),
     codexHooksPath: join(process.env.CODEX_HOME || join(homedir(), '.codex'), 'hooks.json'),
@@ -137,6 +140,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     tmux,
     tmuxAvailability.available,
     pendingWorktreeRemovals,
+    agentStatuses,
   );
   const externalGitWatch = new ExternalGitWatch(watchGitCommonDir, refreshTree);
   let externalGitSyncVersion = 0;
@@ -247,6 +251,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   context.subscriptions.push(
     treeView,
+    agentStatusWatch,
     externalGitWatch,
     vscode.window.registerCustomEditorProvider(terminalEditorViewType, terminalEditorProvider, {
       webviewOptions: {

@@ -30,6 +30,43 @@ describe('renderAgentHookScript', () => {
     });
   });
 
+  it('writes a completed status on Stop after the sidecar write', async () => {
+    const root = tempRoot();
+    const sidecarDir = join(root, 'hooks');
+    const statusDir = join(root, 'status');
+    const scriptPath = writeScript(root, renderAgentHookScript(sidecarDir));
+
+    await runScript(scriptPath, {
+      env: { ...process.env, DECK_SESSION: 'wt-_work_repo__term-1' },
+      input: '{"session_id":"abc-123","hook_event_name":"Stop"}',
+    });
+
+    expect(JSON.parse(readFileSync(join(sidecarDir, 'wt-_work_repo__term-1.json'), 'utf8'))).toEqual({
+      agent: 'claude',
+      session_id: 'abc-123',
+    });
+    const status = JSON.parse(readFileSync(join(statusDir, 'wt-_work_repo__term-1.json'), 'utf8'));
+    expect(status.status).toBe('completed');
+    expect(typeof status.statusAt).toBe('number');
+  });
+
+  it('keeps the Stop sidecar write when status writing fails', async () => {
+    const root = tempRoot();
+    const sidecarDir = join(root, 'hooks');
+    writeFileSync(join(root, 'status'), 'not a directory', 'utf8');
+    const scriptPath = writeScript(root, renderAgentHookScript(sidecarDir));
+
+    await runScript(scriptPath, {
+      env: { ...process.env, DECK_SESSION: 'wt-_work_repo__term-1' },
+      input: '{"session_id":"abc-123","hook_event_name":"Stop"}',
+    });
+
+    expect(JSON.parse(readFileSync(join(sidecarDir, 'wt-_work_repo__term-1.json'), 'utf8'))).toEqual({
+      agent: 'claude',
+      session_id: 'abc-123',
+    });
+  });
+
   it('renames the Deck tmux window to the agent on SessionStart', async () => {
     const root = tempRoot();
     const sidecarDir = join(root, 'hooks');

@@ -33,8 +33,31 @@ describe('HookInstaller', () => {
         SessionStart: [deckHookGroup(scriptPath)],
         UserPromptSubmit: [deckHookGroup(scriptPath)],
         SessionEnd: [deckHookGroup(scriptPath)],
+        Stop: [deckHookGroup(scriptPath)],
       },
     });
+  });
+
+  it('treats a legacy Claude install without Stop as not installed', async () => {
+    const root = tempRoot();
+    const settingsPath = join(root, '.claude', 'settings.json');
+    const scriptPath = join(root, '.local', 'share', 'deck', 'bin', 'deck-claude-hook.sh');
+    mkdirSync(join(root, '.claude'), { recursive: true });
+    writeFileSync(settingsPath, JSON.stringify({
+      hooks: {
+        SessionStart: [deckHookGroup(scriptPath)],
+        UserPromptSubmit: [deckHookGroup(scriptPath)],
+        SessionEnd: [deckHookGroup(scriptPath)],
+      },
+    }), 'utf8');
+    const installer = new HookInstaller({
+      claudeSettingsPath: settingsPath,
+      codexHooksPath: join(root, '.codex', 'hooks.json'),
+      hookScriptPath: scriptPath,
+      sidecarDir: join(root, '.local', 'share', 'deck', 'hooks'),
+    });
+
+    await expect(installer.isInstalled('claude')).resolves.toBe(false);
   });
 
   it('previews the exact Claude config change without writing', async () => {
@@ -58,6 +81,7 @@ describe('HookInstaller', () => {
           SessionStart: [deckHookGroup(scriptPath)],
           UserPromptSubmit: [deckHookGroup(scriptPath)],
           SessionEnd: [deckHookGroup(scriptPath)],
+          Stop: [deckHookGroup(scriptPath)],
         },
       }, null, 2)}\n`,
     }]);
@@ -147,6 +171,7 @@ describe('HookInstaller', () => {
         ],
         UserPromptSubmit: [deckHookGroup(scriptPath)],
         SessionEnd: [deckHookGroup(scriptPath)],
+        Stop: [deckHookGroup(scriptPath)],
       },
     });
   });
@@ -286,6 +311,7 @@ describe('HookInstaller', () => {
         ],
         UserPromptSubmit: [deckHookGroup(claudeScriptPath)],
         SessionEnd: [deckHookGroup(claudeScriptPath)],
+        Stop: [deckHookGroup(claudeScriptPath)],
       },
     }), 'utf8');
     writeFileSync(codexHooksPath, JSON.stringify({

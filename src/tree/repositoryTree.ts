@@ -12,6 +12,7 @@ import {
   type CachedTerminalSession,
   toCachedTerminalSessions,
 } from '../terminal/terminalSession';
+import type { AgentStatus } from '../agent/agentStatusStore';
 import { excludePending } from './excludePending';
 import { reconcileWorktreeOrder } from './reconcileWorktreeOrder';
 import {
@@ -25,6 +26,11 @@ export type RepositoryTreeNode = RepositoryNode | WorktreeNode | TerminalNode | 
 
 interface TerminalSessionLister {
   listSessions(prefix?: string): Promise<TmuxSession[]>;
+}
+
+interface AgentStatusLookup {
+  get(sessionName: string): AgentStatus | undefined;
+  onDidChange(listener: () => void): { dispose(): void };
 }
 
 // Stable TreeItem.id values let VS Code persist expand/collapse + selection
@@ -63,12 +69,15 @@ class TerminalNode extends vscode.TreeItem {
     public readonly terminal: TmuxSession,
     public readonly worktreeNode: WorktreeNode,
     isActiveWorktree: boolean,
+    status?: AgentStatus,
   ) {
-    const item = describeTerminalTreeItem(terminal.windowName, isActiveWorktree);
+    const item = describeTerminalTreeItem(terminal.windowName, isActiveWorktree, status);
     super(item.label, vscode.TreeItemCollapsibleState.None);
     this.id = `terminal::${terminal.sessionName}`;
     this.contextValue = item.contextValue;
-    this.iconPath = new vscode.ThemeIcon(item.iconId);
+    this.iconPath = item.iconColorId
+      ? new vscode.ThemeIcon(item.iconId, new vscode.ThemeColor(item.iconColorId))
+      : new vscode.ThemeIcon(item.iconId);
     this.command = {
       command: 'deck.openTerminal',
       title: 'Open Terminal',
@@ -122,7 +131,10 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
     tmuxOrAvailable: TerminalSessionLister | boolean = true,
     tmuxAvailable?: boolean,
     private readonly pendingWorktreeRemovals: ReadonlySet<string> = new Set(),
+    private readonly agentStatuses?: AgentStatusLookup,
   ) {
+    this.agentStatuses?.onDidChange(() => this.refresh());
+
     if (typeof tmuxOrAvailable === 'boolean') {
       this.tmux = { listSessions: async () => [] };
       this.tmuxAvailable = tmuxAvailable ?? tmuxOrAvailable;
@@ -339,7 +351,12 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
       activeWorktreePath !== undefined &&
       path.resolve(element.worktree.path) === path.resolve(activeWorktreePath);
     return terminals.map(
-      (terminal) => new TerminalNode(terminal, element, isActiveWorktree),
+      (terminal) => new TerminalNode(
+        terminal,
+        element,
+        isActiveWorktree,
+        this.agentStatuses?.get(terminal.sessionName),
+      ),
     );
   }
 

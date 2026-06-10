@@ -1,4 +1,8 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const vscodeState = vi.hoisted(() => ({
+  emitters: [] as Array<{ fire: ReturnType<typeof vi.fn> }>,
+}));
 
 vi.mock('vscode', () => ({
   commands: {
@@ -7,9 +11,16 @@ vi.mock('vscode', () => ({
   EventEmitter: class {
     readonly event = vi.fn();
     fire = vi.fn();
+
+    constructor() {
+      vscodeState.emitters.push(this);
+    }
+  },
+  ThemeColor: class {
+    constructor(readonly id: string) {}
   },
   ThemeIcon: class {
-    constructor(readonly id: string) {}
+    constructor(readonly id: string, readonly color?: unknown) {}
   },
   TreeItem: class {
     contextValue?: string;
@@ -115,6 +126,10 @@ const alphaFeatureWorktree: Worktree = {
 };
 
 describe('RepositoryTreeProvider', () => {
+  beforeEach(() => {
+    vscodeState.emitters = [];
+  });
+
   it('marks only the currently mounted worktree as active', async () => {
     const get = vi.fn((commonDir: string) =>
       commonDir === '/git/alpha' ? '/work/alpha-main' : '/work/beta-main',
@@ -499,6 +514,50 @@ describe('RepositoryTreeProvider', () => {
       }),
     ]);
     expect(tmux.listSessions).toHaveBeenCalledWith('wt-_work_alpha-main__term-');
+  });
+
+  it('renders completed agent status on Terminal rows and refreshes on status changes', async () => {
+    const tmux = {
+      listSessions: vi.fn(async () => [
+        { sessionName: 'wt-_work_alpha-main__term-1', windowName: 'claude' },
+      ]),
+    };
+    let statusChange: (() => void) | undefined;
+    const agentStatuses = {
+      get: vi.fn((sessionName: string) =>
+        sessionName === 'wt-_work_alpha-main__term-1'
+          ? { status: 'completed' as const, statusAt: 1710000000 }
+          : undefined,
+      ),
+      onDidChange: vi.fn((listener: () => void) => {
+        statusChange = listener;
+        return { dispose: vi.fn() };
+      }),
+    };
+    const provider = new RepositoryTreeProvider(
+      registry(['/work/alpha-main']),
+      { get: vi.fn() } as unknown as ActiveWorktreeStore,
+      { get: vi.fn() } as unknown as WorktreeOrderStore,
+      { get: vi.fn(), set: vi.fn(async () => undefined) } as unknown as WorktreeListCacheStore,
+      { get: vi.fn(() => '/git/alpha'), set: vi.fn(async () => undefined) } as unknown as RepositoryCommonDirCache,
+      tmux,
+      true,
+      new Set(),
+      agentStatuses,
+    );
+    const repositories = provider.getChildren();
+    if (!Array.isArray(repositories)) throw new Error('expected sync repository roots');
+    const worktrees = await provider.getChildren(repositories[0]);
+    if (!Array.isArray(worktrees)) throw new Error('expected worktree children');
+
+    const terminalRows = await provider.getChildren(worktrees[0]);
+    statusChange?.();
+
+    expect((terminalRows as Array<{ iconPath: { id: string; color?: { id: string } } }>)[0].iconPath).toEqual({
+      id: 'circle-filled',
+      color: { id: 'textLink.foreground' },
+    });
+    expect(vscodeState.emitters[0].fire).toHaveBeenCalledWith(undefined);
   });
 
   it('returns parent rows for Worktree and Terminal rows', async () => {

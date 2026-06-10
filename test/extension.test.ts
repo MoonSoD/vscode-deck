@@ -14,6 +14,8 @@ const vscodeState = vi.hoisted(() => ({
   agentSetupPromptArgs: undefined as unknown[] | undefined,
   agentSetupPromptRun: vi.fn(),
   agentSetupPromptUninstall: vi.fn(),
+  agentStatusStoreArgs: undefined as unknown[] | undefined,
+  agentStatusStoreStart: vi.fn(async () => ({ dispose: vi.fn() })),
   hookInstallerArgs: undefined as unknown[] | undefined,
   hookInstallerRemove: vi.fn(),
   configUpdate: vi.fn(),
@@ -273,6 +275,18 @@ vi.mock('../src/agent/terminalSnapshotAgentSessions', () => ({
   rewriteTerminalSnapshotAgentSessions: vscodeState.rewriteTerminalSnapshotAgentSessions,
 }));
 
+vi.mock('../src/agent/agentStatusStore', () => ({
+  AgentStatusStore: class {
+    get = vi.fn();
+    onDidChange = vi.fn(() => ({ dispose: vi.fn() }));
+    start = vscodeState.agentStatusStoreStart;
+
+    constructor(...args: unknown[]) {
+      vscodeState.agentStatusStoreArgs = args;
+    }
+  },
+}));
+
 vi.mock('../src/agent/hookInstaller', () => ({
   HookInstaller: class {
     constructor(...args: unknown[]) {
@@ -354,6 +368,8 @@ describe('activate', () => {
     vscodeState.agentSetupPromptArgs = undefined;
     vscodeState.agentSetupPromptRun.mockResolvedValue(undefined);
     vscodeState.agentSetupPromptUninstall.mockResolvedValue(undefined);
+    vscodeState.agentStatusStoreArgs = undefined;
+    vscodeState.agentStatusStoreStart.mockResolvedValue({ dispose: vi.fn() });
     vscodeState.hookInstallerArgs = undefined;
     vscodeState.hookInstallerRemove.mockResolvedValue([]);
     vscodeState.externalWatchDisposables = [];
