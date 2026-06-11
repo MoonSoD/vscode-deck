@@ -2,9 +2,11 @@ import { join } from 'node:path';
 import type { AgentStatus } from './agentStatusStore';
 import type { AgentName } from './agentTypes';
 
-type AgentIconState = 'identity' | 'working';
+export type AgentIconState = 'identity' | 'working';
 
-const AGENT_ICONS: Record<AgentName, { identity: string; working: string }> = {
+type AgentIconFiles = Record<AgentIconState, string>;
+
+const AGENT_ICONS: Record<AgentName, AgentIconFiles> = {
   claude: {
     identity: 'claude-code.png',
     working: 'claude-working.gif',
@@ -20,44 +22,61 @@ export interface AgentIconFactory<TUri, TThemeIcon> {
   themeIcon(id: string): TThemeIcon;
 }
 
-export interface ResolvedAgentIcon<TUri = { fsPath: string }, TThemeIcon = { id: string }> {
-  iconPath: TUri | TThemeIcon;
-  isAgent: boolean;
-  agent?: AgentName;
-  state?: AgentIconState;
+export interface AgentIconInput {
+  windowName: string;
+  resourcesDir: string;
+  status?: AgentStatus;
 }
+
+export type ResolvedAgentIcon<TUri = { fsPath: string }, TThemeIcon = { id: string }> =
+  | {
+    iconPath: TUri;
+    isAgent: true;
+    agent: AgentName;
+    state: AgentIconState;
+  }
+  | {
+    iconPath: TThemeIcon;
+    isAgent: false;
+  };
 
 const defaultIconFactory: AgentIconFactory<{ fsPath: string }, { id: string }> = {
   uriFile: (fsPath) => ({ fsPath }),
   themeIcon: (id) => ({ id }),
 };
 
-export function resolveAgentIcon<TUri = { fsPath: string }, TThemeIcon = { id: string }>(input: {
-  windowName: string;
-  resourcesDir: string;
-  status?: AgentStatus;
-}, factory: AgentIconFactory<TUri, TThemeIcon> = defaultIconFactory as AgentIconFactory<TUri, TThemeIcon>):
-  ResolvedAgentIcon<TUri, TThemeIcon> {
-  const agent = agentFromWindowName(input.windowName) ?? (input.status === undefined ? undefined : 'claude');
-  if (agent !== undefined) {
-    const icons = AGENT_ICONS[agent];
-    const state = input.status?.status === 'inProgress' ? 'working' : 'identity';
-    const iconFile = state === 'working' ? icons.working : icons.identity;
+export function resolveAgentIcon<TUri = { fsPath: string }, TThemeIcon = { id: string }>(
+  input: AgentIconInput,
+  factory: AgentIconFactory<TUri, TThemeIcon> = defaultIconFactory as AgentIconFactory<TUri, TThemeIcon>,
+): ResolvedAgentIcon<TUri, TThemeIcon> {
+  const agent = agentFromWindowName(input.windowName) ?? agentFromStatus(input.status);
+  if (agent === undefined) {
     return {
-      iconPath: factory.uriFile(join(input.resourcesDir, iconFile)),
-      isAgent: true,
-      agent,
-      state,
+      iconPath: factory.themeIcon('terminal'),
+      isAgent: false,
     };
   }
 
+  const state = iconStateFromStatus(input.status);
   return {
-    iconPath: factory.themeIcon('terminal'),
-    isAgent: false,
+    iconPath: factory.uriFile(join(input.resourcesDir, AGENT_ICONS[agent][state])),
+    isAgent: true,
+    agent,
+    state,
   };
 }
 
 function agentFromWindowName(windowName: string): AgentName | undefined {
   if (windowName === 'claude' || windowName === 'codex') return windowName;
   return undefined;
+}
+
+function agentFromStatus(status?: AgentStatus): AgentName | undefined {
+  if (status === undefined) return undefined;
+  return 'claude';
+}
+
+function iconStateFromStatus(status?: AgentStatus): AgentIconState {
+  if (status?.status === 'inProgress') return 'working';
+  return 'identity';
 }
