@@ -63,7 +63,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   await applyDeckTmuxOptionsIfServerRunning(tmux, initialTmuxOptions, tmuxAvailability.available);
   const deckDir = deckDataDir();
   const agentSidecars = new AgentSidecarStore(join(deckDir, 'hooks'));
-  const agentStatuses = new AgentStatusStore(join(deckDir, 'status'), 100, context.globalState);
+  const agentStatuses = new AgentStatusStore(join(deckDir, 'status'), 100);
   const agentStatusWatch = await agentStatuses.start();
   const activeTerminalReadWatch = agentStatuses.onDidChange(() => {
     void markActiveTerminalRead(agentStatuses);

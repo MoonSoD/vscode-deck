@@ -1,16 +1,6 @@
-import { watch } from 'node:fs';
-import { mkdir, readdir, readFile, unlink } from 'node:fs/promises';
-import { join } from 'node:path';
-
-export const AGENT_STATUS_READS_KEY = 'deck.agentStatusReads';
-export const AGENT_STATUS_READS_SCHEMA_VERSION = 1;
-
-type MaybePromise<T> = T | PromiseLike<T>;
-
-export interface AgentStatusReadStorage {
-  get<T>(key: string, defaultValue: T): T;
-  update(key: string, value: unknown): MaybePromise<void>;
-}
+import { watch, type FSWatcher } from 'node:fs';
+import { mkdir, readdir, readFile, unlink, writeFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
 
 export interface AgentStatus {
   status: 'inProgress' | 'needsInput' | 'completed' | 'failed';
@@ -23,26 +13,23 @@ export interface Disposable {
   dispose(): void;
 }
 
-interface AgentStatusReads {
-  schemaVersion: number;
-  completed: Record<string, number>;
-}
-
-const EMPTY_READ_STORAGE: AgentStatusReadStorage = {
-  get: (_key, defaultValue) => defaultValue,
-  update: () => undefined,
-};
-
 export class AgentStatusStore {
   private statuses = new Map<string, AgentStatus>();
+  private readMarkers = new Map<string, number>();
   private readonly listeners = new Set<() => void>();
+  private readonly readRoot: string;
+  private readonly parentRoot: string;
+  private readonly watchers = new Map<string, FSWatcher>();
   private debounceTimer: NodeJS.Timeout | undefined;
 
   constructor(
     private readonly root: string,
     private readonly debounceMs = 100,
-    private readonly readStorage: AgentStatusReadStorage = EMPTY_READ_STORAGE,
-  ) {}
+    readRoot?: string,
+  ) {
+    this.readRoot = readRoot ?? `${root}-reads`;
+    this.parentRoot = dirname(root);
+  }
 
   get(sessionName: string): AgentStatus | undefined {
     return this.withReadState(sessionName, this.statuses.get(sessionName));
@@ -62,18 +49,15 @@ export class AgentStatusStore {
   }
 
   async start(): Promise<Disposable> {
-    await mkdir(this.root, { recursive: true });
+    await this.ensureRoots();
     await this.reload(false);
-
-    const watcher = watch(this.root, () => {
-      this.scheduleReload();
-    });
+    this.ensureWatchers();
 
     return {
       dispose: () => {
         if (this.debounceTimer !== undefined) clearTimeout(this.debounceTimer);
         this.debounceTimer = undefined;
-        watcher.close();
+        this.closeWatchers();
       },
     };
   }
@@ -83,32 +67,24 @@ export class AgentStatusStore {
     try {
       files = await readdir(this.root);
     } catch (error) {
-      if (isNotFound(error)) return;
-      throw error;
+      if (!isNotFound(error)) throw error;
+      files = [];
     }
 
-    for (const file of files) {
-      if (!file.endsWith('.json')) continue;
-      const sessionName = file.slice(0, -'.json'.length);
-      if (liveSessionNames.has(sessionName)) continue;
-      try {
-        await unlink(join(this.root, file));
-      } catch (error) {
-        if (!isNotFound(error)) throw error;
-      }
-    }
+    await this.pruneFiles(this.root, files, liveSessionNames);
+    await this.pruneReadMarkers(liveSessionNames);
     await this.reload();
   }
 
   // For Deck-owned kills (TerminalRemoval, WorktreeRemoval cascade): the agent
   // never fires SessionEnd under tmux kill-session, so the file must go here.
   async remove(sessionName: string): Promise<void> {
-    try {
-      await unlink(join(this.root, `${sessionName}.json`));
-    } catch (error) {
-      if (!isNotFound(error)) throw error;
-    }
-    if (this.statuses.delete(sessionName)) {
+    await this.unlinkIfExists(join(this.root, `${sessionName}.json`));
+    await this.unlinkIfExists(join(this.readRoot, `${sessionName}.json`));
+
+    const removedStatus = this.statuses.delete(sessionName);
+    const removedReadMarker = this.readMarkers.delete(sessionName);
+    if (removedStatus || removedReadMarker) {
       for (const listener of this.listeners) listener();
     }
   }
@@ -116,18 +92,11 @@ export class AgentStatusStore {
   async markRead(sessionName: string): Promise<void> {
     const status = this.statuses.get(sessionName);
     if (status?.status !== 'completed') return;
-    const reads = this.reads();
-    if (reads.completed[sessionName] >= status.statusAt) return;
+    if ((this.readMarkers.get(sessionName) ?? 0) >= status.statusAt) return;
 
-    const next = {
-      schemaVersion: AGENT_STATUS_READS_SCHEMA_VERSION,
-      completed: {
-        ...reads.completed,
-        [sessionName]: status.statusAt,
-      },
-    };
-    await this.writeReads(next);
-
+    await mkdir(this.readRoot, { recursive: true });
+    await writeFile(join(this.readRoot, `${sessionName}.json`), `${JSON.stringify({ statusAt: status.statusAt })}\n`);
+    this.readMarkers.set(sessionName, status.statusAt);
     for (const listener of this.listeners) listener();
   }
 
@@ -142,12 +111,67 @@ export class AgentStatusStore {
   }
 
   private async reload(fire = true): Promise<void> {
-    const next = await this.readAll();
-    if (sameStatuses(this.statuses, next)) return;
+    await this.ensureRoots();
+    this.ensureWatchers();
+    const nextStatuses = await this.readAll();
+    const nextReadMarkers = await this.readMarkersAll();
+    if (sameStatuses(this.statuses, nextStatuses) && sameReadMarkers(this.readMarkers, nextReadMarkers)) return;
 
-    this.statuses = next;
+    this.statuses = nextStatuses;
+    this.readMarkers = nextReadMarkers;
     if (fire) {
       for (const listener of this.listeners) listener();
+    }
+  }
+
+  private async ensureRoots(): Promise<void> {
+    await mkdir(this.root, { recursive: true });
+    await mkdir(this.readRoot, { recursive: true });
+  }
+
+  private ensureWatchers(): void {
+    this.ensureWatcher(this.parentRoot);
+    this.resetWatcher(this.root);
+    this.resetWatcher(this.readRoot);
+  }
+
+  private ensureWatcher(root: string): void {
+    if (this.watchers.has(root)) return;
+    this.watchPath(root);
+  }
+
+  private resetWatcher(root: string): void {
+    const previous = this.watchers.get(root);
+    if (previous) {
+      this.watchers.delete(root);
+      previous.close();
+    }
+    this.watchPath(root);
+  }
+
+  private watchPath(root: string): void {
+    try {
+      const watcher = watch(root, () => {
+        this.scheduleReload();
+      });
+      watcher.on('error', () => {
+        if (this.watchers.get(root) === watcher) {
+          this.watchers.delete(root);
+        }
+        this.scheduleReload();
+      });
+      this.watchers.set(root, watcher);
+    } catch (error) {
+      if (!isNotFound(error)) throw error;
+    }
+  }
+
+  private closeWatchers(): void {
+    for (const root of [this.parentRoot, this.root, this.readRoot]) {
+      const watcher = this.watchers.get(root);
+      if (!watcher) continue;
+      this.watchers.delete(root);
+      watcher.close();
     }
   }
 
@@ -178,28 +202,68 @@ export class AgentStatusStore {
     }
   }
 
+  private async readMarkersAll(): Promise<Map<string, number>> {
+    let files: string[];
+    try {
+      files = await readdir(this.readRoot);
+    } catch (error) {
+      if (isNotFound(error)) return new Map();
+      throw error;
+    }
+
+    const readMarkers = new Map<string, number>();
+    for (const file of files) {
+      if (!file.endsWith('.json')) continue;
+      const statusAt = await this.readMarkerFile(file);
+      if (statusAt !== undefined) readMarkers.set(file.slice(0, -'.json'.length), statusAt);
+    }
+    return readMarkers;
+  }
+
+  private async readMarkerFile(file: string): Promise<number | undefined> {
+    try {
+      return parseReadMarker(await readFile(join(this.readRoot, file), 'utf8'));
+    } catch (error) {
+      if (isNotFound(error) || error instanceof SyntaxError) return undefined;
+      throw error;
+    }
+  }
+
   private withReadState(sessionName: string, status: AgentStatus | undefined): AgentStatus | undefined {
     if (status?.status !== 'completed') return status;
-    const readStatusAt = this.reads().completed[sessionName];
+    const readStatusAt = this.readMarkers.get(sessionName);
     return {
       ...status,
       unread: readStatusAt === undefined || status.statusAt > readStatusAt,
     };
   }
 
-  // Always read fresh: globalState is shared across VS Code windows, and a
-  // cached copy here would let one window's merge-write wipe read marks
-  // another window persisted after the cache was taken.
-  private reads(): AgentStatusReads {
-    const raw = this.readStorage.get<AgentStatusReads | undefined>(AGENT_STATUS_READS_KEY, undefined);
-    if (!isAgentStatusReads(raw)) {
-      return { schemaVersion: AGENT_STATUS_READS_SCHEMA_VERSION, completed: {} };
+  private async pruneReadMarkers(liveSessionNames: ReadonlySet<string>): Promise<void> {
+    let files: string[];
+    try {
+      files = await readdir(this.readRoot);
+    } catch (error) {
+      if (isNotFound(error)) return;
+      throw error;
     }
-    return raw;
+    await this.pruneFiles(this.readRoot, files, liveSessionNames);
   }
 
-  private async writeReads(reads: AgentStatusReads): Promise<void> {
-    await this.readStorage.update(AGENT_STATUS_READS_KEY, reads);
+  private async pruneFiles(root: string, files: readonly string[], liveSessionNames: ReadonlySet<string>): Promise<void> {
+    for (const file of files) {
+      if (!file.endsWith('.json')) continue;
+      const sessionName = file.slice(0, -'.json'.length);
+      if (liveSessionNames.has(sessionName)) continue;
+      await this.unlinkIfExists(join(root, file));
+    }
+  }
+
+  private async unlinkIfExists(path: string): Promise<void> {
+    try {
+      await unlink(path);
+    } catch (error) {
+      if (!isNotFound(error)) throw error;
+    }
   }
 }
 
@@ -226,17 +290,16 @@ function isAgentStatusValue(value: unknown): value is AgentStatus['status'] {
   return value === 'inProgress' || value === 'needsInput' || value === 'completed' || value === 'failed';
 }
 
-function isAgentStatusReads(value: unknown): value is AgentStatusReads {
+function parseReadMarker(text: string): number | undefined {
+  const value: unknown = JSON.parse(text);
   if (
     typeof value !== 'object' ||
     value === null ||
-    (value as { schemaVersion?: unknown }).schemaVersion !== AGENT_STATUS_READS_SCHEMA_VERSION ||
-    typeof (value as { completed?: unknown }).completed !== 'object' ||
-    (value as { completed?: unknown }).completed === null
+    typeof (value as { statusAt?: unknown }).statusAt !== 'number'
   ) {
-    return false;
+    return undefined;
   }
-  return Object.values((value as AgentStatusReads).completed).every((statusAt) => typeof statusAt === 'number');
+  return (value as { statusAt: number }).statusAt;
 }
 
 // "Same" means rendering-equivalent: statusAt only shows through the unread
@@ -254,6 +317,14 @@ function sameStatuses(left: ReadonlyMap<string, AgentStatus>, right: ReadonlyMap
     ) {
       return false;
     }
+  }
+  return true;
+}
+
+function sameReadMarkers(left: ReadonlyMap<string, number>, right: ReadonlyMap<string, number>): boolean {
+  if (left.size !== right.size) return false;
+  for (const [sessionName, statusAt] of left) {
+    if (right.get(sessionName) !== statusAt) return false;
   }
   return true;
 }

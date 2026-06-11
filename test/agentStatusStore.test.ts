@@ -65,8 +65,7 @@ describe('AgentStatusStore', () => {
       '{"status":"completed","statusAt":1710000000}\n',
       'utf8',
     );
-    const storage = new MemoryMemento();
-    const store = new AgentStatusStore(root, 10, storage);
+    const store = new AgentStatusStore(root, 10);
     disposables.push(await store.start());
 
     expect(store.get('wt-_work_repo__term-1')).toEqual({
@@ -98,7 +97,7 @@ describe('AgentStatusStore', () => {
     }, WATCH_EVENT_WAIT);
   });
 
-  it('persists completed read state through injected storage', async () => {
+  it('shares read markers across stores watching the same machine status area', async () => {
     const root = tempRoot();
     mkdirSync(root, { recursive: true });
     writeFileSync(
@@ -106,13 +105,41 @@ describe('AgentStatusStore', () => {
       '{"status":"completed","statusAt":1710000000}\n',
       'utf8',
     );
-    const storage = new MemoryMemento();
-    const firstStore = new AgentStatusStore(root, 10, storage);
+    const windowA = new AgentStatusStore(root, 10);
+    const windowB = new AgentStatusStore(root, 10);
+    disposables.push(await windowA.start());
+    disposables.push(await windowB.start());
+
+    await windowA.markRead('wt-_work_repo__term-1');
+
+    expect(windowA.get('wt-_work_repo__term-1')).toEqual({
+      status: 'completed',
+      statusAt: 1710000000,
+      unread: false,
+    });
+    await vi.waitFor(() => {
+      expect(windowB.get('wt-_work_repo__term-1')).toEqual({
+        status: 'completed',
+        statusAt: 1710000000,
+        unread: false,
+      });
+    }, WATCH_EVENT_WAIT);
+  });
+
+  it('persists completed read state through marker files', async () => {
+    const root = tempRoot();
+    mkdirSync(root, { recursive: true });
+    writeFileSync(
+      join(root, 'wt-_work_repo__term-1.json'),
+      '{"status":"completed","statusAt":1710000000}\n',
+      'utf8',
+    );
+    const firstStore = new AgentStatusStore(root, 10);
     disposables.push(await firstStore.start());
 
     await firstStore.markRead('wt-_work_repo__term-1');
 
-    const secondStore = new AgentStatusStore(root, 10, storage);
+    const secondStore = new AgentStatusStore(root, 10);
     disposables.push(await secondStore.start());
 
     expect(secondStore.get('wt-_work_repo__term-1')).toEqual({
@@ -120,26 +147,6 @@ describe('AgentStatusStore', () => {
       statusAt: 1710000000,
       unread: false,
     });
-  });
-
-  it('merges read marks from two windows sharing the same storage', async () => {
-    const root = tempRoot();
-    mkdirSync(root, { recursive: true });
-    writeFileSync(join(root, 'term-1.json'), '{"status":"completed","statusAt":1710000000}', 'utf8');
-    writeFileSync(join(root, 'term-2.json'), '{"status":"completed","statusAt":1710000000}', 'utf8');
-    const storage = new MemoryMemento();
-    const windowA = new AgentStatusStore(root, 10, storage);
-    const windowB = new AgentStatusStore(root, 10, storage);
-    disposables.push(await windowA.start());
-    disposables.push(await windowB.start());
-
-    await windowA.markRead('term-1');
-    await windowB.markRead('term-2');
-
-    expect(windowA.get('term-1')?.unread).toBe(false);
-    expect(windowA.get('term-2')?.unread).toBe(false);
-    expect(windowB.get('term-1')?.unread).toBe(false);
-    expect(windowB.get('term-2')?.unread).toBe(false);
   });
 
   it('ignores malformed and invalid status files', async () => {
@@ -212,28 +219,31 @@ describe('AgentStatusStore', () => {
   it('removes a single session status on Deck-owned kills and notifies listeners', async () => {
     const root = tempRoot();
     mkdirSync(root, { recursive: true });
-    writeFileSync(join(root, 'killed.json'), '{"status":"needsInput","statusAt":1710000000}', 'utf8');
+    writeFileSync(join(root, 'killed.json'), '{"status":"completed","statusAt":1710000000}', 'utf8');
     const store = new AgentStatusStore(root, 10);
     const changes = vi.fn();
     disposables.push(store.onDidChange(changes));
     disposables.push(await store.start());
+    await store.markRead('killed');
 
     await store.remove('killed');
 
     expect(store.get('killed')).toBeUndefined();
     expect(existsSync(join(root, 'killed.json'))).toBe(false);
+    expect(existsSync(join(`${root}-reads`, 'killed.json'))).toBe(false);
     expect(changes).toHaveBeenCalled();
 
     await expect(store.remove('killed')).resolves.toBeUndefined();
   });
 
-  it('removes status files for Terminal sessions that no longer exist', async () => {
+  it('removes status and read marker files for Terminal sessions that no longer exist', async () => {
     const root = tempRoot();
     mkdirSync(root, { recursive: true });
     writeFileSync(join(root, 'live.json'), '{"status":"inProgress","statusAt":1710000000}', 'utf8');
     writeFileSync(join(root, 'dead.json'), '{"status":"completed","statusAt":1710000001}', 'utf8');
     const store = new AgentStatusStore(root, 10);
     disposables.push(await store.start());
+    await store.markRead('dead');
 
     await store.prune(new Set(['live']));
 
@@ -241,23 +251,35 @@ describe('AgentStatusStore', () => {
     expect(store.get('dead')).toBeUndefined();
     expect(existsSync(join(root, 'live.json'))).toBe(true);
     expect(existsSync(join(root, 'dead.json'))).toBe(false);
+    expect(existsSync(join(`${root}-reads`, 'dead.json'))).toBe(false);
+  });
+
+  it('keeps reading statuses after the status area is removed and recreated', async () => {
+    const root = tempRoot();
+    const store = new AgentStatusStore(root, 10);
+    disposables.push(await store.start());
+
+    rmSync(root, { recursive: true, force: true });
+    rmSync(`${root}-reads`, { recursive: true, force: true });
+
+    mkdirSync(root, { recursive: true });
+    writeFileSync(join(root, 'done.json'), '{"status":"completed","statusAt":1710000000}', 'utf8');
+
+    await vi.waitFor(() => {
+      expect(store.get('done')).toEqual({ status: 'completed', statusAt: 1710000000, unread: true });
+    }, WATCH_EVENT_WAIT);
+
+    writeFileSync(join(root, 'done.json'), '{"status":"completed","statusAt":1710000001}', 'utf8');
+
+    await vi.waitFor(() => {
+      expect(store.get('done')).toEqual({ status: 'completed', statusAt: 1710000001, unread: true });
+    }, WATCH_EVENT_WAIT);
   });
 });
 
 function tempRoot(): string {
   const root = mkdtempSync(join(tmpdir(), 'deck-agent-status-'));
   tempRoots.push(root);
+  tempRoots.push(`${root}-reads`);
   return root;
-}
-
-class MemoryMemento {
-  private readonly values: Record<string, unknown> = {};
-
-  get<T>(key: string, defaultValue: T): T {
-    return (this.values[key] as T | undefined) ?? defaultValue;
-  }
-
-  async update(key: string, value: unknown): Promise<void> {
-    this.values[key] = value;
-  }
 }
