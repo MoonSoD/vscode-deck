@@ -138,7 +138,7 @@ describe('AgentStatusStore', () => {
     const windowB = new AgentStatusStore(root, 10);
     disposables.push(await windowA.start());
     disposables.push(await windowB.start());
-    const watcherCloseCounts = spyOnWatcherCloses(windowB);
+    const watcherCloseCount = spyOnWatcherCloses(windowB);
 
     writeFileSync(
       join(root, 'wt-_work_repo__term-1.json'),
@@ -170,7 +170,7 @@ describe('AgentStatusStore', () => {
         unread: false,
       });
     }, WATCH_EVENT_WAIT);
-    expect(watcherCloseCounts()).toEqual([0, 0, 0]);
+    expect(watcherCloseCount()).toBe(0);
   });
 
   it('persists completed read state through marker files', async () => {
@@ -358,10 +358,10 @@ function tempRoot(): string {
   return root;
 }
 
-function spyOnWatcherCloses(store: AgentStatusStore): () => number[] {
+function spyOnWatcherCloses(store: AgentStatusStore): () => number {
   const watchers = Array.from(
     (store as unknown as { watchers: Map<string, { close(): void }> }).watchers.values(),
   );
   const spies = watchers.map((watcher) => vi.spyOn(watcher, 'close'));
-  return () => spies.map((spy) => spy.mock.calls.length);
+  return () => spies.reduce((count, spy) => count + spy.mock.calls.length, 0);
 }

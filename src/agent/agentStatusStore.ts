@@ -138,8 +138,8 @@ export class AgentStatusStore {
       const readRootChanged = this.isParentEventFor(filename, this.readRoot);
       if (!statusRootChanged && !readRootChanged) return;
 
-      if (statusRootChanged) this.resetWatcher(this.root);
-      if (readRootChanged) this.resetWatcher(this.readRoot);
+      if (statusRootChanged) this.resetWatcher(this.root, () => this.scheduleReload());
+      if (readRootChanged) this.resetWatcher(this.readRoot, () => this.scheduleReload());
       this.scheduleReload();
     });
     this.ensureWatcher(this.root, () => this.scheduleReload());
@@ -151,13 +151,13 @@ export class AgentStatusStore {
     this.watchPath(root, onChange);
   }
 
-  private resetWatcher(root: string): void {
+  private resetWatcher(root: string, onChange: WatchListener): void {
     const previous = this.watchers.get(root);
     if (previous) {
       this.watchers.delete(root);
       previous.close();
     }
-    this.watchPath(root, () => this.scheduleReload());
+    this.watchPath(root, onChange);
   }
 
   private watchPath(root: string, onChange: WatchListener): void {
