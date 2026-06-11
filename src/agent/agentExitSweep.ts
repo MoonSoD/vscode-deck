@@ -60,12 +60,12 @@ export class AgentExitSweep implements Disposable {
     });
     if (agentPanes.length === 0) return false;
 
-    let hasProbeableAgent = false;
+    let shouldKeepSweeping = false;
     for (const pane of agentPanes) {
       const status = this.options.statuses.get(pane.sessionName);
       const process = agentProcess(status, pane.agent);
       if (!process) continue;
-      hasProbeableAgent = true;
+      shouldKeepSweeping = true;
       if (await this.liveness.isAgentAlive(process)) continue;
 
       try {
@@ -80,7 +80,7 @@ export class AgentExitSweep implements Disposable {
       }
     }
 
-    return hasProbeableAgent;
+    return shouldKeepSweeping;
   }
 
   dispose(): void {
@@ -96,8 +96,8 @@ export class AgentExitSweep implements Disposable {
     this.timer = undefined;
 
     try {
-      const hasAgentPanes = await this.runOnce();
-      if (hasAgentPanes && !this.disposed) {
+      const shouldKeepSweeping = await this.runOnce();
+      if (shouldKeepSweeping && !this.disposed) {
         this.timer = setTimeout(() => {
           this.timer = undefined;
           void this.runAndSchedule();
