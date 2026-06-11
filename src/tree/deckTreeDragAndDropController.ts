@@ -142,41 +142,41 @@ export class DeckTreeDragAndDropController
   }
 
   private async dropRepositorySeeds(uriList: string): Promise<void> {
-    if (!this.activeWorktrees || !this.switcher || !this.detachedOpener || !this.reveal) return;
+    const { activeWorktrees, detachedOpener, reveal, switcher } = this;
+    if (!activeWorktrees || !switcher || !detachedOpener || !reveal) return;
 
     const seedPaths = parseUriList(uriList);
     if (seedPaths.length === 0) return;
 
-    if (seedPaths.length === 1) {
-      const [seedPath] = seedPaths;
-      const result = await registerRepositorySeed({
+    const registerSeed = (
+      seedPath: string,
+      revealRepository: (repositoryPath: string) => Promise<void>,
+    ) =>
+      registerRepositorySeed({
         seedPath,
         registry: this.repositoryRegistry,
-        activeWorktrees: this.activeWorktrees,
+        activeWorktrees,
         refresh: this.refresh,
-        reveal: this.reveal,
+        reveal: revealRepository,
         repositoryCommonDirCache: this.repositoryCommonDirCache,
       });
+
+    if (seedPaths.length === 1) {
+      const [seedPath] = seedPaths;
+      const result = await registerSeed(seedPath, reveal);
       if (result.kind === 'registered') {
-        await showRepositoryPostAddPrompt(seedPath, this.switcher, this.detachedOpener);
+        await showRepositoryPostAddPrompt(seedPath, switcher, detachedOpener);
       }
       return;
     }
 
     let lastRegisteredPath: string | undefined;
     for (const seedPath of seedPaths) {
-      await registerRepositorySeed({
-        seedPath,
-        registry: this.repositoryRegistry,
-        activeWorktrees: this.activeWorktrees,
-        refresh: this.refresh,
-        reveal: async (repositoryPath) => {
-          lastRegisteredPath = repositoryPath;
-        },
-        repositoryCommonDirCache: this.repositoryCommonDirCache,
+      await registerSeed(seedPath, async (repositoryPath) => {
+        lastRegisteredPath = repositoryPath;
       });
     }
-    if (lastRegisteredPath) await this.reveal(lastRegisteredPath);
+    if (lastRegisteredPath) await reveal(lastRegisteredPath);
   }
 
   private async dropWorktree(
