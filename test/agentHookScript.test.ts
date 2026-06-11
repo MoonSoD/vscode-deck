@@ -452,10 +452,7 @@ describe('renderAgentHookScript', () => {
     expect(typeof status.statusAt).toBe('number');
   });
 
-  it.each([
-    ['PermissionRequest'],
-    ['StopFailure'],
-  ])('does not map Codex %s to status in this slice', async (hookEventName) => {
+  it('writes Codex needs-input with an empty message on PermissionRequest', async () => {
     const root = tempRoot();
     const sidecarDir = join(root, 'hooks');
     const statusDir = join(root, 'status');
@@ -463,7 +460,54 @@ describe('renderAgentHookScript', () => {
 
     await runScript(scriptPath, {
       env: { ...process.env, DECK_SESSION: 'wt-_work_repo__term-1' },
-      input: `{"session_id":"codex-123","hook_event_name":"${hookEventName}","message":"Allow Bash?"}`,
+      input: '{"session_id":"codex-123","hook_event_name":"PermissionRequest","tool_name":"shell"}',
+    });
+
+    const raw = readFileSync(join(statusDir, 'wt-_work_repo__term-1.json'), 'utf8');
+    const status = JSON.parse(raw);
+    expect(status.status).toBe('needsInput');
+    expect(status.message).toBe('');
+    expect(typeof status.statusAt).toBe('number');
+  });
+
+  it('exits 0 and emits no decision for Codex PermissionRequest when status writing fails', async () => {
+    const root = tempRoot();
+    const sidecarDir = join(root, 'hooks');
+    writeFileSync(join(root, 'status'), 'not a directory', 'utf8');
+    const scriptPath = writeScript(root, renderAgentHookScript(sidecarDir, 'codex'));
+
+    const result = await runScriptResult(scriptPath, {
+      env: { ...process.env, DECK_SESSION: 'wt-_work_repo__term-1' },
+      input: '{"session_id":"codex-123","hook_event_name":"PermissionRequest"}',
+    });
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toBe('');
+  });
+
+  it('exits 0 and emits no decision for malformed Codex PermissionRequest payloads', async () => {
+    const root = tempRoot();
+    const sidecarDir = join(root, 'hooks');
+    const scriptPath = writeScript(root, renderAgentHookScript(sidecarDir, 'codex'));
+
+    const result = await runScriptResult(scriptPath, {
+      env: { ...process.env, DECK_SESSION: 'wt-_work_repo__term-1' },
+      input: '{"session_id":"codex-123","hook_event_name":"PermissionRequest"',
+    });
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toBe('');
+  });
+
+  it('does not map Codex StopFailure to status', async () => {
+    const root = tempRoot();
+    const sidecarDir = join(root, 'hooks');
+    const statusDir = join(root, 'status');
+    const scriptPath = writeScript(root, renderAgentHookScript(sidecarDir, 'codex'));
+
+    await runScript(scriptPath, {
+      env: { ...process.env, DECK_SESSION: 'wt-_work_repo__term-1' },
+      input: '{"session_id":"codex-123","hook_event_name":"StopFailure"}',
     });
 
     expect(existsSync(statusDir)).toBe(false);
@@ -558,6 +602,22 @@ function runScript(
     const child = execFile(scriptPath, options.args ?? [], { env: options.env }, (error) => {
       if (error) reject(error);
       else resolve();
+    });
+    child.stdin?.end(options.input);
+  });
+}
+
+function runScriptResult(
+  scriptPath: string,
+  options: { args?: string[]; env: NodeJS.ProcessEnv; input: string },
+): Promise<{ code: number | null; stdout: string }> {
+  return new Promise((resolve) => {
+    const child = execFile(scriptPath, options.args ?? [], { env: options.env }, (error, stdout) => {
+      if (error && 'code' in error) {
+        resolve({ code: typeof error.code === 'number' ? error.code : null, stdout });
+      } else {
+        resolve({ code: 0, stdout });
+      }
     });
     child.stdin?.end(options.input);
   });
