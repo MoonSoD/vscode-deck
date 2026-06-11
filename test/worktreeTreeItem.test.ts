@@ -127,4 +127,20 @@ describe('describeTerminalTreeItem', () => {
       contextValue: 'deck.terminal.foreign',
     });
   });
+
+  it('shows the agent identity glyph for a claude window with no status yet (resumed/idle)', () => {
+    expect(describeTerminalTreeItem('claude', false, undefined)).toEqual({
+      label: 'claude',
+      iconId: 'agent',
+      contextValue: 'deck.terminal.foreign',
+    });
+  });
+
+  it('shows the plain terminal icon for a non-agent window', () => {
+    expect(describeTerminalTreeItem('zsh', false, undefined)).toEqual({
+      label: 'zsh',
+      iconId: 'terminal',
+      contextValue: 'deck.terminal.foreign',
+    });
+  });
 });

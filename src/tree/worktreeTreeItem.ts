@@ -68,6 +68,11 @@ export function describeTerminalTreeItem(
   status?: AgentStatus,
 ): TerminalTreeItemDescription {
   const contextValue = isActive ? 'deck.terminal.active' : 'deck.terminal.foreign';
+  // Agent identity comes from the window name — the hook renames the tmux
+  // window to the agent name on SessionStart (incl. `claude --resume`), before
+  // any status file exists. Key the icon off identity so a resumed/idle agent
+  // still shows its mark; status only adds the working spinner.
+  const isAgent = windowName === 'claude' || status !== undefined;
   if (status?.status === 'inProgress') {
     return {
       label: windowName,
@@ -75,7 +80,7 @@ export function describeTerminalTreeItem(
       contextValue,
     };
   }
-  if (status !== undefined) {
+  if (isAgent) {
     return {
       label: windowName,
       iconId: 'agent',
