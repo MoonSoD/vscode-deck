@@ -97,6 +97,32 @@ describe('AgentStatusStore', () => {
     }, WATCH_EVENT_WAIT);
   });
 
+  it('reflects read state in entries() so the status decoration clears on read', async () => {
+    const root = tempRoot();
+    mkdirSync(root, { recursive: true });
+    writeFileSync(
+      join(root, 'wt-_work_repo__term-1.json'),
+      '{"status":"completed","statusAt":1710000000}\n',
+      'utf8',
+    );
+    const store = new AgentStatusStore(root, 10);
+    disposables.push(await store.start());
+
+    expect(new Map(store.entries()).get('wt-_work_repo__term-1')).toEqual({
+      status: 'completed',
+      statusAt: 1710000000,
+      unread: true,
+    });
+
+    await store.markRead('wt-_work_repo__term-1');
+
+    expect(new Map(store.entries()).get('wt-_work_repo__term-1')).toEqual({
+      status: 'completed',
+      statusAt: 1710000000,
+      unread: false,
+    });
+  });
+
   it('shares read markers across stores watching the same machine status area', async () => {
     const root = tempRoot();
     mkdirSync(root, { recursive: true });

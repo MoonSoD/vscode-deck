@@ -38,8 +38,14 @@ export class AgentStatusStore {
     return this.withReadState(sessionName, this.statuses.get(sessionName));
   }
 
+  // Read-adjusted, like get(): consumers (decoration rollups, notifier) must
+  // see the unread bit, or a read completion keeps rendering its blue dot.
   entries(): IterableIterator<[string, AgentStatus]> {
-    return this.statuses.entries();
+    const adjusted = new Map<string, AgentStatus>();
+    for (const sessionName of this.statuses.keys()) {
+      adjusted.set(sessionName, this.withReadState(sessionName, this.statuses.get(sessionName))!);
+    }
+    return adjusted.entries();
   }
 
   onDidChange(listener: () => void): Disposable {
