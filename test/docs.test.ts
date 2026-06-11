@@ -30,6 +30,7 @@ describe('domain docs', () => {
     expect(normalizedAdr).toContain('VS Code ChatSessionStatus');
     expect(normalizedAdr).toContain('read/unread metadata');
     expect(normalizedAdr).toContain('separate disposable status file');
+    expect(normalizedAdr).toContain('status-reads/');
     expect(normalizedAdr).toContain('resume-critical sidecar');
     expect(normalizedAdr).toContain('booleans');
     expect(normalizedAdr).toContain('no Allow action');

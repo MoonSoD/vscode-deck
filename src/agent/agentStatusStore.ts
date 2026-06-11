@@ -1,6 +1,6 @@
 import { watch, type FSWatcher } from 'node:fs';
 import { mkdir, readdir, readFile, unlink, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 
 export interface AgentStatus {
   status: 'inProgress' | 'needsInput' | 'completed' | 'failed';
@@ -12,6 +12,8 @@ export interface AgentStatus {
 export interface Disposable {
   dispose(): void;
 }
+
+type WatchListener = (eventType: string, filename: string | Buffer | null) => void;
 
 export class AgentStatusStore {
   private statuses = new Map<string, AgentStatus>();
@@ -131,14 +133,22 @@ export class AgentStatusStore {
   }
 
   private ensureWatchers(): void {
-    this.ensureWatcher(this.parentRoot);
-    this.resetWatcher(this.root);
-    this.resetWatcher(this.readRoot);
+    this.ensureWatcher(this.parentRoot, (_eventType, filename) => {
+      const statusRootChanged = this.isParentEventFor(filename, this.root);
+      const readRootChanged = this.isParentEventFor(filename, this.readRoot);
+      if (!statusRootChanged && !readRootChanged) return;
+
+      if (statusRootChanged) this.resetWatcher(this.root);
+      if (readRootChanged) this.resetWatcher(this.readRoot);
+      this.scheduleReload();
+    });
+    this.ensureWatcher(this.root, () => this.scheduleReload());
+    this.ensureWatcher(this.readRoot, () => this.scheduleReload());
   }
 
-  private ensureWatcher(root: string): void {
+  private ensureWatcher(root: string, onChange: WatchListener): void {
     if (this.watchers.has(root)) return;
-    this.watchPath(root);
+    this.watchPath(root, onChange);
   }
 
   private resetWatcher(root: string): void {
@@ -147,14 +157,12 @@ export class AgentStatusStore {
       this.watchers.delete(root);
       previous.close();
     }
-    this.watchPath(root);
+    this.watchPath(root, () => this.scheduleReload());
   }
 
-  private watchPath(root: string): void {
+  private watchPath(root: string, onChange: WatchListener): void {
     try {
-      const watcher = watch(root, () => {
-        this.scheduleReload();
-      });
+      const watcher = watch(root, onChange);
       watcher.on('error', () => {
         if (this.watchers.get(root) === watcher) {
           this.watchers.delete(root);
@@ -165,6 +173,10 @@ export class AgentStatusStore {
     } catch (error) {
       if (!isNotFound(error)) throw error;
     }
+  }
+
+  private isParentEventFor(filename: string | Buffer | null, root: string): boolean {
+    return filename === null || filename.toString() === basename(root);
   }
 
   private closeWatchers(): void {

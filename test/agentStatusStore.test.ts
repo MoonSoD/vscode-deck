@@ -126,6 +126,53 @@ describe('AgentStatusStore', () => {
     }, WATCH_EVENT_WAIT);
   });
 
+  it('does not close status watchers during steady-state status and read-marker writes', async () => {
+    const root = tempRoot();
+    mkdirSync(root, { recursive: true });
+    writeFileSync(
+      join(root, 'wt-_work_repo__term-1.json'),
+      '{"status":"completed","statusAt":1710000000}\n',
+      'utf8',
+    );
+    const windowA = new AgentStatusStore(root, 10);
+    const windowB = new AgentStatusStore(root, 10);
+    disposables.push(await windowA.start());
+    disposables.push(await windowB.start());
+    const watcherCloseCounts = spyOnWatcherCloses(windowB);
+
+    writeFileSync(
+      join(root, 'wt-_work_repo__term-1.json'),
+      '{"status":"completed","statusAt":1710000001}\n',
+      'utf8',
+    );
+
+    await vi.waitFor(() => {
+      expect(windowB.get('wt-_work_repo__term-1')).toEqual({
+        status: 'completed',
+        statusAt: 1710000001,
+        unread: true,
+      });
+    }, WATCH_EVENT_WAIT);
+
+    await vi.waitFor(() => {
+      expect(windowA.get('wt-_work_repo__term-1')).toEqual({
+        status: 'completed',
+        statusAt: 1710000001,
+        unread: true,
+      });
+    }, WATCH_EVENT_WAIT);
+    await windowA.markRead('wt-_work_repo__term-1');
+
+    await vi.waitFor(() => {
+      expect(windowB.get('wt-_work_repo__term-1')).toEqual({
+        status: 'completed',
+        statusAt: 1710000001,
+        unread: false,
+      });
+    }, WATCH_EVENT_WAIT);
+    expect(watcherCloseCounts()).toEqual([0, 0, 0]);
+  });
+
   it('persists completed read state through marker files', async () => {
     const root = tempRoot();
     mkdirSync(root, { recursive: true });
@@ -270,10 +317,12 @@ describe('AgentStatusStore', () => {
     }, WATCH_EVENT_WAIT);
   });
 
-  it('keeps reading statuses after the status area is removed and recreated', async () => {
+  it('keeps reading statuses and read markers after the status area is removed and recreated', async () => {
     const root = tempRoot();
-    const store = new AgentStatusStore(root, 10);
-    disposables.push(await store.start());
+    const windowA = new AgentStatusStore(root, 10);
+    const windowB = new AgentStatusStore(root, 10);
+    disposables.push(await windowA.start());
+    disposables.push(await windowB.start());
 
     rmSync(root, { recursive: true, force: true });
     rmSync(`${root}-reads`, { recursive: true, force: true });
@@ -282,13 +331,22 @@ describe('AgentStatusStore', () => {
     writeFileSync(join(root, 'done.json'), '{"status":"completed","statusAt":1710000000}', 'utf8');
 
     await vi.waitFor(() => {
-      expect(store.get('done')).toEqual({ status: 'completed', statusAt: 1710000000, unread: true });
+      expect(windowB.get('done')).toEqual({ status: 'completed', statusAt: 1710000000, unread: true });
     }, WATCH_EVENT_WAIT);
 
     writeFileSync(join(root, 'done.json'), '{"status":"completed","statusAt":1710000001}', 'utf8');
 
     await vi.waitFor(() => {
-      expect(store.get('done')).toEqual({ status: 'completed', statusAt: 1710000001, unread: true });
+      expect(windowB.get('done')).toEqual({ status: 'completed', statusAt: 1710000001, unread: true });
+    }, WATCH_EVENT_WAIT);
+
+    await vi.waitFor(() => {
+      expect(windowA.get('done')).toEqual({ status: 'completed', statusAt: 1710000001, unread: true });
+    }, WATCH_EVENT_WAIT);
+    await windowA.markRead('done');
+
+    await vi.waitFor(() => {
+      expect(windowB.get('done')).toEqual({ status: 'completed', statusAt: 1710000001, unread: false });
     }, WATCH_EVENT_WAIT);
   });
 });
@@ -298,4 +356,12 @@ function tempRoot(): string {
   tempRoots.push(root);
   tempRoots.push(`${root}-reads`);
   return root;
+}
+
+function spyOnWatcherCloses(store: AgentStatusStore): () => number[] {
+  const watchers = Array.from(
+    (store as unknown as { watchers: Map<string, { close(): void }> }).watchers.values(),
+  );
+  const spies = watchers.map((watcher) => vi.spyOn(watcher, 'close'));
+  return () => spies.map((spy) => spy.mock.calls.length);
 }

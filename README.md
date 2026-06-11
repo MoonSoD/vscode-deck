@@ -37,6 +37,14 @@ Terminals run on an isolated tmux server dedicated to Deck (separate from your
 personal tmux), so they require **tmux ≥ 3.1** on your `PATH`. Without it the rest
 of Deck still works and the terminal UI is hidden.
 
+## Agent status data
+
+Deck stores disposable agent status files in `~/.local/share/deck/status/` and
+completed-turn read markers in the sibling `~/.local/share/deck/status-reads/`
+directory. Deleting only `status/` leaves harmless orphan read markers; Deck
+prunes them on the next reload. To fully reset agent status and read state,
+delete both directories.
+
 ## Docs
 
 - [AGENTS.md](./AGENTS.md) — agent / contributor working principles

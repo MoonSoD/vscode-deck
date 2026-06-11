@@ -28,10 +28,16 @@ decisions from issues #91-#95.
    another status. Completed starts unread and becomes read when the Terminal tab
    is focused, matching VS Code's agent-sessions behavior.
 
-3. **Use a separate disposable status file, not the AgentSession resume data.**
-   Status is high-churn and disposable. The AgentSession sidecar from ADR-0021
-   remains the resume-critical sidecar and is written before status work. Losing
-   status must never prevent a TerminalSnapshot from resuming an AgentSession.
+3. **Use a separate disposable status file plus read-marker files, not the
+   AgentSession resume data.** Status is high-churn and disposable. Each
+   AgentStatus is a machine-global file under `~/.local/share/deck/status/`, and
+   each completed Terminal read marker is a sibling machine-global file under
+   `~/.local/share/deck/status-reads/` containing the read `statusAt`. Both are
+   one file per session so VS Code windows and installs converge through
+   filesystem watches. The AgentSession sidecar from ADR-0021 remains the
+   resume-critical sidecar and is written before status work. Losing status or
+   read markers must never prevent a TerminalSnapshot from resuming an
+   AgentSession.
 
 4. **Notification settings are simple on/off booleans, default on.**
    `deck.notifyOnNeedsInput` and `deck.notifyOnCompleted` are booleans
@@ -96,6 +102,10 @@ decisions from issues #91-#95.
 - **Status is best-effort observability, not source-of-truth state.** If a status
   record is missing or stale, Deck prefers to show nothing current rather than
   infer from output.
+- **Read markers are disposable with status.** Removing
+  `~/.local/share/deck/status/` leaves any `status-reads/` markers orphaned, and
+  Deck prunes them on reload. A full AgentStatus reset removes both `status/`
+  and `status-reads/`.
 - **Multi-window notifications can leave a stale toast.** Each VS Code window
   observes transitions independently. A NeedsInput toast in one window can remain
   after the user handles the prompt from another window, but clicking it still
