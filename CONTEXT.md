@@ -64,6 +64,10 @@ _Avoid_: repository list, config
 The user-curated display order of Worktrees within a Repository.
 _Avoid_: sort order
 
+**TerminalOrder**:
+The user-curated display order of Terminals within a Worktree. An order overlay reconciled against the live tmux list — tmux owns which Terminals exist; this owns only their order. Absent it, Terminals fall back to ascending `term-N` order.
+_Avoid_: terminal list (it stores order, not existence — cf. ADR-0014), sort order
+
 ### Terminals
 
 **DeckSocket**:
