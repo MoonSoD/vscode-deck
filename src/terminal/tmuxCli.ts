@@ -187,6 +187,20 @@ export class TmuxCli {
     throw new Error(result.stderr || result.stdout || `tmux set -gu failed: ${result.code}`);
   }
 
+  async restoreAutomaticRename(session: string): Promise<void> {
+    const result = await this.runner.run('tmux', [
+      ...this.baseArgs(),
+      'set',
+      '-w',
+      '-t',
+      exactTarget(session),
+      'automatic-rename',
+      'on',
+    ]);
+    if (result.code === 0 || isMissingSession(result)) return;
+    throw new Error(result.stderr || result.stdout || `tmux set -w failed: ${result.code}`);
+  }
+
   async isServerRunning(): Promise<boolean> {
     const result = await this.runner.run('tmux', [
       ...this.baseArgs(),

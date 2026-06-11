@@ -767,9 +767,10 @@ describe('activate', () => {
     expect(vscodeState.onDidCloseTerminal).not.toHaveBeenCalled();
     expect(vscodeState.onDidChangeActiveTerminal).not.toHaveBeenCalled();
     // Tab restoration is now VS Code's native custom-editor restore — Deck no
-    // longer replays a snapshot. Two list-sessions run here: the pending-intent
-    // open, then agent sidecar/status pruning share one live-session list.
-    expect(vscodeState.lifecycleOrder).toEqual(['pending-list', 'pending-list']);
+    // longer replays a snapshot. Three list-sessions run here: the one-shot
+    // agent exit sweep wake, the pending-intent open, then agent sidecar/status
+    // pruning share one live-session list.
+    expect(vscodeState.lifecycleOrder).toEqual(['pending-list', 'pending-list', 'pending-list']);
     expect(vscodeState.agentStatusStorePrune).toHaveBeenCalledWith(
       new Set(['wt-_work_alpha-main__term-1']),
     );

@@ -215,6 +215,30 @@ describe('TmuxCli', () => {
     }]);
   });
 
+  it('restores automatic rename for one Deck session window', async () => {
+    const runner = new MockRunner([{ code: 0, stdout: '', stderr: '' }]);
+    const tmux = new TmuxCli('/ext/resources/deck.conf', runner);
+
+    await tmux.restoreAutomaticRename('wt-_work_repo__term-1');
+
+    expect(runner.calls).toEqual([{
+      command: 'tmux',
+      args: [
+        '-L',
+        'deck',
+        '-f',
+        '/ext/resources/deck.conf',
+        'set',
+        '-w',
+        '-t',
+        '=wt-_work_repo__term-1',
+        'automatic-rename',
+        'on',
+      ],
+      cwd: undefined,
+    }]);
+  });
+
   it('lists Deck sessions with window names', async () => {
     const runner = new MockRunner([
       {

@@ -1,10 +1,14 @@
 import { statSync, watch, type FSWatcher } from 'node:fs';
 import { mkdir, readdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
+import type { AgentName } from './agentTypes';
 
 export interface AgentStatus {
   status: 'inProgress' | 'needsInput' | 'completed' | 'failed';
   statusAt: number;
+  agent?: AgentName;
+  pid?: number;
+  startTime?: string;
   message?: string;
   unread?: boolean;
 }
@@ -323,6 +327,19 @@ function parseStatus(text: string): AgentStatus | undefined {
     value !== null &&
     isAgentStatusValue((value as { status?: unknown }).status) &&
     typeof (value as { statusAt?: unknown }).statusAt === 'number' &&
+    (
+      (value as { agent?: unknown }).agent === undefined ||
+      (value as { agent?: unknown }).agent === 'claude' ||
+      (value as { agent?: unknown }).agent === 'codex'
+    ) &&
+    (
+      (value as { pid?: unknown }).pid === undefined ||
+      typeof (value as { pid?: unknown }).pid === 'number'
+    ) &&
+    (
+      (value as { startTime?: unknown }).startTime === undefined ||
+      typeof (value as { startTime?: unknown }).startTime === 'string'
+    ) &&
     (
       (value as { message?: unknown }).message === undefined ||
       typeof (value as { message?: unknown }).message === 'string'

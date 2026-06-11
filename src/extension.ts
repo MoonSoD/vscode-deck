@@ -38,6 +38,7 @@ import { resolveDeckTmuxOptions, type DeckTmuxOptions } from './terminal/deckTmu
 import { TerminalSnapshotRuntime } from './terminal/terminalSnapshotRuntime';
 import { createRestoreGate } from './terminal/restoreGate';
 import { AgentSidecarStore } from './agent/agentSidecarStore';
+import { AgentExitSweep } from './agent/agentExitSweep';
 import { AgentStatusFileDecorationProvider } from './agent/agentStatusFileDecorationProvider';
 import { AgentStatusNotifier } from './agent/agentStatusNotifier';
 import { AgentStatusStore } from './agent/agentStatusStore';
@@ -62,8 +63,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const agentSidecars = new AgentSidecarStore(join(deckDir, 'hooks'));
   const agentStatuses = new AgentStatusStore(join(deckDir, 'status'), 100);
   const agentStatusWatch = await agentStatuses.start();
+  let agentExitSweep: AgentExitSweep | undefined;
   const activeTerminalReadWatch = agentStatuses.onDidChange(() => {
     void markActiveTerminalRead(agentStatuses);
+  });
+  const agentExitSweepWakeWatch = agentStatuses.onDidChange(() => {
+    agentExitSweep?.wake();
   });
   void markActiveTerminalRead(agentStatuses);
   const hookInstaller = new HookInstaller({
@@ -135,11 +140,21 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     pendingWorktreeRemovals,
     agentStatuses,
   );
+  agentExitSweep = tmuxAvailability.available
+    ? new AgentExitSweep({
+        panes: tmux,
+        statuses: agentStatuses,
+        teardown: tmux,
+        onError: (error) => console.warn('Deck: agent exit sweep failed', error),
+      })
+    : undefined;
+  agentExitSweep?.wake();
   const externalGitWatch = new ExternalGitWatch(watchGitCommonDir, refreshTree);
   let externalGitSyncVersion = 0;
 
   function refreshTree(): void {
     tree.refresh();
+    agentExitSweep?.wake();
     syncExternalGitWatches();
   }
 
@@ -278,6 +293,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     treeView,
     agentStatusWatch,
     activeTerminalReadWatch,
+    agentExitSweepWakeWatch,
+    ...(agentExitSweep ? [agentExitSweep] : []),
     agentStatusDecorationProvider,
     agentStatusDecorationWatch,
     agentStatusCollapseWatch,

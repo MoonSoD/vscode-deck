@@ -432,6 +432,29 @@ describe('renderAgentHookScript', () => {
     expect(typeof status.statusAt).toBe('number');
   });
 
+  it('writes process liveness metadata to Codex status records only', async () => {
+    const root = tempRoot();
+    const sidecarDir = join(root, 'hooks');
+    const statusDir = join(root, 'status');
+    const scriptPath = writeScript(root, renderAgentHookScript(sidecarDir, 'codex'));
+
+    await runScript(scriptPath, {
+      env: { ...process.env, DECK_SESSION: 'wt-_work_repo__term-1' },
+      input: '{"session_id":"codex-123","hook_event_name":"UserPromptSubmit"}',
+    });
+
+    const status = JSON.parse(readFileSync(join(statusDir, 'wt-_work_repo__term-1.json'), 'utf8'));
+    expect(status.agent).toBe('codex');
+    expect(typeof status.pid).toBe('number');
+    expect(status.pid).toBeGreaterThan(0);
+    expect(typeof status.startTime).toBe('string');
+    expect(status.startTime.length).toBeGreaterThan(0);
+    expect(JSON.parse(readFileSync(join(sidecarDir, 'wt-_work_repo__term-1.json'), 'utf8'))).toEqual({
+      agent: 'codex',
+      session_id: 'codex-123',
+    });
+  });
+
   it.each([
     ['PreToolUse', 'inProgress'],
     ['Stop', 'completed'],
