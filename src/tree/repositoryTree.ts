@@ -399,7 +399,7 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
       knownCommonDir ??
       (await resolveCommonDirSafe(this.repositoryCommonDirCache, repositoryPath)) ??
       undefined;
-    this.pruneWorktreeOrder(commonDir, gitWorktrees);
+    await this.pruneWorktreeOrder(commonDir, gitWorktrees);
     if (commonDir !== undefined) await this.worktreeListCache.set(commonDir, visibleWorktrees);
     return this.toWorktreeNodes(repositoryPath, visibleWorktrees, commonDir, activeWorktreePath);
   }
@@ -458,7 +458,7 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
     void listWorktrees(repositoryPath)
       .then(async (worktrees) => {
         const visibleWorktrees = this.visibleWorktrees(worktrees, pendingAtListStart);
-        this.pruneWorktreeOrder(commonDir, worktrees);
+        await this.pruneWorktreeOrder(commonDir, worktrees);
         if (sameWorktrees(previous, visibleWorktrees)) return;
         await this.worktreeListCache.set(commonDir, visibleWorktrees);
         this._onDidChangeTreeData.fire(undefined);
@@ -495,7 +495,7 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
     return nodes;
   }
 
-  private pruneWorktreeOrder(commonDir: string | undefined, gitWorktrees: readonly Worktree[]): void {
+  private async pruneWorktreeOrder(commonDir: string | undefined, gitWorktrees: readonly Worktree[]): Promise<void> {
     if (commonDir === undefined) return;
 
     const storedOrder = this.worktreeOrders.get(commonDir);
@@ -503,7 +503,7 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
 
     const prunedOrder = pruneOrder(storedOrder, new Set(gitWorktrees.map((worktree) => worktree.path)));
     if (prunedOrder.changed) {
-      void this.worktreeOrders.set(commonDir, prunedOrder.order).catch(() => undefined);
+      await this.worktreeOrders.set(commonDir, prunedOrder.order).catch(() => undefined);
     }
   }
 
