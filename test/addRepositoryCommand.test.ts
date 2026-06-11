@@ -125,20 +125,16 @@ describe('AddRepositoryCommand', () => {
     },
   );
 
-  it('skips append for a duplicate common-dir but still offers post-add actions', async () => {
+  it('does nothing for a duplicate common-dir', async () => {
     const { activeWorktrees, command, refresh, registry, reveal } = createCommand(['/repo/other']);
 
     await command.run();
 
     expect(registry.append).not.toHaveBeenCalled();
-    expect(activeWorktrees.set).toHaveBeenCalledWith('/git/repo', '/repo/main');
-    expect(refresh).toHaveBeenCalledOnce();
-    expect(reveal).toHaveBeenCalledWith('/repo/main');
-    expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
-      'Added repository main.',
-      'Switch',
-      'Open in New Window',
-    );
+    expect(activeWorktrees.set).not.toHaveBeenCalled();
+    expect(refresh).not.toHaveBeenCalled();
+    expect(reveal).not.toHaveBeenCalled();
+    expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
   });
 
   it('shows an error and stops when the picked folder is not a git repo', async () => {

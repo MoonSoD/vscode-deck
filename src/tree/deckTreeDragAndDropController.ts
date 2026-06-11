@@ -1,5 +1,16 @@
 import * as vscode from 'vscode';
 import { getCommonDirSafe, listWorktrees } from '../git/worktrees';
+import {
+  ActiveWorktreeStoreLike,
+  DetachedOpenerLike,
+  registerRepositorySeed,
+  showRepositoryPostAddPrompt,
+  SwitcherLike,
+} from '../repository/registerRepositorySeed';
+import {
+  CommonDirCacheLike,
+  PASS_THROUGH_COMMON_DIR_CACHE,
+} from '../repository/repositoryCommonDirCache';
 import { RepositoryRegistryStore } from '../repository/repositoryRegistryStore';
 import { TerminalOrderStore } from '../terminal/terminalOrderStore';
 import type { TmuxSession } from '../terminal/tmuxCli';
@@ -10,6 +21,7 @@ import { reconcileWorktreeOrder } from './reconcileWorktreeOrder';
 import { DropPosition, reorderArray } from './reorderArray';
 
 const DECK_TREE_MIME = 'application/vnd.code.tree.deck.repositories';
+const URI_LIST_MIME = 'text/uri-list';
 
 type DragPayload =
   | {
@@ -59,14 +71,19 @@ export class DeckTreeDragAndDropController
   implements vscode.TreeDragAndDropController<DeckNodeLike>
 {
   readonly dragMimeTypes = [DECK_TREE_MIME];
-  readonly dropMimeTypes = [DECK_TREE_MIME];
+  readonly dropMimeTypes = [DECK_TREE_MIME, URI_LIST_MIME];
 
   constructor(
     private readonly refresh: () => void,
-    private readonly repositoryRegistry: Pick<RepositoryRegistryStore, 'list' | 'replace'>,
+    private readonly repositoryRegistry: Pick<RepositoryRegistryStore, 'list' | 'append' | 'replace'>,
     private readonly worktreeOrders: WorktreeOrderStore,
     private readonly terminalOrders?: Pick<TerminalOrderStore, 'get' | 'set'>,
     private readonly tmux?: TerminalSessionLister,
+    private readonly activeWorktrees?: ActiveWorktreeStoreLike,
+    private readonly switcher?: SwitcherLike,
+    private readonly detachedOpener?: DetachedOpenerLike,
+    private readonly reveal?: (repositoryPath: string) => Promise<void>,
+    private readonly repositoryCommonDirCache: CommonDirCacheLike = PASS_THROUGH_COMMON_DIR_CACHE,
   ) {}
 
   handleDrag(
@@ -86,6 +103,12 @@ export class DeckTreeDragAndDropController
     target: DeckNodeLike | undefined,
     dataTransfer: vscode.DataTransfer,
   ): Promise<void> {
+    const uriList = dataTransfer.get(URI_LIST_MIME)?.value;
+    if (typeof uriList === 'string') {
+      await this.dropRepositorySeeds(uriList);
+      return;
+    }
+
     const payload = dataTransfer.get(DECK_TREE_MIME)?.value as DragPayload | undefined;
     if (!payload) return;
 
@@ -116,6 +139,44 @@ export class DeckTreeDragAndDropController
 
     await this.repositoryRegistry.replace(reordered);
     this.refresh();
+  }
+
+  private async dropRepositorySeeds(uriList: string): Promise<void> {
+    if (!this.activeWorktrees || !this.switcher || !this.detachedOpener || !this.reveal) return;
+
+    const seedPaths = parseUriList(uriList);
+    if (seedPaths.length === 0) return;
+
+    if (seedPaths.length === 1) {
+      const [seedPath] = seedPaths;
+      const result = await registerRepositorySeed({
+        seedPath,
+        registry: this.repositoryRegistry,
+        activeWorktrees: this.activeWorktrees,
+        refresh: this.refresh,
+        reveal: this.reveal,
+        repositoryCommonDirCache: this.repositoryCommonDirCache,
+      });
+      if (result.kind === 'registered') {
+        await showRepositoryPostAddPrompt(seedPath, this.switcher, this.detachedOpener);
+      }
+      return;
+    }
+
+    let lastRegisteredPath: string | undefined;
+    for (const seedPath of seedPaths) {
+      await registerRepositorySeed({
+        seedPath,
+        registry: this.repositoryRegistry,
+        activeWorktrees: this.activeWorktrees,
+        refresh: this.refresh,
+        reveal: async (repositoryPath) => {
+          lastRegisteredPath = repositoryPath;
+        },
+        repositoryCommonDirCache: this.repositoryCommonDirCache,
+      });
+    }
+    if (lastRegisteredPath) await this.reveal(lastRegisteredPath);
   }
 
   private async dropWorktree(
@@ -220,4 +281,13 @@ function dropPosition(
 
 function sameOrder(left: readonly string[], right: readonly string[]): boolean {
   return left.length === right.length && left.every((item, index) => item === right[index]);
+}
+
+function parseUriList(uriList: string): string[] {
+  return uriList
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0 && !line.startsWith('#'))
+    .map((uri) => vscode.Uri.parse(uri).fsPath)
+    .filter((path) => path.length > 0);
 }

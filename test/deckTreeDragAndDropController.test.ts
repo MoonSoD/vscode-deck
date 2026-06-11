@@ -11,6 +11,13 @@ vi.mock('vscode', () => ({
   DataTransferItem: class {
     constructor(readonly value: unknown) {}
   },
+  Uri: {
+    parse: vi.fn((value: string) => ({ fsPath: decodeURIComponent(new URL(value).pathname) })),
+  },
+  window: {
+    showErrorMessage: vi.fn(),
+    showInformationMessage: vi.fn(),
+  },
 }));
 
 vi.mock('../src/git/worktrees', () => ({
@@ -60,6 +67,9 @@ function terminal(repositoryPath: string, worktreePath: string, sessionName: str
 function createController(refresh = vi.fn()) {
   const repositoryRegistry = {
     list: vi.fn(() => vscodeState.repositories),
+    append: vi.fn(async (repositoryPath: string) => {
+      vscodeState.repositories = [...vscodeState.repositories, repositoryPath];
+    }),
     replace: vi.fn(async (repositories: readonly string[]) => {
       vscodeState.repositories = [...repositories];
     }),
@@ -79,10 +89,28 @@ function createController(refresh = vi.fn()) {
   const tmux = {
     listSessions: vscodeState.listSessions,
   };
+  const activeWorktrees = { set: vi.fn(async () => undefined) };
+  const switcher = { switchTo: vi.fn(async () => undefined) };
+  const detachedOpener = { open: vi.fn(async () => undefined) };
+  const reveal = vi.fn(async () => undefined);
   return {
-    controller: new DeckTreeDragAndDropController(refresh, repositoryRegistry, worktreeOrders, terminalOrders, tmux),
+    activeWorktrees,
+    controller: new DeckTreeDragAndDropController(
+      refresh,
+      repositoryRegistry,
+      worktreeOrders,
+      terminalOrders,
+      tmux,
+      activeWorktrees,
+      switcher,
+      detachedOpener,
+      reveal,
+    ),
+    detachedOpener,
     repositoryRegistry,
     refresh,
+    reveal,
+    switcher,
     terminalOrders,
     worktreeOrders,
   };
@@ -91,6 +119,7 @@ function createController(refresh = vi.fn()) {
 describe('DeckTreeDragAndDropController', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(vscode.window.showInformationMessage).mockResolvedValue(undefined);
     vscodeState.repositories = ['/repo/a', '/repo/b', '/repo/c', '/repo/d'];
     vscodeState.getCommonDirSafe.mockResolvedValue('/git/a');
     vscodeState.listWorktrees.mockResolvedValue([
@@ -356,5 +385,60 @@ describe('DeckTreeDragAndDropController', () => {
 
     expect(worktreeOrders.set).not.toHaveBeenCalled();
     expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it('registers one external uri-list folder drop and shows post-add actions', async () => {
+    const { activeWorktrees, controller, repositoryRegistry, refresh, reveal, switcher } = createController();
+    vscodeState.repositories = ['/repo/a'];
+    vscodeState.getCommonDirSafe.mockImplementation(async (worktreePath: string) => {
+      if (worktreePath === '/dropped/main') return '/git/dropped';
+      if (worktreePath === '/repo/a') return '/git/a';
+      return null;
+    });
+    vi.mocked(vscode.window.showInformationMessage).mockResolvedValue('Switch');
+    const dataTransfer = new DataTransferMock();
+    dataTransfer.set('text/uri-list', new vscode.DataTransferItem('file:///dropped/main'));
+
+    await controller.handleDrop?.(undefined, dataTransfer as vscode.DataTransfer, {} as never);
+
+    expect(repositoryRegistry.append).toHaveBeenCalledWith('/dropped/main');
+    expect(vscodeState.repositories).toEqual(['/repo/a', '/dropped/main']);
+    expect(activeWorktrees.set).toHaveBeenCalledWith('/git/dropped', '/dropped/main');
+    expect(refresh).toHaveBeenCalledOnce();
+    expect(reveal).toHaveBeenCalledWith('/dropped/main');
+    expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
+      'Added repository main.',
+      'Switch',
+      'Open in New Window',
+    );
+    expect(switcher.switchTo).toHaveBeenCalledWith('/dropped/main');
+  });
+
+  it('registers multiple external uri-list folder drops silently and reveals the last', async () => {
+    const { activeWorktrees, controller, repositoryRegistry, refresh, reveal } = createController();
+    vscodeState.repositories = ['/repo/a'];
+    vscodeState.getCommonDirSafe.mockImplementation(async (worktreePath: string) => {
+      if (worktreePath === '/dropped/one') return '/git/one';
+      if (worktreePath === '/dropped/two') return '/git/two';
+      if (worktreePath === '/repo/a') return '/git/a';
+      return null;
+    });
+    const dataTransfer = new DataTransferMock();
+    dataTransfer.set(
+      'text/uri-list',
+      new vscode.DataTransferItem('# explorer selection\nfile:///dropped/one\nfile:///dropped/two'),
+    );
+
+    await controller.handleDrop?.(undefined, dataTransfer as vscode.DataTransfer, {} as never);
+
+    expect(repositoryRegistry.append).toHaveBeenCalledWith('/dropped/one');
+    expect(repositoryRegistry.append).toHaveBeenCalledWith('/dropped/two');
+    expect(vscodeState.repositories).toEqual(['/repo/a', '/dropped/one', '/dropped/two']);
+    expect(activeWorktrees.set).toHaveBeenCalledWith('/git/one', '/dropped/one');
+    expect(activeWorktrees.set).toHaveBeenCalledWith('/git/two', '/dropped/two');
+    expect(refresh).toHaveBeenCalledTimes(2);
+    expect(reveal).toHaveBeenCalledOnce();
+    expect(reveal).toHaveBeenCalledWith('/dropped/two');
+    expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
   });
 });

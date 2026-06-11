@@ -210,12 +210,32 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     worktreeListCache,
     repositoryCommonDirCache,
   );
+  let treeView: vscode.TreeView<RepositoryTreeNode> | undefined;
+  const revealRepository = async (repositoryPath: string) => {
+    const roots = tree.getChildren();
+    if (!Array.isArray(roots)) return;
+    const repository = roots.find((node) => 'repositoryPath' in node && node.repositoryPath === repositoryPath);
+    if (!repository) return;
+    try {
+      await treeView?.reveal(repository, { expand: true, select: true });
+    } catch (error) {
+      // Reveal can fail if VS Code's internal element map is out of sync
+      // with the freshly-constructed RepositoryNode; the repository is still in
+      // the tree, just not scrolled into view.
+      console.warn('Deck: TreeView.reveal failed', error);
+    }
+  };
   const dragAndDropController = new DeckTreeDragAndDropController(
     refreshTree,
     repositoryRegistry,
     worktreeOrders,
     terminalOrders,
     tmux,
+    activeWorktrees,
+    switcher,
+    detachedOpener,
+    revealRepository,
+    repositoryCommonDirCache,
   );
   const removeWorktree = new WorktreeRemovalCommand(
     activeWorktrees,
@@ -236,7 +256,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     worktreeListCache,
   );
 
-  const treeView = vscode.window.createTreeView('deck.repositories', {
+  treeView = vscode.window.createTreeView('deck.repositories', {
     treeDataProvider: tree,
     dragAndDropController,
     canSelectMany: false,
@@ -277,20 +297,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     switcher,
     detachedOpener,
     refreshTree,
-    async (repositoryPath) => {
-      const roots = tree.getChildren();
-      if (!Array.isArray(roots)) return;
-      const repository = roots.find((node) => 'repositoryPath' in node && node.repositoryPath === repositoryPath);
-      if (!repository) return;
-      try {
-        await treeView.reveal(repository, { expand: true, select: true });
-      } catch (error) {
-        // Reveal can fail if VS Code's internal element map is out of sync
-        // with the freshly-constructed RepositoryNode; the repository is still in
-        // the tree, just not scrolled into view.
-        console.warn('Deck: TreeView.reveal failed', error);
-      }
-    },
+    revealRepository,
     repositoryCommonDirCache,
   );
 

@@ -1,33 +1,19 @@
-import * as path from 'node:path';
 import * as vscode from 'vscode';
 import {
   CommonDirCacheLike,
   PASS_THROUGH_COMMON_DIR_CACHE,
-  resolveCommonDirSafe,
 } from './repositoryCommonDirCache';
-
-const SWITCH_LABEL = 'Switch';
-const OPEN_IN_NEW_WINDOW_LABEL = 'Open in New Window';
+import {
+  ActiveWorktreeStoreLike,
+  DetachedOpenerLike,
+  registerRepositorySeed,
+  RepositoryRegistryLike,
+  showRepositoryPostAddPrompt,
+  SwitcherLike,
+} from './registerRepositorySeed';
 
 export interface RepositoryFolderPicker {
   pick(): Promise<string | undefined>;
-}
-
-interface RepositoryRegistryLike {
-  list(): readonly string[];
-  append(repositoryPath: string): Promise<void>;
-}
-
-interface ActiveWorktreeStoreLike {
-  set(commonDir: string, worktreePath: string): Promise<void>;
-}
-
-interface SwitcherLike {
-  switchTo(targetPath: string): Promise<void>;
-}
-
-interface DetachedOpenerLike {
-  open(targetPath: string): Promise<void>;
 }
 
 export class VsCodeRepositoryFolderPicker implements RepositoryFolderPicker {
@@ -58,36 +44,16 @@ export class AddRepositoryCommand {
     const seedPath = await this.picker.pick();
     if (!seedPath) return;
 
-    const commonDir = await resolveCommonDirSafe(this.repositoryCommonDirCache, seedPath);
-    if (commonDir === null) {
-      vscode.window.showErrorMessage(`Cannot add ${seedPath}: not a git repository.`);
-      return;
-    }
+    const result = await registerRepositorySeed({
+      seedPath,
+      registry: this.registry,
+      activeWorktrees: this.activeWorktrees,
+      refresh: this.refresh,
+      reveal: this.reveal,
+      repositoryCommonDirCache: this.repositoryCommonDirCache,
+    });
+    if (result.kind !== 'registered') return;
 
-    const isRegistered = await this.hasRegisteredCommonDir(commonDir);
-    if (!isRegistered) await this.registry.append(seedPath);
-
-    await this.activeWorktrees.set(commonDir, seedPath);
-    this.refresh();
-    await this.reveal(seedPath);
-
-    const postAddAction = await vscode.window.showInformationMessage(
-      `Added repository ${path.basename(seedPath)}.`,
-      SWITCH_LABEL,
-      OPEN_IN_NEW_WINDOW_LABEL,
-    );
-    if (postAddAction === SWITCH_LABEL) {
-      await this.switcher.switchTo(seedPath);
-    } else if (postAddAction === OPEN_IN_NEW_WINDOW_LABEL) {
-      await this.detachedOpener.open(seedPath);
-    }
-  }
-
-  private async hasRegisteredCommonDir(commonDir: string): Promise<boolean> {
-    for (const repositoryPath of this.registry.list()) {
-      const registered = await resolveCommonDirSafe(this.repositoryCommonDirCache, repositoryPath);
-      if (registered !== null && registered === commonDir) return true;
-    }
-    return false;
+    await showRepositoryPostAddPrompt(seedPath, this.switcher, this.detachedOpener);
   }
 }
