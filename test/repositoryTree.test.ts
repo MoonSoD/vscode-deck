@@ -190,6 +190,51 @@ describe('RepositoryTreeProvider', () => {
     ]);
   });
 
+  it('prunes stale WorktreeOrder entries while rendering live Worktrees', async () => {
+    const activeWorktrees = {
+      get: vi.fn(),
+    } as unknown as ActiveWorktreeStore;
+    const worktreeOrders = {
+      get: vi.fn(() => ['/work/missing', '/work/alpha-feature', '/work/alpha-main']),
+      set: vi.fn(async () => undefined),
+    } as unknown as WorktreeOrderStore;
+    const provider = new RepositoryTreeProvider(registry(['/work/alpha-main']), activeWorktrees, worktreeOrders);
+
+    const repositoryNode = provider.getChildren();
+    if (!Array.isArray(repositoryNode)) throw new Error('expected sync repository roots');
+
+    const worktreeNodes = await provider.getChildren(repositoryNode[0]);
+    if (!Array.isArray(worktreeNodes)) throw new Error('expected worktree children');
+
+    expect(worktreeNodes.map((node) => ('worktree' in node ? node.worktree.path : ''))).toEqual([
+      '/work/alpha-feature',
+      '/work/alpha-main',
+    ]);
+    expect(worktreeOrders.set).toHaveBeenCalledWith('/git/alpha', [
+      '/work/alpha-feature',
+      '/work/alpha-main',
+    ]);
+  });
+
+  it('does not rewrite WorktreeOrder when every stored Worktree is live', async () => {
+    const worktreeOrders = {
+      get: vi.fn(() => ['/work/alpha-feature', '/work/alpha-main']),
+      set: vi.fn(async () => undefined),
+    } as unknown as WorktreeOrderStore;
+    const provider = new RepositoryTreeProvider(
+      registry(['/work/alpha-main']),
+      { get: vi.fn() } as unknown as ActiveWorktreeStore,
+      worktreeOrders,
+    );
+
+    const repositoryNode = provider.getChildren();
+    if (!Array.isArray(repositoryNode)) throw new Error('expected sync repository roots');
+
+    await provider.getChildren(repositoryNode[0]);
+
+    expect(worktreeOrders.set).not.toHaveBeenCalled();
+  });
+
   it('renders warm cached worktrees synchronously and refreshes in the background only on diff', async () => {
     const activeWorktrees = {
       get: vi.fn(),
@@ -594,6 +639,42 @@ describe('RepositoryTreeProvider', () => {
       'wt-_work_alpha-main__term-1',
       'wt-_work_alpha-main__term-2',
     ]);
+  });
+
+  it('does not rewrite TerminalOrder when every stored Terminal is live', async () => {
+    const tmux = {
+      listSessions: vi.fn(async () => [
+        { sessionName: 'wt-_work_alpha-main__term-1', windowName: 'one' },
+        { sessionName: 'wt-_work_alpha-main__term-2', windowName: 'two' },
+      ]),
+    };
+    const terminalOrders = {
+      get: vi.fn(() => [
+        'wt-_work_alpha-main__term-2',
+        'wt-_work_alpha-main__term-1',
+      ]),
+      set: vi.fn(async () => undefined),
+    } as unknown as TerminalOrderStore;
+    const provider = new RepositoryTreeProvider(
+      registry(['/work/alpha-main']),
+      { get: vi.fn() } as unknown as ActiveWorktreeStore,
+      { get: vi.fn() } as unknown as WorktreeOrderStore,
+      { get: vi.fn(), set: vi.fn(async () => undefined) } as unknown as WorktreeListCacheStore,
+      { get: vi.fn(() => '/git/alpha'), set: vi.fn(async () => undefined) } as unknown as RepositoryCommonDirCache,
+      tmux,
+      true,
+      new Set(),
+      undefined,
+      terminalOrders,
+    );
+    const repositories = provider.getChildren();
+    if (!Array.isArray(repositories)) throw new Error('expected sync repository roots');
+    const worktrees = await provider.getChildren(repositories[0]);
+    if (!Array.isArray(worktrees)) throw new Error('expected worktree children');
+
+    await provider.getChildren(worktrees[0]);
+
+    expect(terminalOrders.set).not.toHaveBeenCalled();
   });
 
   it('renders agent identity on Terminal rows and refreshes on status changes', async () => {
