@@ -312,6 +312,9 @@ describe('TerminalEditorProvider', () => {
     expect(terminalPanel.webview.html).toContain("event.clipboardData?.items || []");
     expect(terminalPanel.webview.html).toContain("item.type.startsWith('image/')");
     expect(terminalPanel.webview.html).toContain("event.preventDefault()");
+    // Without stopPropagation, xterm's own paste listener still runs and emits
+    // an empty bracketed paste, which Claude Code turns into a second image.
+    expect(terminalPanel.webview.html).toContain("event.stopPropagation()");
     expect(terminalPanel.webview.html).toContain("terminalElement.addEventListener('paste'");
     expect(terminalPanel.webview.html).toContain("navigator.clipboard.read()");
     expect(terminalPanel.webview.html).toContain("item.types.some((type) => type.startsWith('image/'))");

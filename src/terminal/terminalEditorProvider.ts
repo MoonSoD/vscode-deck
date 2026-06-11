@@ -589,6 +589,10 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
         const items = Array.from(event.clipboardData?.items || []);
         if (!items.some((item) => item.type.startsWith('image/'))) return;
         event.preventDefault();
+        // Stop the event before xterm's own paste listener: it ignores
+        // defaultPrevented and would emit an empty bracketed paste, which
+        // Claude Code's clipboard fallback turns into a second image.
+        event.stopPropagation();
         vscode.postMessage({ type: 'input', payload: '\\x16' });
       }, true);
       document.addEventListener('click', hideContextMenu);
