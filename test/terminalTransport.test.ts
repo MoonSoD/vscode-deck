@@ -18,6 +18,22 @@ describe('TerminalTransport', () => {
     expect(client.resize).toHaveBeenCalledWith(120, 32);
   });
 
+  it('perturbs the pane height after startup so a restored TUI repaints onto the right cell', async () => {
+    const client = fakeClient();
+    const transport = new TerminalTransport('/ext/resources/deck.conf', vi.fn(() => client));
+
+    transport.start('wt-_work_repo__term-1', '/work/repo', 120, 32);
+
+    // Initial size dimensions the seed/capture correctly; the one-row shrink and
+    // restore force the SIGWINCH that makes the foreground TUI repaint.
+    await vi.waitFor(() => expect(client.resize).toHaveBeenCalledTimes(3));
+    expect(client.resize.mock.calls).toEqual([
+      [120, 32],
+      [120, 31],
+      [120, 32],
+    ]);
+  });
+
   it('forwards control output, writes, resize, exit events, and dispose', async () => {
     const client = fakeClient();
     const transport = new TerminalTransport('/ext/resources/deck.conf', vi.fn(() => client));

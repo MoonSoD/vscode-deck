@@ -23,6 +23,7 @@ export class TerminalTransport {
   private startPromise: Promise<void> | undefined;
   private ready = false;
   private exitEmitted = false;
+  private size = { cols: 80, rows: 24 };
   private pendingSize: { cols: number; rows: number } | undefined;
   private readonly dataHandlers = new Set<(data: string) => void>();
   private readonly exitHandlers = new Set<(code: number) => void>();
@@ -38,6 +39,7 @@ export class TerminalTransport {
     if (this.client) return;
     const size = this.pendingSize ?? { cols, rows };
     this.pendingSize = undefined;
+    this.size = size;
 
     const client = this.clientFactory(this.configPath);
     this.client = client;
@@ -55,7 +57,9 @@ export class TerminalTransport {
 
     this.startPromise = Promise.resolve(client.start(sessionName, cwd, TERMINAL_SCROLLBACK_LINES))
       .then(() => {
-        if (this.client === client) this.ready = true;
+        if (this.client !== client) return;
+        this.ready = true;
+        this.repaintAfterSeed(client);
       })
       .catch((error: unknown) => {
         if (this.client !== client) return;
@@ -97,12 +101,30 @@ export class TerminalTransport {
   }
 
   resize(cols: number, rows: number): void {
+    this.size = { cols, rows };
     if (!this.client) {
       this.pendingSize = { cols, rows };
       return;
     }
 
     void Promise.resolve(this.client.resize(cols, rows)).catch(() => undefined);
+  }
+
+  // The reattach seed is capture-pane *text* plus one absolute cursor
+  // reposition (ADR-0012 seed-cursor seam). When xterm re-wraps the captured
+  // frame to a different row count than tmux, that reposition lands rows off,
+  // and a full-screen TUI (Claude, vim) carries the offset forward through its
+  // relative redraws. Perturbing the pane height by a row forces tmux to
+  // deliver SIGWINCH, so the TUI repaints from scratch with absolute
+  // positioning and the cursor snaps onto the right cell. A shell prompt
+  // redraws in place; non-interactive output ignores the signal.
+  private repaintAfterSeed(client: TmuxControlClientLike): void {
+    const { cols, rows } = this.size;
+    void Promise.resolve(client.resize(cols, Math.max(1, rows - 1)))
+      .then(() => {
+        if (this.client === client) return client.resize(cols, rows);
+      })
+      .catch(() => undefined);
   }
 
   clearHistory(): void {
