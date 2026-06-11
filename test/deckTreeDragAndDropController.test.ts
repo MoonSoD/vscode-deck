@@ -149,17 +149,16 @@ describe('DeckTreeDragAndDropController', () => {
     expect(refresh).toHaveBeenCalledOnce();
   });
 
-  it('moves Repositories to the bottom when dropped on the empty root area', async () => {
+  it('ignores Repository drops on empty space', async () => {
     const { controller, repositoryRegistry, refresh } = createController();
     const dataTransfer = new DataTransferMock();
 
     controller.handleDrag?.([repository('/repo/b')], dataTransfer as vscode.DataTransfer, {} as never);
     await controller.handleDrop?.(undefined, dataTransfer as vscode.DataTransfer, {} as never);
 
-    expect(repositoryRegistry.replace).toHaveBeenCalledWith(
-      ['/repo/a', '/repo/c', '/repo/d', '/repo/b'],
-    );
-    expect(refresh).toHaveBeenCalledOnce();
+    expect(vscodeState.repositories).toEqual(['/repo/a', '/repo/b', '/repo/c', '/repo/d']);
+    expect(repositoryRegistry.replace).not.toHaveBeenCalled();
+    expect(refresh).not.toHaveBeenCalled();
   });
 
   it('ignores Repository drops onto Worktree rows', async () => {

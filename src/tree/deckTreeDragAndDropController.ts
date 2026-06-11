@@ -101,24 +101,16 @@ export class DeckTreeDragAndDropController
       return;
     }
 
+    if (!target || !isRepositoryNode(target)) return;
+
     const repositories = this.repositoryRegistry.list();
-    let reordered: string[];
-    if (target) {
-      if (!isRepositoryNode(target)) return;
-      const position = dropPosition(repositories, payload.sourcePath, target.repositoryPath);
-      reordered = reorderArray(
-        repositories,
-        payload.sourcePath,
-        target.repositoryPath,
-        position,
-      );
-    } else {
-      if (!repositories.includes(payload.sourcePath)) return;
-      reordered = [
-        ...repositories.filter((repositoryPath) => repositoryPath !== payload.sourcePath),
-        payload.sourcePath,
-      ];
-    }
+    const position = dropPosition(repositories, payload.sourcePath, target.repositoryPath);
+    const reordered = reorderArray(
+      repositories,
+      payload.sourcePath,
+      target.repositoryPath,
+      position,
+    );
 
     if (sameOrder(repositories, reordered)) return;
 
