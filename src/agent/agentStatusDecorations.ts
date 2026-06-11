@@ -119,13 +119,13 @@ export class AgentStatusDecorationRollups {
   }
 
   getDecorationStatus(kind: AgentStatusDecorationNodeKind, id: string): AgentStatus | undefined {
-    return mostUrgent(
-      this.terminals.flatMap((terminal) => {
-        if (this.decorationTarget(terminal) !== nodeKey(kind, id)) return [];
-        const status = attentionStatus(this.statuses.get(terminal.sessionName));
-        return status === undefined ? [] : [status];
-      }),
-    );
+    let result: AttentionStatus | undefined;
+    const target = nodeKey(kind, id);
+    for (const terminal of this.terminals) {
+      if (this.decorationTarget(terminal) !== target) continue;
+      result = mostUrgent(result, attentionStatus(this.statuses.get(terminal.sessionName)));
+    }
+    return result;
   }
 
   private decorationTarget(terminal: AgentStatusDecorationTerminal): string {
@@ -150,11 +150,13 @@ function attentionStatus(status: AgentStatus | undefined): AttentionStatus | und
   return undefined;
 }
 
-function mostUrgent(statuses: readonly AttentionStatus[]): AttentionStatus | undefined {
-  return statuses.reduce<AttentionStatus | undefined>((mostUrgentStatus, status) => {
-    if (mostUrgentStatus === undefined || urgency(status) > urgency(mostUrgentStatus)) return status;
-    return mostUrgentStatus;
-  }, undefined);
+function mostUrgent(
+  current: AttentionStatus | undefined,
+  candidate: AttentionStatus | undefined,
+): AttentionStatus | undefined {
+  if (candidate === undefined) return current;
+  if (current === undefined || urgency(candidate) > urgency(current)) return candidate;
+  return current;
 }
 
 function urgency(status: AttentionStatus): number {

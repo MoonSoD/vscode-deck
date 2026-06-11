@@ -488,11 +488,12 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
   }
 
   private syncAgentStatusDecorations(): void {
-    this.agentStatusDecorationRollups.setStatuses(this.agentStatuses?.entries() ?? []);
+    const statuses = [...(this.agentStatuses?.entries() ?? [])];
+    this.agentStatusDecorationRollups.setStatuses(statuses);
     const terminals = new Map(this.knownTerminals);
     for (const [worktreePath, repositoryPath] of this.knownWorktreeRepositories) {
       const prefix = terminalSessionPrefix(worktreePath);
-      for (const [sessionName] of this.agentStatuses?.entries() ?? []) {
+      for (const [sessionName] of statuses) {
         if (!sessionName.startsWith(prefix)) continue;
         terminals.set(sessionName, { repositoryPath, worktreePath, sessionName });
       }
