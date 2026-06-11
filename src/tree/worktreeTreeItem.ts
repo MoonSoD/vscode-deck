@@ -18,7 +18,7 @@ export interface TerminalTreeItemDescription {
   label: string;
   description?: string;
   tooltip?: string;
-  iconId: 'terminal' | 'loading~spin' | 'sparkle';
+  iconId: 'terminal' | 'agent-working' | 'agent';
   contextValue: 'deck.terminal.active' | 'deck.terminal.foreign';
 }
 
@@ -71,14 +71,14 @@ export function describeTerminalTreeItem(
   if (status?.status === 'inProgress') {
     return {
       label: windowName,
-      iconId: 'loading~spin',
+      iconId: 'agent-working',
       contextValue,
     };
   }
   if (status !== undefined) {
     return {
       label: windowName,
-      iconId: 'sparkle',
+      iconId: 'agent',
       contextValue,
     };
   }

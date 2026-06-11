@@ -8,7 +8,7 @@ export interface AgentStatusDecorationUri {
 }
 
 export interface AgentStatusDecoration {
-  badge: '●';
+  badge: '•';
   colorId: 'list.warningForeground' | 'textLink.foreground' | 'errorForeground';
   tooltip: string;
 }
@@ -58,21 +58,21 @@ export function provideAgentStatusDecoration(
   if (uri.scheme !== agentStatusDecorationScheme) return undefined;
   if (status?.status === 'needsInput') {
     return {
-      badge: '●',
+      badge: '•',
       colorId: 'list.warningForeground',
       tooltip: statusTooltip('Input needed', status.message),
     };
   }
   if (status?.status === 'completed' && status.unread !== false) {
     return {
-      badge: '●',
+      badge: '•',
       colorId: 'textLink.foreground',
       tooltip: statusTooltip('Completed', status.message),
     };
   }
   if (status?.status === 'failed') {
     return {
-      badge: '●',
+      badge: '•',
       colorId: 'errorForeground',
       tooltip: statusTooltip('Failed', status.message),
     };

@@ -92,7 +92,7 @@ describe('describeTerminalTreeItem', () => {
   it('renders in-progress agent status as a loading row without inline status text', () => {
     expect(describeTerminalTreeItem('claude', false, { status: 'inProgress', statusAt: 1710000000 })).toEqual({
       label: 'claude',
-      iconId: 'loading~spin',
+      iconId: 'agent-working',
       contextValue: 'deck.terminal.foreign',
     });
   });
@@ -100,7 +100,7 @@ describe('describeTerminalTreeItem', () => {
   it('renders non-working agent statuses with the agent identity glyph', () => {
     expect(describeTerminalTreeItem('claude', false, { status: 'needsInput', statusAt: 1710000000 })).toEqual({
       label: 'claude',
-      iconId: 'sparkle',
+      iconId: 'agent',
       contextValue: 'deck.terminal.foreign',
     });
     expect(describeTerminalTreeItem('claude', false, {
@@ -109,7 +109,7 @@ describe('describeTerminalTreeItem', () => {
       unread: true,
     })).toEqual({
       label: 'claude',
-      iconId: 'sparkle',
+      iconId: 'agent',
       contextValue: 'deck.terminal.foreign',
     });
     expect(describeTerminalTreeItem('claude', false, {
@@ -118,12 +118,12 @@ describe('describeTerminalTreeItem', () => {
       unread: false,
     })).toEqual({
       label: 'claude',
-      iconId: 'sparkle',
+      iconId: 'agent',
       contextValue: 'deck.terminal.foreign',
     });
     expect(describeTerminalTreeItem('claude', false, { status: 'failed', statusAt: 1710000000 })).toEqual({
       label: 'claude',
-      iconId: 'sparkle',
+      iconId: 'agent',
       contextValue: 'deck.terminal.foreign',
     });
   });

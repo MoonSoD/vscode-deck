@@ -12,7 +12,7 @@ describe('provideAgentStatusDecoration', () => {
       statusAt: 1710000000,
       message: 'Allow Bash(ls)?',
     })).toEqual({
-      badge: '●',
+      badge: '•',
       colorId: 'list.warningForeground',
       tooltip: 'Input needed: Allow Bash(ls)?',
     });
@@ -22,7 +22,7 @@ describe('provideAgentStatusDecoration', () => {
       statusAt: 1710000001,
       unread: true,
     })).toEqual({
-      badge: '●',
+      badge: '•',
       colorId: 'textLink.foreground',
       tooltip: 'Completed',
     });
@@ -32,7 +32,7 @@ describe('provideAgentStatusDecoration', () => {
       statusAt: 1710000002,
       message: 'API error',
     })).toEqual({
-      badge: '●',
+      badge: '•',
       colorId: 'errorForeground',
       tooltip: 'Failed: API error',
     });

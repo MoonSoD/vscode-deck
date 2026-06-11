@@ -29,6 +29,18 @@ import {
 
 export type RepositoryTreeNode = RepositoryNode | WorktreeNode | TerminalNode | TmuxUnavailableNode;
 
+const resourcesDir = path.join(__dirname, '..', '..', 'resources');
+
+// The terminal row's left icon carries agent identity, not status (status is
+// the right-side decoration). The Claude marks ship as raster assets because
+// VS Code currently renders custom tree SVGs black (microsoft/vscode#311339)
+// and animated GIFs are the only sanctioned way to animate a custom tree icon.
+function terminalIconPath(iconId: string): vscode.Uri | vscode.ThemeIcon {
+  if (iconId === 'agent-working') return vscode.Uri.file(path.join(resourcesDir, 'claude-working.gif'));
+  if (iconId === 'agent') return vscode.Uri.file(path.join(resourcesDir, 'claude-code.png'));
+  return new vscode.ThemeIcon(iconId);
+}
+
 interface TerminalSessionLister {
   listSessions(prefix?: string): Promise<TmuxSession[]>;
 }
@@ -89,7 +101,7 @@ class TerminalNode extends vscode.TreeItem {
     this.description = item.description;
     this.tooltip = item.tooltip;
     this.resourceUri = toDecorationUri('terminal', terminal.sessionName);
-    this.iconPath = new vscode.ThemeIcon(item.iconId);
+    this.iconPath = terminalIconPath(item.iconId);
     this.command = {
       command: 'deck.openTerminal',
       title: 'Open Terminal',

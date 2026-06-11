@@ -41,7 +41,7 @@ describe('AgentStatusFileDecorationProvider', () => {
     }, rollups);
 
     expect(provider.provideFileDecoration(agentStatusDecorationUri('terminal', 'term-1') as never)).toEqual({
-      badge: '●',
+      badge: '•',
       tooltip: 'Input needed: Allow Bash(ls)?',
       color: { id: 'list.warningForeground' },
       propagate: false,

@@ -555,10 +555,8 @@ describe('RepositoryTreeProvider', () => {
     const terminalRows = await provider.getChildren(worktrees[0]);
     statusChange?.();
 
-    expect((terminalRows as Array<{ iconPath: { id: string; color?: { id: string } } }>)[0].iconPath).toEqual({
-      id: 'sparkle',
-      color: undefined,
-    });
+    expect((terminalRows as Array<{ iconPath: { fsPath: string } }>)[0].iconPath.fsPath)
+      .toMatch(/resources\/claude-code\.png$/);
     expect(vscodeState.emitters[0].fire).toHaveBeenCalledWith(undefined);
   });
 
@@ -593,15 +591,14 @@ describe('RepositoryTreeProvider', () => {
 
     expect((terminalRows as Array<{
       description?: string;
-      iconPath: { id: string; color?: { id: string } };
+      iconPath: { fsPath: string };
       resourceUri: { scheme: string; path: string };
     }>)[0])
       .toEqual(expect.objectContaining({
         description: undefined,
-        iconPath: {
-          id: 'sparkle',
-          color: undefined,
-        },
+        iconPath: expect.objectContaining({
+          fsPath: expect.stringMatching(/resources\/claude-code\.png$/),
+        }),
         resourceUri: expect.objectContaining({
           scheme: 'deck-status',
           path: '/terminal/wt-_work_alpha-main__term-1',
