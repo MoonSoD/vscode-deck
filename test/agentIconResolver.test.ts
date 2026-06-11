@@ -36,13 +36,26 @@ describe('resolveAgentIcon', () => {
     });
   });
 
-  it('treats a status-only terminal as a Claude agent terminal', () => {
+  it('treats a status-only terminal without an agent as Claude (legacy fallback)', () => {
     expect(resolveAgentIcon({
       windowName: 'zsh',
       resourcesDir,
       status: { status: 'inProgress', statusAt: 1710000000 },
     }).iconPath).toEqual({
       fsPath: '/extension/resources/claude-working.gif',
+    });
+  });
+
+  it('uses status.agent for a status-only terminal, not the Claude default', () => {
+    expect(resolveAgentIcon({
+      windowName: 'zsh',
+      resourcesDir,
+      status: { status: 'inProgress', statusAt: 1710000000, agent: 'codex' },
+    })).toEqual({
+      iconPath: { fsPath: '/extension/resources/codex-working.gif' },
+      isAgent: true,
+      agent: 'codex',
+      state: 'working',
     });
   });
 

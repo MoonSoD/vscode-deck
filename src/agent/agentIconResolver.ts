@@ -73,7 +73,9 @@ function agentFromWindowName(windowName: string): AgentName | undefined {
 
 function agentFromStatus(status?: AgentStatus): AgentName | undefined {
   if (status === undefined) return undefined;
-  return 'claude';
+  // The status record carries the agent that wrote it; trust it over a stale
+  // window name so a Codex row never falls back to the Claude mark.
+  return status.agent ?? 'claude';
 }
 
 function iconStateFromStatus(status?: AgentStatus): AgentIconState {

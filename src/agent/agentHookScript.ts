@@ -9,6 +9,10 @@ export function renderAgentHookScript(
   return [
     '#!/bin/sh',
     'set -eu',
+    // Deck only observes. A Codex PermissionRequest hook that exits 2 is read as
+    // Deny (any non-zero marks it Failed), so force exit 0 on every path — even a
+    // stray set -e abort — and a hook can never deny a prompt (ADR-0026 §4).
+    "trap 'exit 0' EXIT",
     '',
     `agent="\${2:-${agent}}"`,
     'case "$agent" in',
