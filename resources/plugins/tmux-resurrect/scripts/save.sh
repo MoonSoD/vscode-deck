@@ -39,7 +39,12 @@ pane_format() {
 	format+="${delimiter}"
 	format+="#{pane_index}"
 	format+="${delimiter}"
-	format+="#{pane_title}"
+	# Deck modification: `:` empty-guard. pane_title (a Deck addition, absent
+	# upstream) goes empty the moment an agent exits; without the guard the empty
+	# field collapses under read's whitespace IFS in dump_panes, shifting
+	# pane_current_path out of its column and restoring panes at `/`. restore.sh
+	# strips the `:` via remove_first_char, matching window_flags/pane_current_path.
+	format+=":#{pane_title}"
 	format+="${delimiter}"
 	format+=":#{pane_current_path}"
 	format+="${delimiter}"
