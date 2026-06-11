@@ -254,6 +254,22 @@ describe('AgentStatusStore', () => {
     expect(existsSync(join(`${root}-reads`, 'dead.json'))).toBe(false);
   });
 
+  it('removes a read marker when its status file is removed externally', async () => {
+    const root = tempRoot();
+    mkdirSync(root, { recursive: true });
+    writeFileSync(join(root, 'done.json'), '{"status":"completed","statusAt":1710000000}', 'utf8');
+    const store = new AgentStatusStore(root, 10);
+    disposables.push(await store.start());
+    await store.markRead('done');
+
+    rmSync(join(root, 'done.json'), { force: true });
+
+    await vi.waitFor(() => {
+      expect(store.get('done')).toBeUndefined();
+      expect(existsSync(join(`${root}-reads`, 'done.json'))).toBe(false);
+    }, WATCH_EVENT_WAIT);
+  });
+
   it('keeps reading statuses after the status area is removed and recreated', async () => {
     const root = tempRoot();
     const store = new AgentStatusStore(root, 10);

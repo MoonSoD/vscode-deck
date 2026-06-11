@@ -79,8 +79,8 @@ export class AgentStatusStore {
   // For Deck-owned kills (TerminalRemoval, WorktreeRemoval cascade): the agent
   // never fires SessionEnd under tmux kill-session, so the file must go here.
   async remove(sessionName: string): Promise<void> {
-    await this.unlinkIfExists(join(this.root, `${sessionName}.json`));
-    await this.unlinkIfExists(join(this.readRoot, `${sessionName}.json`));
+    await this.unlinkIfExists(this.statusPath(sessionName));
+    await this.unlinkIfExists(this.readMarkerPath(sessionName));
 
     const removedStatus = this.statuses.delete(sessionName);
     const removedReadMarker = this.readMarkers.delete(sessionName);
@@ -95,7 +95,7 @@ export class AgentStatusStore {
     if ((this.readMarkers.get(sessionName) ?? 0) >= status.statusAt) return;
 
     await mkdir(this.readRoot, { recursive: true });
-    await writeFile(join(this.readRoot, `${sessionName}.json`), `${JSON.stringify({ statusAt: status.statusAt })}\n`);
+    await writeFile(this.readMarkerPath(sessionName), `${JSON.stringify({ statusAt: status.statusAt })}\n`);
     this.readMarkers.set(sessionName, status.statusAt);
     for (const listener of this.listeners) listener();
   }
@@ -115,6 +115,7 @@ export class AgentStatusStore {
     this.ensureWatchers();
     const nextStatuses = await this.readAll();
     const nextReadMarkers = await this.readMarkersAll();
+    await this.pruneOrphanReadMarkers(nextStatuses, nextReadMarkers);
     if (sameStatuses(this.statuses, nextStatuses) && sameReadMarkers(this.readMarkers, nextReadMarkers)) return;
 
     this.statuses = nextStatuses;
@@ -249,6 +250,17 @@ export class AgentStatusStore {
     await this.pruneFiles(this.readRoot, files, liveSessionNames);
   }
 
+  private async pruneOrphanReadMarkers(
+    statuses: ReadonlyMap<string, AgentStatus>,
+    readMarkers: Map<string, number>,
+  ): Promise<void> {
+    for (const sessionName of readMarkers.keys()) {
+      if (statuses.has(sessionName)) continue;
+      await this.unlinkIfExists(this.readMarkerPath(sessionName));
+      readMarkers.delete(sessionName);
+    }
+  }
+
   private async pruneFiles(root: string, files: readonly string[], liveSessionNames: ReadonlySet<string>): Promise<void> {
     for (const file of files) {
       if (!file.endsWith('.json')) continue;
@@ -256,6 +268,14 @@ export class AgentStatusStore {
       if (liveSessionNames.has(sessionName)) continue;
       await this.unlinkIfExists(join(root, file));
     }
+  }
+
+  private statusPath(sessionName: string): string {
+    return join(this.root, `${sessionName}.json`);
+  }
+
+  private readMarkerPath(sessionName: string): string {
+    return join(this.readRoot, `${sessionName}.json`);
   }
 
   private async unlinkIfExists(path: string): Promise<void> {
