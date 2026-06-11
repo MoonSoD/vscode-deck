@@ -136,6 +136,14 @@ describe('describeTerminalTreeItem', () => {
     });
   });
 
+  it('shows the agent identity glyph for a codex window with no status yet', () => {
+    expect(describeTerminalTreeItem('codex', false, undefined)).toEqual({
+      label: 'codex',
+      iconId: 'agent',
+      contextValue: 'deck.terminal.foreign',
+    });
+  });
+
   it('shows the plain terminal icon for a non-agent window', () => {
     expect(describeTerminalTreeItem('zsh', false, undefined)).toEqual({
       label: 'zsh',

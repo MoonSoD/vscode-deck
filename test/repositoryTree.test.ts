@@ -560,6 +560,39 @@ describe('RepositoryTreeProvider', () => {
     expect(vscodeState.emitters[0].fire).toHaveBeenCalledWith(undefined);
   });
 
+  it('renders a Codex identity icon for a codex window before status exists', async () => {
+    const tmux = {
+      listSessions: vi.fn(async () => [
+        { sessionName: 'wt-_work_alpha-main__term-1', windowName: 'codex' },
+      ]),
+    };
+    const agentStatuses = {
+      get: vi.fn(() => undefined),
+      entries: vi.fn(() => new Map().entries()),
+      onDidChange: vi.fn(() => ({ dispose: vi.fn() })),
+    };
+    const provider = new RepositoryTreeProvider(
+      registry(['/work/alpha-main']),
+      { get: vi.fn() } as unknown as ActiveWorktreeStore,
+      { get: vi.fn() } as unknown as WorktreeOrderStore,
+      { get: vi.fn(), set: vi.fn(async () => undefined) } as unknown as WorktreeListCacheStore,
+      { get: vi.fn(() => '/git/alpha'), set: vi.fn(async () => undefined) } as unknown as RepositoryCommonDirCache,
+      tmux,
+      true,
+      new Set(),
+      agentStatuses,
+    );
+    const repositories = provider.getChildren();
+    if (!Array.isArray(repositories)) throw new Error('expected sync repository roots');
+    const worktrees = await provider.getChildren(repositories[0]);
+    if (!Array.isArray(worktrees)) throw new Error('expected worktree children');
+
+    const terminalRows = await provider.getChildren(worktrees[0]);
+
+    expect((terminalRows as Array<{ iconPath: { fsPath: string } }>)[0].iconPath.fsPath)
+      .toMatch(/resources\/codex-code\.png$/);
+  });
+
   it('sets deck-status resource URIs without inline status descriptions on Terminal rows', async () => {
     const tmux = {
       listSessions: vi.fn(async () => [

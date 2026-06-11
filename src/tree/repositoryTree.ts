@@ -18,6 +18,7 @@ import {
   AgentStatusDecorationRollups,
   type AgentStatusDecorationTerminal,
 } from '../agent/agentStatusDecorations';
+import { resolveAgentIcon } from '../agent/agentIconResolver';
 import { excludePending } from './excludePending';
 import { reconcileWorktreeOrder } from './reconcileWorktreeOrder';
 import {
@@ -35,10 +36,11 @@ const resourcesDir = path.join(__dirname, '..', '..', 'resources');
 // the right-side decoration). The Claude marks ship as raster assets because
 // VS Code currently renders custom tree SVGs black (microsoft/vscode#311339)
 // and animated GIFs are the only sanctioned way to animate a custom tree icon.
-function terminalIconPath(iconId: string): vscode.Uri | vscode.ThemeIcon {
-  if (iconId === 'agent-working') return vscode.Uri.file(path.join(resourcesDir, 'claude-working.gif'));
-  if (iconId === 'agent') return vscode.Uri.file(path.join(resourcesDir, 'claude-code.png'));
-  return new vscode.ThemeIcon(iconId);
+function terminalIconPath(windowName: string, status?: AgentStatus): vscode.Uri | vscode.ThemeIcon {
+  return resolveAgentIcon({ windowName, status, resourcesDir }, {
+    uriFile: vscode.Uri.file,
+    themeIcon: (id) => new vscode.ThemeIcon(id),
+  }).iconPath;
 }
 
 interface TerminalSessionLister {
@@ -101,7 +103,7 @@ class TerminalNode extends vscode.TreeItem {
     this.description = item.description;
     this.tooltip = item.tooltip;
     this.resourceUri = toDecorationUri('terminal', terminal.sessionName);
-    this.iconPath = terminalIconPath(item.iconId);
+    this.iconPath = terminalIconPath(terminal.windowName, status);
     this.command = {
       command: 'deck.openTerminal',
       title: 'Open Terminal',

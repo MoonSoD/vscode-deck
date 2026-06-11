@@ -1,5 +1,6 @@
 import { Worktree } from '../git/worktrees';
 import type { AgentStatus } from '../agent/agentStatusStore';
+import { resolveAgentIcon } from '../agent/agentIconResolver';
 
 export interface RepositoryTreeItemDescription {
   label: string;
@@ -72,15 +73,15 @@ export function describeTerminalTreeItem(
   // window to the agent name on SessionStart (incl. `claude --resume`), before
   // any status file exists. Key the icon off identity so a resumed/idle agent
   // still shows its mark; status only adds the working spinner.
-  const isAgent = windowName === 'claude' || status !== undefined;
-  if (status?.status === 'inProgress') {
+  const resolvedIcon = resolveAgentIcon({ windowName, status, resourcesDir: '' });
+  if (resolvedIcon.isAgent && resolvedIcon.state === 'working') {
     return {
       label: windowName,
       iconId: 'agent-working',
       contextValue,
     };
   }
-  if (isAgent) {
+  if (resolvedIcon.isAgent) {
     return {
       label: windowName,
       iconId: 'agent',
