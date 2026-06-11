@@ -1,6 +1,6 @@
-import { watch, type FSWatcher } from 'node:fs';
+import { statSync, watch, type FSWatcher } from 'node:fs';
 import { mkdir, readdir, readFile, unlink, writeFile } from 'node:fs/promises';
-import { basename, dirname, join } from 'node:path';
+import { dirname, join } from 'node:path';
 
 export interface AgentStatus {
   status: 'inProgress' | 'needsInput' | 'completed' | 'failed';
@@ -22,6 +22,7 @@ export class AgentStatusStore {
   private readonly readRoot: string;
   private readonly parentRoot: string;
   private readonly watchers = new Map<string, FSWatcher>();
+  private readonly watchedInodes = new Map<string, number>();
   private debounceTimer: NodeJS.Timeout | undefined;
 
   constructor(
@@ -133,17 +134,30 @@ export class AgentStatusStore {
   }
 
   private ensureWatchers(): void {
-    this.ensureWatcher(this.parentRoot, (_eventType, filename) => {
-      const statusRootChanged = this.isParentEventFor(filename, this.root);
-      const readRootChanged = this.isParentEventFor(filename, this.readRoot);
-      if (!statusRootChanged && !readRootChanged) return;
+    // The parent watch only nudges a reload — never resets child watchers. On
+    // macOS a parent dir reports writes *inside* a child dir (the child's mtime
+    // bumps), so resetting child watchers from parent events churned them on
+    // every status write. Child watchers are re-created only on real
+    // recreation, detected by inode below.
+    this.ensureWatcher(this.parentRoot, () => this.scheduleReload());
+    this.reconcileChildWatcher(this.root);
+    this.reconcileChildWatcher(this.readRoot);
+  }
 
-      if (statusRootChanged) this.resetWatcher(this.root, () => this.scheduleReload());
-      if (readRootChanged) this.resetWatcher(this.readRoot, () => this.scheduleReload());
-      this.scheduleReload();
-    });
-    this.ensureWatcher(this.root, () => this.scheduleReload());
-    this.ensureWatcher(this.readRoot, () => this.scheduleReload());
+  // (Re)watch a status dir only when it is unwatched or was deleted+recreated
+  // (its inode changed). An ordinary write keeps the same inode, so this never
+  // closes/reopens a live watcher — the churn #104 set out to remove.
+  private reconcileChildWatcher(root: string): void {
+    let inode: number;
+    try {
+      inode = statSync(root).ino;
+    } catch (error) {
+      if (isNotFound(error)) return; // ensureRoots recreates it before the next reconcile
+      throw error;
+    }
+    if (this.watchers.has(root) && this.watchedInodes.get(root) === inode) return;
+    this.resetWatcher(root, () => this.scheduleReload());
+    this.watchedInodes.set(root, inode);
   }
 
   private ensureWatcher(root: string, onChange: WatchListener): void {
@@ -175,10 +189,6 @@ export class AgentStatusStore {
     }
   }
 
-  private isParentEventFor(filename: string | Buffer | null, root: string): boolean {
-    return filename === null || filename.toString() === basename(root);
-  }
-
   private closeWatchers(): void {
     for (const root of [this.parentRoot, this.root, this.readRoot]) {
       const watcher = this.watchers.get(root);
@@ -186,6 +196,7 @@ export class AgentStatusStore {
       this.watchers.delete(root);
       watcher.close();
     }
+    this.watchedInodes.clear();
   }
 
   private async readAll(): Promise<Map<string, AgentStatus>> {
