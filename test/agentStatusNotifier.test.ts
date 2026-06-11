@@ -57,13 +57,14 @@ describe('AgentStatusNotifier', () => {
     disposable.dispose();
   });
 
-  it('does not notify when that Terminal tab is active', () => {
+  it('does not notify when that Terminal tab is active and the window is focused', () => {
     const statuses = new Map<string, AgentStatus>();
     const store = new FakeStatusStore(statuses);
     const notifications = fakeNotifications();
     const notifier = createNotifier({
       store,
       notifications,
+      isFocused: () => true,
       activeTerminalSessionName: () => 'wt-_work_repo__term-1',
     });
     const disposable = notifier.start();
@@ -79,22 +80,42 @@ describe('AgentStatusNotifier', () => {
     disposable.dispose();
   });
 
+  it('notifies for the active Terminal tab when the window is unfocused (you are away)', () => {
+    const statuses = new Map<string, AgentStatus>();
+    const store = new FakeStatusStore(statuses);
+    const notifications = fakeNotifications();
+    const notifier = createNotifier({
+      store,
+      notifications,
+      isFocused: () => false,
+      activeTerminalSessionName: () => 'wt-_work_repo__term-1',
+    });
+    const disposable = notifier.start();
+
+    statuses.set('wt-_work_repo__term-1', {
+      status: 'needsInput',
+      statusAt: 1710000000,
+      message: 'Allow Bash(ls)?',
+    });
+    store.fire();
+
+    expect(notifications.showWarningMessage).toHaveBeenCalledOnce();
+    disposable.dispose();
+  });
+
   it.each([
-    ['off', true, false],
-    ['windowNotFocused', true, false],
-    ['windowNotFocused', false, true],
-    ['always', true, true],
+    [true, true],
+    [false, false],
   ] as const)(
-    'applies notifyOnNeedsInput=%s while focused=%s',
-    (mode, focused, expectedToast) => {
+    'applies notifyOnNeedsInput=%s',
+    (enabled, expectedToast) => {
       const statuses = new Map<string, AgentStatus>();
       const store = new FakeStatusStore(statuses);
       const notifications = fakeNotifications();
       const notifier = createNotifier({
         store,
         notifications,
-        notifyOnNeedsInput: () => mode,
-        isFocused: () => focused,
+        notifyOnNeedsInput: () => enabled,
       });
       const disposable = notifier.start();
 
@@ -106,31 +127,16 @@ describe('AgentStatusNotifier', () => {
     },
   );
 
-  it('keeps completed notifications off by default and sends info toasts when enabled', () => {
+  it('sends completed info toasts by default and suppresses them when disabled', () => {
     const statuses = new Map<string, AgentStatus>();
     const store = new FakeStatusStore(statuses);
     const notifications = fakeNotifications();
     const notifier = createNotifier({ store, notifications });
     const disposable = notifier.start();
 
-    statuses.set('wt-_work_repo__term-1', { status: 'completed', statusAt: 1710000000 });
-    store.fire();
-
-    expect(notifications.showInformationMessage).not.toHaveBeenCalled();
-
-    statuses.set('wt-_work_repo__term-1', { status: 'inProgress', statusAt: 1710000001 });
-    store.fire();
-    disposable.dispose();
-
-    const enabledNotifier = createNotifier({
-      store,
-      notifications,
-      notifyOnCompleted: () => 'always',
-    });
-    const enabledDisposable = enabledNotifier.start();
     statuses.set('wt-_work_repo__term-1', {
       status: 'completed',
-      statusAt: 1710000002,
+      statusAt: 1710000000,
       message: 'Claude stopped',
     });
     store.fire();
@@ -139,25 +145,35 @@ describe('AgentStatusNotifier', () => {
       'Claude stopped',
       'Open Terminal',
     );
-    enabledDisposable.dispose();
+    disposable.dispose();
+
+    const offNotifications = fakeNotifications();
+    const offNotifier = createNotifier({
+      store,
+      notifications: offNotifications,
+      notifyOnCompleted: () => false,
+    });
+    const offDisposable = offNotifier.start();
+    statuses.set('wt-_work_repo__term-2', { status: 'completed', statusAt: 1710000001 });
+    store.fire();
+
+    expect(offNotifications.showInformationMessage).not.toHaveBeenCalled();
+    offDisposable.dispose();
   });
 
   it.each([
-    ['off', true, false],
-    ['windowNotFocused', true, false],
-    ['windowNotFocused', false, true],
-    ['always', true, true],
+    [true, true],
+    [false, false],
   ] as const)(
-    'applies notifyOnCompleted=%s while focused=%s',
-    (mode, focused, expectedToast) => {
+    'applies notifyOnCompleted=%s',
+    (enabled, expectedToast) => {
       const statuses = new Map<string, AgentStatus>();
       const store = new FakeStatusStore(statuses);
       const notifications = fakeNotifications();
       const notifier = createNotifier({
         store,
         notifications,
-        notifyOnCompleted: () => mode,
-        isFocused: () => focused,
+        notifyOnCompleted: () => enabled,
       });
       const disposable = notifier.start();
 
@@ -201,16 +217,16 @@ function createNotifier(options: {
   store: FakeStatusStore;
   notifications?: ReturnType<typeof fakeNotifications>;
   openTerminal?: (sessionName: string) => void | PromiseLike<void>;
-  notifyOnNeedsInput?: () => 'off' | 'windowNotFocused' | 'always';
-  notifyOnCompleted?: () => 'off' | 'windowNotFocused' | 'always';
+  notifyOnNeedsInput?: () => boolean;
+  notifyOnCompleted?: () => boolean;
   isFocused?: () => boolean;
   activeTerminalSessionName?: () => string | undefined;
 }): AgentStatusNotifier {
   return new AgentStatusNotifier({
     store: options.store,
     settings: {
-      notifyOnNeedsInput: options.notifyOnNeedsInput ?? (() => 'always'),
-      notifyOnCompleted: options.notifyOnCompleted ?? (() => 'off'),
+      notifyOnNeedsInput: options.notifyOnNeedsInput ?? (() => true),
+      notifyOnCompleted: options.notifyOnCompleted ?? (() => true),
     },
     windowState: {
       isFocused: options.isFocused ?? (() => true),

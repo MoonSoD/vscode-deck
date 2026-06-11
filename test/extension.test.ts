@@ -53,6 +53,8 @@ const vscodeState = vi.hoisted(() => ({
   onDidChangeConfiguration: vi.fn(() => ({ dispose: vi.fn() })),
   onDidChangeTabGroups: vi.fn(() => ({ dispose: vi.fn() })),
   onDidChangeTabs: vi.fn(() => ({ dispose: vi.fn() })),
+  onDidChangeWindowState: vi.fn(() => ({ dispose: vi.fn() })),
+  windowFocused: true,
   onDidChangeWorkspaceFolders: vi.fn(() => ({ dispose: vi.fn() })),
   onDidOpenTerminal: vi.fn(() => ({ dispose: vi.fn() })),
   openTerminalInNewWindowRun: vi.fn(),
@@ -138,9 +140,10 @@ vi.mock('vscode', () => ({
     showTextDocument: vscodeState.showTextDocument,
     state: {
       get focused() {
-        return true;
+        return vscodeState.windowFocused;
       },
     },
+    onDidChangeWindowState: vscodeState.onDidChangeWindowState,
     onDidCloseTerminal: vscodeState.onDidCloseTerminal,
     onDidChangeActiveTerminal: vscodeState.onDidChangeActiveTerminal,
     onDidOpenTerminal: vscodeState.onDidOpenTerminal,
@@ -452,6 +455,8 @@ describe('activate', () => {
     });
     vscodeState.onDidChangeTabGroups.mockClear();
     vscodeState.onDidChangeTabs.mockClear();
+    vscodeState.onDidChangeWindowState.mockClear();
+    vscodeState.windowFocused = true;
     vscodeState.tabGroups = [];
     vscodeState.treeViewSelection = [];
     vscodeState.workspaceFolders = [{ uri: { fsPath: '/work/alpha-main' } }];
@@ -986,6 +991,30 @@ describe('activate', () => {
     vscodeState.agentStatusStoreChangeListener?.();
     await Promise.resolve();
 
+    expect(vscodeState.agentStatusStoreMarkRead).toHaveBeenCalledWith('wt-_work_alpha-main__term-1');
+  });
+
+  it('does not mark the active Terminal read while the window is unfocused, then does on refocus', async () => {
+    const context = createContext();
+    vscodeState.activeTab = {
+      input: { viewType: 'deck.terminal', uri: { scheme: 'deck-terminal', path: '/work/alpha-main/term-1' } },
+    };
+    vscodeState.windowFocused = false;
+
+    await activate(context as never);
+
+    // A status change while unfocused must not mark the parked active tab read.
+    vscodeState.agentStatusStoreMarkRead.mockClear();
+    vscodeState.agentStatusStoreChangeListener?.();
+    await Promise.resolve();
+    expect(vscodeState.agentStatusStoreMarkRead).not.toHaveBeenCalled();
+
+    // Focusing back marks it read via the window-state listener.
+    vscodeState.windowFocused = true;
+    const focusHandler = vscodeState.onDidChangeWindowState.mock.calls[0]?.[0];
+    if (!focusHandler) throw new Error('missing window-state listener');
+    await focusHandler({ focused: true });
+    await Promise.resolve();
     expect(vscodeState.agentStatusStoreMarkRead).toHaveBeenCalledWith('wt-_work_alpha-main__term-1');
   });
 

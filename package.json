@@ -2,7 +2,7 @@
   "name": "deck",
   "displayName": "Deck",
   "description": "Switch between git worktrees of multiple registered repositories from a single secondary sidebar tree.",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "publisher": "a9a4k",
   "repository": {
     "type": "git",
@@ -52,24 +52,14 @@
           "description": "Codex command template Deck uses to resume an AgentSession. Include {id} for the session id."
         },
         "deck.notifyOnNeedsInput": {
-          "type": "string",
-          "enum": [
-            "off",
-            "windowNotFocused",
-            "always"
-          ],
-          "default": "always",
-          "description": "Controls when Deck notifies that an agent needs input."
+          "type": "boolean",
+          "default": true,
+          "description": "Show a notification when an agent needs input. Suppressed when you are already viewing that Terminal's tab."
         },
         "deck.notifyOnCompleted": {
-          "type": "string",
-          "enum": [
-            "off",
-            "windowNotFocused",
-            "always"
-          ],
-          "default": "always",
-          "description": "Controls when Deck notifies that an agent has completed a turn."
+          "type": "boolean",
+          "default": true,
+          "description": "Show a notification when an agent completes a turn. Suppressed when you are already viewing that Terminal's tab."
         },
         "deck.tmux.automaticRenameFormat": {
           "type": "string",

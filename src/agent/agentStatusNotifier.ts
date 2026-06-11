@@ -2,16 +2,14 @@ import type { AgentStatus, Disposable } from './agentStatusStore';
 
 const OPEN_TERMINAL = 'Open Terminal';
 
-export type AgentStatusNotificationMode = 'off' | 'windowNotFocused' | 'always';
-
 interface AgentStatusStoreLike {
   entries(): Iterable<[string, AgentStatus]>;
   onDidChange(listener: () => void): Disposable;
 }
 
 interface AgentStatusNotificationSettings {
-  notifyOnNeedsInput(): AgentStatusNotificationMode;
-  notifyOnCompleted(): AgentStatusNotificationMode;
+  notifyOnNeedsInput(): boolean;
+  notifyOnCompleted(): boolean;
 }
 
 interface AgentStatusWindowState {
@@ -74,10 +72,16 @@ export class AgentStatusNotifier {
     );
   }
 
-  private shouldNotify(sessionName: string, mode: AgentStatusNotificationMode): boolean {
-    if (mode === 'off') return false;
-    if (this.options.windowState.activeTerminalSessionName() === sessionName) return false;
-    return mode === 'always' || !this.options.windowState.isFocused();
+  private shouldNotify(sessionName: string, enabled: boolean): boolean {
+    if (!enabled) return false;
+    // Suppress only when you're actually looking at that terminal: its tab is
+    // the active tab AND the window is focused. If the window is unfocused
+    // (you're in another window or app) the tab isn't really in front of you,
+    // so still notify — the warning toast waits for your return. (A true
+    // "reach me anywhere, even another app" channel is the companion app, #102.)
+    const looking = this.options.windowState.isFocused()
+      && this.options.windowState.activeTerminalSessionName() === sessionName;
+    return !looking;
   }
 
   private show(choice: Thenable<string | undefined>, sessionName: string): void {

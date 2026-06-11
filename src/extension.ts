@@ -38,10 +38,7 @@ import { resolveDeckTmuxOptions, type DeckTmuxOptions } from './terminal/deckTmu
 import { TerminalSnapshotRuntime } from './terminal/terminalSnapshotRuntime';
 import { createRestoreGate } from './terminal/restoreGate';
 import { AgentSidecarStore } from './agent/agentSidecarStore';
-import {
-  AgentStatusNotifier,
-  type AgentStatusNotificationMode,
-} from './agent/agentStatusNotifier';
+import { AgentStatusNotifier } from './agent/agentStatusNotifier';
 import { AgentStatusStore } from './agent/agentStatusStore';
 import { countNeedsInputStatuses, describeNeedsInputBadge } from './agent/agentStatusRollups';
 import { AgentDetection } from './agent/agentDetection';
@@ -234,8 +231,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const agentStatusNotifierWatch = new AgentStatusNotifier({
     store: agentStatuses,
     settings: {
-      notifyOnNeedsInput: () => agentStatusNotificationModeFromSettings('notifyOnNeedsInput', 'always'),
-      notifyOnCompleted: () => agentStatusNotificationModeFromSettings('notifyOnCompleted', 'always'),
+      notifyOnNeedsInput: () => agentStatusNotificationEnabled('notifyOnNeedsInput'),
+      notifyOnCompleted: () => agentStatusNotificationEnabled('notifyOnCompleted'),
     },
     windowState: {
       isFocused: () => vscode.window.state.focused,
@@ -330,6 +327,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.window.tabGroups.onDidChangeTabGroups(async () => {
       await markActiveTerminalRead(agentStatuses);
       await revealActiveTerminalInTree(tree, treeView);
+    }),
+    // Focusing back with the agent's tab active is when you actually read it —
+    // markActiveTerminalRead no-ops while unfocused, so re-run it on refocus.
+    vscode.window.onDidChangeWindowState((state) => {
+      if (state.focused) void markActiveTerminalRead(agentStatuses);
     }),
     treeView.onDidChangeVisibility((event) => {
       if (event.visible) refreshTree();
@@ -453,16 +455,8 @@ function resumeTemplateFromSettings(): ResumeTemplate {
   });
 }
 
-function agentStatusNotificationModeFromSettings(
-  key: 'notifyOnNeedsInput' | 'notifyOnCompleted',
-  fallback: AgentStatusNotificationMode,
-): AgentStatusNotificationMode {
-  const value = vscode.workspace.getConfiguration('deck').get<string>(key, fallback);
-  return isAgentStatusNotificationMode(value) ? value : fallback;
-}
-
-function isAgentStatusNotificationMode(value: unknown): value is AgentStatusNotificationMode {
-  return value === 'off' || value === 'windowNotFocused' || value === 'always';
+function agentStatusNotificationEnabled(key: 'notifyOnNeedsInput' | 'notifyOnCompleted'): boolean {
+  return vscode.workspace.getConfiguration('deck').get<boolean>(key, true);
 }
 
 interface RepositoryRegistryReader {
@@ -587,6 +581,11 @@ function activeDeckTerminal(): { sessionName: string; worktreePath: string } | u
 async function markActiveTerminalRead(
   agentStatuses: Pick<AgentStatusStore, 'markRead'>,
 ): Promise<void> {
+  // Only "read" when you're actually looking: the window must be focused, not
+  // merely have the terminal parked as its active tab. Otherwise a completed
+  // turn in a background window's active tab would be marked read everywhere
+  // (read state is machine-global), clearing the unread dot you never saw.
+  if (!vscode.window.state.focused) return;
   const activeTerminal = activeDeckTerminal();
   if (!activeTerminal) return;
 

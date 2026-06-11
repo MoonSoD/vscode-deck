@@ -92,14 +92,12 @@ describe('package contributions', () => {
 
   it('contributes agent status notification settings', () => {
     expect(pkg.contributes.configuration?.properties?.['deck.notifyOnNeedsInput']).toMatchObject({
-      type: 'string',
-      enum: ['off', 'windowNotFocused', 'always'],
-      default: 'always',
+      type: 'boolean',
+      default: true,
     });
     expect(pkg.contributes.configuration?.properties?.['deck.notifyOnCompleted']).toMatchObject({
-      type: 'string',
-      enum: ['off', 'windowNotFocused', 'always'],
-      default: 'always',
+      type: 'boolean',
+      default: true,
     });
   });
 
