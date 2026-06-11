@@ -38,9 +38,9 @@ import { resolveDeckTmuxOptions, type DeckTmuxOptions } from './terminal/deckTmu
 import { TerminalSnapshotRuntime } from './terminal/terminalSnapshotRuntime';
 import { createRestoreGate } from './terminal/restoreGate';
 import { AgentSidecarStore } from './agent/agentSidecarStore';
+import { AgentStatusFileDecorationProvider } from './agent/agentStatusFileDecorationProvider';
 import { AgentStatusNotifier } from './agent/agentStatusNotifier';
 import { AgentStatusStore } from './agent/agentStatusStore';
-import { countNeedsInputStatuses, describeNeedsInputBadge } from './agent/agentStatusRollups';
 import { AgentDetection } from './agent/agentDetection';
 import { AgentSetupPrompt, type AgentConfigChange } from './agent/agentSetupPrompt';
 import { HookInstaller, type HookReconcileResult } from './agent/hookInstaller';
@@ -221,13 +221,19 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     dragAndDropController,
     canSelectMany: false,
   });
-  function syncAgentStatusBadge(): void {
-    treeView.badge = describeNeedsInputBadge(
-      countNeedsInputStatuses(Array.from(agentStatuses.entries(), ([, status]) => status)),
-    );
-  }
-  syncAgentStatusBadge();
-  const agentStatusBadgeWatch = agentStatuses.onDidChange(syncAgentStatusBadge);
+  const agentStatusDecorationProvider = new AgentStatusFileDecorationProvider(
+    agentStatuses,
+    tree.agentStatusDecorationRollups,
+  );
+  const agentStatusDecorationWatch = vscode.window.registerFileDecorationProvider(agentStatusDecorationProvider);
+  const agentStatusCollapseWatch = treeView.onDidCollapseElement((event) => {
+    tree.setCollapsed(event.element, true);
+    agentStatusDecorationProvider.fire();
+  });
+  const agentStatusExpandWatch = treeView.onDidExpandElement((event) => {
+    tree.setCollapsed(event.element, false);
+    agentStatusDecorationProvider.fire();
+  });
   const agentStatusNotifierWatch = new AgentStatusNotifier({
     store: agentStatuses,
     settings: {
@@ -272,7 +278,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     treeView,
     agentStatusWatch,
     activeTerminalReadWatch,
-    agentStatusBadgeWatch,
+    agentStatusDecorationProvider,
+    agentStatusDecorationWatch,
+    agentStatusCollapseWatch,
+    agentStatusExpandWatch,
     agentStatusNotifierWatch,
     externalGitWatch,
     vscode.window.registerCustomEditorProvider(terminalEditorViewType, terminalEditorProvider, {

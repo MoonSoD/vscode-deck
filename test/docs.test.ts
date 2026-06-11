@@ -33,6 +33,11 @@ describe('domain docs', () => {
     expect(normalizedAdr).toContain('status-reads/');
     expect(normalizedAdr).toContain('resume-critical sidecar');
     expect(normalizedAdr).toContain('booleans');
+    expect(normalizedAdr).toContain('FileDecorationProvider');
+    expect(normalizedAdr).toContain('deck-status:');
+    expect(normalizedAdr).toContain('closest collapsed ancestor');
+    expect(normalizedAdr).toContain('Inline status descriptions');
+    expect(normalizedAdr).toContain('view badge');
     expect(normalizedAdr).toContain('no Allow action');
     expect(normalizedAdr).toContain('Pattern matching');
     expect(normalizedAdr).toContain('tmux user options');

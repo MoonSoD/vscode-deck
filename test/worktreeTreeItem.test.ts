@@ -20,10 +20,9 @@ describe('describeRepositoryTreeItem', () => {
     });
   });
 
-  it('rolls needs-input counts into the repository description', () => {
-    expect(describeRepositoryTreeItem('/work/alpha', false, 2).description).toBe('· 2 needs input');
-    expect(describeRepositoryTreeItem('/work/alpha', true, 1).description).toBe('active · 1 needs input');
-    expect(describeRepositoryTreeItem('/work/alpha', false, 0).description).toBe('');
+  it('does not render agent status rollups in the repository description', () => {
+    expect(describeRepositoryTreeItem('/work/alpha', false).description).toBe('');
+    expect(describeRepositoryTreeItem('/work/alpha', true).description).toBe('active');
   });
 });
 
@@ -75,7 +74,7 @@ describe('describeWorktreeTreeItem', () => {
     ).toBe('deck.worktree');
   });
 
-  it('rolls needs-input counts into the worktree description', () => {
+  it('does not render agent status rollups in the worktree description', () => {
     const worktree = {
       path: '/work/alpha-feature',
       head: 'b',
@@ -84,74 +83,47 @@ describe('describeWorktreeTreeItem', () => {
       branch: 'feature',
     };
 
-    expect(describeWorktreeTreeItem(worktree, '/work/alpha-main', '/work/alpha-main', 3).description)
-      .toBe('/work/alpha-feature · 3 needs input');
-    expect(describeWorktreeTreeItem(worktree, '/work/alpha-main', '/work/alpha-main', 0).description)
+    expect(describeWorktreeTreeItem(worktree, '/work/alpha-main', '/work/alpha-main').description)
       .toBe('/work/alpha-feature');
   });
 });
 
 describe('describeTerminalTreeItem', () => {
-  it('renders in-progress agent status as a blue loading row', () => {
+  it('renders in-progress agent status as a loading row without inline status text', () => {
     expect(describeTerminalTreeItem('claude', false, { status: 'inProgress', statusAt: 1710000000 })).toEqual({
       label: 'claude',
-      description: 'Working...',
       iconId: 'loading~spin',
-      iconColorId: 'textLink.foreground',
       contextValue: 'deck.terminal.foreign',
     });
   });
 
-  it('renders needs-input agent status as a warning filled dot', () => {
+  it('renders non-working agent statuses with the agent identity glyph', () => {
     expect(describeTerminalTreeItem('claude', false, { status: 'needsInput', statusAt: 1710000000 })).toEqual({
       label: 'claude',
-      description: 'Input needed.',
-      iconId: 'circle-filled',
-      iconColorId: 'list.warningForeground',
+      iconId: 'sparkle',
       contextValue: 'deck.terminal.foreign',
     });
-  });
-
-  it('renders unread completed agent status as a blue filled dot', () => {
     expect(describeTerminalTreeItem('claude', false, {
       status: 'completed',
       statusAt: 1710000000,
       unread: true,
     })).toEqual({
       label: 'claude',
-      iconId: 'circle-filled',
-      iconColorId: 'textLink.foreground',
+      iconId: 'sparkle',
       contextValue: 'deck.terminal.foreign',
     });
-  });
-
-  it('renders read completed agent status as a muted small dot', () => {
     expect(describeTerminalTreeItem('claude', false, {
       status: 'completed',
       statusAt: 1710000000,
       unread: false,
     })).toEqual({
       label: 'claude',
-      iconId: 'circle-small-filled',
-      iconColorId: 'agentSessionReadIndicator.foreground',
+      iconId: 'sparkle',
       contextValue: 'deck.terminal.foreign',
     });
-  });
-
-  it('carries the needs-input message as the tooltip', () => {
-    expect(describeTerminalTreeItem('claude', false, {
-      status: 'needsInput',
-      statusAt: 1710000000,
-      message: 'Allow Bash(ls)?',
-    }).tooltip).toBe('Allow Bash(ls)?');
-  });
-
-  it('renders failed agent status as a red error icon', () => {
     expect(describeTerminalTreeItem('claude', false, { status: 'failed', statusAt: 1710000000 })).toEqual({
       label: 'claude',
-      description: 'Failed',
-      iconId: 'error',
-      iconColorId: 'errorForeground',
+      iconId: 'sparkle',
       contextValue: 'deck.terminal.foreign',
     });
   });

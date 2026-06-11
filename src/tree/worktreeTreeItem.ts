@@ -18,12 +18,7 @@ export interface TerminalTreeItemDescription {
   label: string;
   description?: string;
   tooltip?: string;
-  iconId: 'terminal' | 'loading~spin' | 'circle-filled' | 'circle-small-filled' | 'error';
-  iconColorId?:
-    | 'textLink.foreground'
-    | 'list.warningForeground'
-    | 'errorForeground'
-    | 'agentSessionReadIndicator.foreground';
+  iconId: 'terminal' | 'loading~spin' | 'sparkle';
   contextValue: 'deck.terminal.active' | 'deck.terminal.foreign';
 }
 
@@ -37,11 +32,10 @@ export interface TmuxUnavailableTreeItemDescription {
 export function describeRepositoryTreeItem(
   repositoryPath: string,
   isActiveRepository: boolean,
-  needsInputCount = 0,
 ): RepositoryTreeItemDescription {
   return {
     label: repositoryPath.split('/').pop() ?? repositoryPath,
-    description: withNeedsInputCount(isActiveRepository ? 'active' : '', needsInputCount),
+    description: isActiveRepository ? 'active' : '',
     iconId: 'folder',
   };
 }
@@ -50,7 +44,6 @@ export function describeWorktreeTreeItem(
   worktree: Worktree,
   activeWorktreePath: string | undefined,
   mainWorktreePath?: string,
-  needsInputCount = 0,
 ): WorktreeTreeItemDescription {
   const isActive = worktree.path === activeWorktreePath;
   const isMain = worktree.path === mainWorktreePath;
@@ -63,7 +56,7 @@ export function describeWorktreeTreeItem(
 
   return {
     label: worktree.branch ?? worktree.path,
-    description: withNeedsInputCount(worktree.path, needsInputCount),
+    description: worktree.path,
     iconId: isActive ? 'check' : 'git-branch',
     contextValue,
   };
@@ -78,48 +71,14 @@ export function describeTerminalTreeItem(
   if (status?.status === 'inProgress') {
     return {
       label: windowName,
-      description: 'Working...',
       iconId: 'loading~spin',
-      iconColorId: 'textLink.foreground',
       contextValue,
     };
   }
-  if (status?.status === 'needsInput') {
+  if (status !== undefined) {
     return {
       label: windowName,
-      description: 'Input needed.',
-      // The hook's captured prompt (e.g. the tool awaiting permission) is only
-      // shown transiently in the toast otherwise.
-      tooltip: status.message,
-      iconId: 'circle-filled',
-      iconColorId: 'list.warningForeground',
-      contextValue,
-    };
-  }
-  if (status?.status === 'completed') {
-    if (status.unread === false) {
-      return {
-        label: windowName,
-        iconId: 'circle-small-filled',
-        // VS Code's read indicator color (foreground at 20%); an unknown color
-        // id falls back to the default icon foreground, i.e. the prior look.
-        iconColorId: 'agentSessionReadIndicator.foreground',
-        contextValue,
-      };
-    }
-    return {
-      label: windowName,
-      iconId: 'circle-filled',
-      iconColorId: 'textLink.foreground',
-      contextValue,
-    };
-  }
-  if (status?.status === 'failed') {
-    return {
-      label: windowName,
-      description: 'Failed',
-      iconId: 'error',
-      iconColorId: 'errorForeground',
+      iconId: 'sparkle',
       contextValue,
     };
   }
@@ -138,10 +97,4 @@ export function describeTmuxUnavailableTreeItem(): TmuxUnavailableTreeItemDescri
     contextValue: 'deck.tmux.unavailable',
     tooltip: 'Install tmux 3.1 or newer to use Deck-managed Terminals.',
   };
-}
-
-function withNeedsInputCount(description: string, count: number): string {
-  if (count <= 0) return description;
-  const suffix = `· ${count} needs input`;
-  return description ? `${description} ${suffix}` : suffix;
 }

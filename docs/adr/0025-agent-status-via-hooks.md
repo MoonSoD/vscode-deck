@@ -10,10 +10,10 @@ agent occupied the Terminal, not whether the agent was working, blocked on a
 permission prompt, finished, or failed.
 
 The feature shipped in PRD #90 closes that observability gap for Claude Code
-agents. Deck surfaces an **AgentStatus** on Terminal rows, rolls actionable
-NeedsInput counts up to collapsed Worktree and Repository rows, badges the Deck
-view, and notifies on NeedsInput transitions. This ADR records the shipped
-decisions from issues #91-#95.
+agents. Deck surfaces an **AgentStatus** on Terminal rows, decorates the
+closest collapsed ancestor when status is hidden under a collapsed row, and
+notifies on NeedsInput transitions. This ADR records the shipped decisions from
+issues #91-#95 and the rendering amendment from issue #105.
 
 ## Decision
 
@@ -54,7 +54,34 @@ decisions from issues #91-#95.
    Sending keys into a TUI dialog through tmux is brittle and can approve the
    wrong thing if the dialog changes or focus moves.
 
-6. **Reconcile Deck-owned hook entries on activation.** The PRD's earlier
+6. **Render status with left identity icons and right-side file decorations.**
+   The Terminal row's left icon is identity/liveness only: `loading~spin` while
+   InProgress, a generic agent identity glyph for NeedsInput, Completed, Failed,
+   and idle agent rows, and the plain terminal icon when no agent occupies the
+   Terminal. Attention states use a `FileDecorationProvider` on custom
+   `deck-status:` resource URIs so VS Code draws a right-side dot and label
+   tint: NeedsInput uses `list.warningForeground`, Completed-unread uses
+   `textLink.foreground`, and Failed uses `errorForeground`. InProgress,
+   Completed-read, and absent status have no right-side decoration. Decoration
+   tooltips carry the status and captured message. Inline status descriptions
+   such as "Working...", "Input needed.", and "Failed" are superseded.
+
+7. **Roll attention to the closest collapsed ancestor only.** VS Code's native
+   decoration propagation is not used for AgentStatus (`propagate: false`).
+   Deck tracks Worktree and Repository expand/collapse state and decorates the
+   deepest visible row on the path to an attention-state Terminal: the Terminal
+   when nothing is collapsed, the Worktree when only it is collapsed, or the
+   Repository when the Repository is collapsed. When several attention
+   descendants roll to one collapsed row, urgency is NeedsInput, then Failed,
+   then Completed-unread. The previous all-ancestor `· N needs input`
+   descriptions are superseded.
+
+8. **Do not badge the Deck view container.** The earlier view badge that counted
+   NeedsInput Terminals is superseded. Hidden-sidebar attention is covered only
+   by transient notifications; a persistent cross-view cue can return later if
+   the quiet model proves too quiet.
+
+9. **Reconcile Deck-owned hook entries on activation.** The PRD's earlier
    "upgrade through consent and diff review" path is superseded. Once an agent
    already has Deck hooks, activation compares the config Deck would render for
    this build plus the generated hook script against what is installed. Drift in
@@ -110,8 +137,11 @@ decisions from issues #91-#95.
   observes transitions independently. A NeedsInput toast in one window can remain
   after the user handles the prompt from another window, but clicking it still
   opens the Terminal, which is safe.
-- **The tree keeps stable Terminal ordering.** Status decorates rows and rolls up
-  NeedsInput counts, but it does not sort Terminals.
+- **The tree keeps stable Terminal ordering.** Status decorates rows and rolls
+  up to the closest collapsed ancestor, but it does not sort Terminals.
+- **No persistent hidden-view badge.** If the Deck view or secondary sidebar is
+  hidden, the extension no longer shows a numeric container badge. NeedsInput
+  and optional Completed toasts remain the nudge.
 - **AgentSession resume stays isolated.** Status cleanup, pruning, or parse
   failure cannot break ADR-0021's resume sidecar or TerminalSnapshot restore.
 - **Setup prompts stay fresh-install only.** Agents with any Deck hook entries
@@ -119,4 +149,5 @@ decisions from issues #91-#95.
 
 ## Status
 
-Accepted — shipped by PRD #90 issues #91-#95 and amended by issue #99.
+Accepted — shipped by PRD #90 issues #91-#95 and amended by issues #99 and
+#105.

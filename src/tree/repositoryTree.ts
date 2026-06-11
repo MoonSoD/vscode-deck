@@ -13,7 +13,11 @@ import {
   toCachedTerminalSessions,
 } from '../terminal/terminalSession';
 import type { AgentStatus } from '../agent/agentStatusStore';
-import { countNeedsInputStatusesForSessionPrefix } from '../agent/agentStatusRollups';
+import {
+  agentStatusDecorationUri,
+  AgentStatusDecorationRollups,
+  type AgentStatusDecorationTerminal,
+} from '../agent/agentStatusDecorations';
 import { excludePending } from './excludePending';
 import { reconcileWorktreeOrder } from './reconcileWorktreeOrder';
 import {
@@ -42,14 +46,14 @@ class RepositoryNode extends vscode.TreeItem {
   constructor(
     public readonly repositoryPath: string,
     isActiveRepository: boolean,
-    needsInputCount = 0,
   ) {
-    const item = describeRepositoryTreeItem(repositoryPath, isActiveRepository, needsInputCount);
+    const item = describeRepositoryTreeItem(repositoryPath, isActiveRepository);
     super(item.label, vscode.TreeItemCollapsibleState.Expanded);
     this.id = `repository::${repositoryPath}`;
     this.contextValue = 'deck.repository';
     this.description = item.description;
     this.tooltip = repositoryPath;
+    this.resourceUri = toDecorationUri('repository', repositoryPath);
     this.iconPath = new vscode.ThemeIcon(item.iconId);
   }
 }
@@ -60,13 +64,13 @@ class WorktreeNode extends vscode.TreeItem {
     public readonly worktree: Worktree,
     activeWorktreePath: string | undefined,
     public readonly mainWorktreePath: string | undefined,
-    needsInputCount = 0,
   ) {
-    const item = describeWorktreeTreeItem(worktree, activeWorktreePath, mainWorktreePath, needsInputCount);
+    const item = describeWorktreeTreeItem(worktree, activeWorktreePath, mainWorktreePath);
     super(item.label, vscode.TreeItemCollapsibleState.Expanded);
     this.id = `worktree::${worktree.path}`;
     this.contextValue = item.contextValue;
     this.description = item.description;
+    this.resourceUri = toDecorationUri('worktree', worktree.path);
     this.iconPath = new vscode.ThemeIcon(item.iconId);
   }
 }
@@ -84,9 +88,8 @@ class TerminalNode extends vscode.TreeItem {
     this.contextValue = item.contextValue;
     this.description = item.description;
     this.tooltip = item.tooltip;
-    this.iconPath = item.iconColorId
-      ? new vscode.ThemeIcon(item.iconId, new vscode.ThemeColor(item.iconColorId))
-      : new vscode.ThemeIcon(item.iconId);
+    this.resourceUri = toDecorationUri('terminal', terminal.sessionName);
+    this.iconPath = new vscode.ThemeIcon(item.iconId);
     this.command = {
       command: 'deck.openTerminal',
       title: 'Open Terminal',
@@ -117,11 +120,14 @@ class TmuxUnavailableNode extends vscode.TreeItem {
 export class RepositoryTreeProvider implements vscode.TreeDataProvider<RepositoryTreeNode> {
   private readonly _onDidChangeTreeData = new vscode.EventEmitter<RepositoryTreeNode | undefined>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
+  readonly agentStatusDecorationRollups = new AgentStatusDecorationRollups();
   private activeRepositoryCommonDir: string | null = null;
   private resolvingActiveRepository = false;
   private readonly repositoryCommonDirs = new Map<string, string | null>();
   private readonly resolvingRepositoryPaths = new Set<string>();
   private readonly refreshingWorktrees = new Set<string>();
+  private readonly knownWorktreeRepositories = new Map<string, string>();
+  private readonly knownTerminals = new Map<string, AgentStatusDecorationTerminal>();
   private readonly tmux: TerminalSessionLister;
   private readonly tmuxAvailable: boolean;
 
@@ -142,7 +148,11 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
     private readonly pendingWorktreeRemovals: ReadonlySet<string> = new Set(),
     private readonly agentStatuses?: AgentStatusLookup,
   ) {
-    this.agentStatuses?.onDidChange(() => this.refresh());
+    this.syncAgentStatusDecorations();
+    this.agentStatuses?.onDidChange(() => {
+      this.syncAgentStatusDecorations();
+      this.refresh();
+    });
 
     if (typeof tmuxOrAvailable === 'boolean') {
       this.tmux = { listSessions: async () => [] };
@@ -163,12 +173,19 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
     return element;
   }
 
+  setCollapsed(element: RepositoryTreeNode, collapsed: boolean): void {
+    if (element instanceof RepositoryNode) {
+      this.agentStatusDecorationRollups.setCollapsed('repository', element.repositoryPath, collapsed);
+    } else if (element instanceof WorktreeNode) {
+      this.agentStatusDecorationRollups.setCollapsed('worktree', element.worktree.path, collapsed);
+    }
+  }
+
   getParent(element: RepositoryTreeNode): RepositoryTreeNode | undefined {
     if (element instanceof WorktreeNode) {
       return new RepositoryNode(
         element.repositoryPath,
         this.isActiveRepository(element.repositoryPath),
-        this.repositoryNeedsInputCount(element.repositoryPath),
       );
     }
     if (element instanceof TerminalNode) {
@@ -186,10 +203,13 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
       // viewsWelcome ("No repositories yet") flash on every tree.refresh().
       const repositories = this.repositoryRegistry.list();
       this.resolveActiveRepository();
-      return repositories.map((p) => {
+      const nodes = repositories.map((p) => {
         this.resolveRepositoryCommonDir(p);
-        return new RepositoryNode(p, this.isActiveRepository(p), this.repositoryNeedsInputCount(p));
+        this.syncCachedDecorationWorktrees(p);
+        return new RepositoryNode(p, this.isActiveRepository(p));
       });
+      this.syncAgentStatusDecorations();
+      return nodes;
     }
     if (element instanceof RepositoryNode) {
       return this.getWorktreeChildren(element);
@@ -263,7 +283,6 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
       worktreeNode.worktree,
       this.currentWorktreePath(),
       worktreeNode.mainWorktreePath,
-      this.worktreeNeedsInputCount(worktreeNode.worktree.path),
     );
   }
 
@@ -379,14 +398,23 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
     const isActiveWorktree =
       activeWorktreePath !== undefined &&
       path.resolve(element.worktree.path) === path.resolve(activeWorktreePath);
-    return terminals.map(
-      (terminal) => new TerminalNode(
-        terminal,
-        element,
-        isActiveWorktree,
-        this.agentStatuses?.get(terminal.sessionName),
-      ),
+    const nodes = terminals.map(
+      (terminal) => {
+        this.knownTerminals.set(terminal.sessionName, {
+          repositoryPath: element.repositoryPath,
+          worktreePath: element.worktree.path,
+          sessionName: terminal.sessionName,
+        });
+        return new TerminalNode(
+          terminal,
+          element,
+          isActiveWorktree,
+          this.agentStatuses?.get(terminal.sessionName),
+        );
+      },
     );
+    this.syncAgentStatusDecorations();
+    return nodes;
   }
 
   private refreshWorktreesInBackground(
@@ -423,36 +451,17 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
       ),
     );
     const mainWorktreePath = gitWorktrees.find((w) => !w.bare)?.path;
-    return worktrees.map((w) => new WorktreeNode(
-      repositoryPath,
-      w,
-      activeWorktreePath,
-      mainWorktreePath,
-      this.worktreeNeedsInputCount(w.path),
-    ));
-  }
-
-  private repositoryNeedsInputCount(repositoryPath: string): number {
-    const commonDir =
-      this.repositoryCommonDirCache.get(repositoryPath) ??
-      this.repositoryCommonDirs.get(repositoryPath) ??
-      undefined;
-    if (commonDir === undefined) return 0;
-
-    const worktrees = this.worktreeListCache.get(commonDir);
-    if (worktrees === undefined) return 0;
-
-    return worktrees.reduce(
-      (count, worktree) => count + this.worktreeNeedsInputCount(worktree.path),
-      0,
-    );
-  }
-
-  private worktreeNeedsInputCount(worktreePath: string): number {
-    return countNeedsInputStatusesForSessionPrefix(
-      this.agentStatuses?.entries() ?? [],
-      terminalSessionPrefix(worktreePath),
-    );
+    const nodes = worktrees.map((w) => {
+      this.knownWorktreeRepositories.set(w.path, repositoryPath);
+      return new WorktreeNode(
+        repositoryPath,
+        w,
+        activeWorktreePath,
+        mainWorktreePath,
+      );
+    });
+    this.syncAgentStatusDecorations();
+    return nodes;
   }
 
   private visibleWorktrees(
@@ -463,6 +472,46 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
     if (pendingAtListStart === undefined) return currentlyVisible;
     return excludePending(currentlyVisible, pendingAtListStart);
   }
+
+  private syncCachedDecorationWorktrees(repositoryPath: string): void {
+    const commonDir =
+      this.repositoryCommonDirCache.get(repositoryPath) ??
+      this.repositoryCommonDirs.get(repositoryPath) ??
+      undefined;
+    if (commonDir === undefined || commonDir === null) return;
+
+    const worktrees = this.worktreeListCache.get(commonDir);
+    if (worktrees === undefined) return;
+    for (const worktree of this.visibleWorktrees(worktrees)) {
+      this.knownWorktreeRepositories.set(worktree.path, repositoryPath);
+    }
+  }
+
+  private syncAgentStatusDecorations(): void {
+    this.agentStatusDecorationRollups.setStatuses(this.agentStatuses?.entries() ?? []);
+    const terminals = new Map(this.knownTerminals);
+    for (const [worktreePath, repositoryPath] of this.knownWorktreeRepositories) {
+      const prefix = terminalSessionPrefix(worktreePath);
+      for (const [sessionName] of this.agentStatuses?.entries() ?? []) {
+        if (!sessionName.startsWith(prefix)) continue;
+        terminals.set(sessionName, { repositoryPath, worktreePath, sessionName });
+      }
+    }
+    this.agentStatusDecorationRollups.setTerminals([...terminals.values()]);
+  }
+}
+
+function toDecorationUri(
+  kind: 'repository' | 'worktree' | 'terminal',
+  id: string,
+): vscode.Uri {
+  const uri = agentStatusDecorationUri(kind, id);
+  return vscode.Uri.from({
+    scheme: uri.scheme,
+    authority: '',
+    path: uri.path,
+    query: '',
+  });
 }
 
 function sameWorktrees(left: readonly Worktree[], right: readonly Worktree[]): boolean {

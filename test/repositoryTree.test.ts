@@ -40,6 +40,7 @@ vi.mock('vscode', () => ({
   },
   Uri: {
     file: (fsPath: string) => ({ fsPath }),
+    from: (value: { scheme: string; authority: string; path: string; query: string }) => value,
   },
   window: {
     showErrorMessage: vi.fn(),
@@ -516,7 +517,7 @@ describe('RepositoryTreeProvider', () => {
     expect(tmux.listSessions).toHaveBeenCalledWith('wt-_work_alpha-main__term-');
   });
 
-  it('renders completed agent status on Terminal rows and refreshes on status changes', async () => {
+  it('renders agent identity on Terminal rows and refreshes on status changes', async () => {
     const tmux = {
       listSessions: vi.fn(async () => [
         { sessionName: 'wt-_work_alpha-main__term-1', windowName: 'claude' },
@@ -555,13 +556,13 @@ describe('RepositoryTreeProvider', () => {
     statusChange?.();
 
     expect((terminalRows as Array<{ iconPath: { id: string; color?: { id: string } } }>)[0].iconPath).toEqual({
-      id: 'circle-filled',
-      color: { id: 'textLink.foreground' },
+      id: 'sparkle',
+      color: undefined,
     });
     expect(vscodeState.emitters[0].fire).toHaveBeenCalledWith(undefined);
   });
 
-  it('copies agent status descriptions onto Terminal tree rows', async () => {
+  it('sets deck-status resource URIs without inline status descriptions on Terminal rows', async () => {
     const tmux = {
       listSessions: vi.fn(async () => [
         { sessionName: 'wt-_work_alpha-main__term-1', windowName: 'claude' },
@@ -590,17 +591,25 @@ describe('RepositoryTreeProvider', () => {
 
     const terminalRows = await provider.getChildren(worktrees[0]);
 
-    expect((terminalRows as Array<{ description?: string; iconPath: { id: string; color?: { id: string } } }>)[0])
+    expect((terminalRows as Array<{
+      description?: string;
+      iconPath: { id: string; color?: { id: string } };
+      resourceUri: { scheme: string; path: string };
+    }>)[0])
       .toEqual(expect.objectContaining({
-        description: 'Input needed.',
+        description: undefined,
         iconPath: {
-          id: 'circle-filled',
-          color: { id: 'list.warningForeground' },
+          id: 'sparkle',
+          color: undefined,
         },
+        resourceUri: expect.objectContaining({
+          scheme: 'deck-status',
+          path: '/terminal/wt-_work_alpha-main__term-1',
+        }),
       }));
   });
 
-  it('rolls needs-input agent statuses into Repository and Worktree descriptions', async () => {
+  it('keeps Repository and Worktree descriptions free of agent status rollups', async () => {
     const statuses = new Map([
       ['wt-_work_alpha-main__term-1', { status: 'needsInput' as const, statusAt: 1710000000 }],
       ['wt-_work_alpha-feature__term-1', { status: 'completed' as const, statusAt: 1710000001 }],
@@ -632,10 +641,10 @@ describe('RepositoryTreeProvider', () => {
     const worktrees = provider.getChildren(repositories[0]);
     if (!Array.isArray(worktrees)) throw new Error('expected cached worktree children');
 
-    expect(repositories[0].description).toBe('· 2 needs input');
+    expect(repositories[0].description).toBe('');
     expect(worktrees.map((worktree) => worktree.description)).toEqual([
-      '/work/alpha-main · 1 needs input',
-      '/work/alpha-feature · 1 needs input',
+      '/work/alpha-main',
+      '/work/alpha-feature',
     ]);
   });
 

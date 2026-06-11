@@ -37,6 +37,8 @@ const vscodeState = vi.hoisted(() => ({
   tabGroups: [] as Array<{ viewColumn: number; tabs: Array<{ input?: unknown }> }>,
   createTreeView: vi.fn(() => ({
     dispose: vi.fn(),
+    onDidCollapseElement: vi.fn(() => ({ dispose: vi.fn() })),
+    onDidExpandElement: vi.fn(() => ({ dispose: vi.fn() })),
     onDidChangeVisibility: vi.fn(() => ({ dispose: vi.fn() })),
     reveal: vi.fn(async () => undefined),
     get selection() {
@@ -69,6 +71,7 @@ const vscodeState = vi.hoisted(() => ({
   }>,
   registerCommand: vi.fn(() => ({ dispose: vi.fn() })),
   registerCustomEditorProvider: vi.fn(() => ({ dispose: vi.fn() })),
+  registerFileDecorationProvider: vi.fn(() => ({ dispose: vi.fn() })),
   removeWorktreeArgs: undefined as unknown[] | undefined,
   settingsRepositories: ['/settings/repo'],
   settingsAgentResumeTemplates: {} as Record<string, string | undefined>,
@@ -120,6 +123,21 @@ vi.mock('vscode', () => ({
     HighContrast: 3,
     HighContrastLight: 4,
   },
+  EventEmitter: class {
+    readonly event = vi.fn();
+    fire = vi.fn();
+    dispose = vi.fn();
+  },
+  FileDecoration: class {
+    constructor(
+      readonly badge?: string,
+      readonly tooltip?: string,
+      readonly color?: unknown,
+    ) {}
+  },
+  ThemeColor: class {
+    constructor(readonly id: string) {}
+  },
   commands: {
     executeCommand: vscodeState.executeCommand,
     registerCommand: vscodeState.registerCommand,
@@ -134,6 +152,7 @@ vi.mock('vscode', () => ({
   window: {
     activeColorTheme: { kind: 2 },
     createTreeView: vscodeState.createTreeView,
+    registerFileDecorationProvider: vscodeState.registerFileDecorationProvider,
     registerCustomEditorProvider: vscodeState.registerCustomEditorProvider,
     showWarningMessage: vscodeState.showWarningMessage,
     showInformationMessage: vscodeState.showInformationMessage,
@@ -253,9 +272,15 @@ vi.mock('../src/repository/repositoryRemovalCommand', () => ({
 
 vi.mock('../src/tree/repositoryTree', () => ({
   RepositoryTreeProvider: class {
+    agentStatusDecorationRollups = {
+      setStatuses: vi.fn(),
+      setTerminals: vi.fn(),
+      getDecorationStatus: vi.fn(),
+    };
     findTerminal = vi.fn();
     findTerminalBySessionName = vi.fn();
     refresh = vi.fn();
+    setCollapsed = vi.fn();
     getChildren = vi.fn(() => [{ repositoryPath: '/settings/repo' }]);
 
     constructor(...args: unknown[]) {
@@ -523,7 +548,7 @@ describe('activate', () => {
     expect(context.subscriptions[0]).toBe(vscodeState.createTreeView.mock.results[0].value);
   });
 
-  it('updates the Deck view badge from needs-input agent statuses', async () => {
+  it('registers agent status file decorations without a Deck view badge', async () => {
     vscodeState.agentStatusStoreEntries = [
       ['wt-_work_alpha-main__term-1', { status: 'needsInput', statusAt: 1710000000 }],
       ['wt-_work_alpha-main__term-2', { status: 'completed', statusAt: 1710000001 }],
@@ -533,27 +558,7 @@ describe('activate', () => {
     await activate(context as never);
     const treeView = vscodeState.createTreeView.mock.results[0].value as { badge?: unknown };
 
-    expect(treeView.badge).toEqual({
-      value: 1,
-      tooltip: '1 agent needs input',
-    });
-
-    vscodeState.agentStatusStoreEntries = [
-      ['wt-_work_alpha-main__term-1', { status: 'needsInput', statusAt: 1710000002 }],
-      ['wt-_work_beta-main__term-1', { status: 'needsInput', statusAt: 1710000003 }],
-    ];
-    vscodeState.agentStatusStoreChange?.();
-
-    expect(treeView.badge).toEqual({
-      value: 2,
-      tooltip: '2 agents need input',
-    });
-
-    vscodeState.agentStatusStoreEntries = [
-      ['wt-_work_alpha-main__term-1', { status: 'completed', statusAt: 1710000004 }],
-    ];
-    vscodeState.agentStatusStoreChange?.();
-
+    expect(vscode.window.registerFileDecorationProvider).toHaveBeenCalledWith(expect.any(Object));
     expect(treeView.badge).toBeUndefined();
   });
 
