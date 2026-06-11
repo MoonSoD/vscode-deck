@@ -23,6 +23,7 @@ import { resolveAgentIcon } from '../agent/agentIconResolver';
 import { excludePending } from './excludePending';
 import { reconcileWorktreeOrder } from './reconcileWorktreeOrder';
 import { reconcileTerminalOrder } from './reconcileTerminalOrder';
+import { pruneOrder } from './pruneOrder';
 import {
   describeRepositoryTreeItem,
   describeTmuxUnavailableTreeItem,
@@ -398,6 +399,7 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
       knownCommonDir ??
       (await resolveCommonDirSafe(this.repositoryCommonDirCache, repositoryPath)) ??
       undefined;
+    await this.pruneWorktreeOrder(commonDir, gitWorktrees);
     if (commonDir !== undefined) await this.worktreeListCache.set(commonDir, visibleWorktrees);
     return this.toWorktreeNodes(repositoryPath, visibleWorktrees, commonDir, activeWorktreePath);
   }
@@ -408,12 +410,14 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
       await this.tmux.listSessions(terminalSessionPrefix(element.worktree.path)),
     );
     const storedOrder = this.terminalOrders?.get(element.worktree.path);
-    const prunedStoredOrder = pruneTerminalOrder(storedOrder, liveTerminals);
-    if (storedOrder !== undefined && prunedStoredOrder !== undefined && prunedStoredOrder !== storedOrder) {
-      await this.terminalOrders?.set(element.worktree.path, prunedStoredOrder);
+    const prunedStoredOrder = storedOrder === undefined
+      ? undefined
+      : pruneOrder(storedOrder, new Set(liveTerminals.map((terminal) => terminal.sessionName)));
+    if (prunedStoredOrder?.changed) {
+      await this.terminalOrders?.set(element.worktree.path, prunedStoredOrder.order);
     }
     const terminals = reconcileTerminalOrder(
-      prunedStoredOrder,
+      prunedStoredOrder?.order,
       liveTerminals,
     );
     return this.toTerminalNodes(element, terminals);
@@ -454,6 +458,7 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
     void listWorktrees(repositoryPath)
       .then(async (worktrees) => {
         const visibleWorktrees = this.visibleWorktrees(worktrees, pendingAtListStart);
+        await this.pruneWorktreeOrder(commonDir, worktrees);
         if (sameWorktrees(previous, visibleWorktrees)) return;
         await this.worktreeListCache.set(commonDir, visibleWorktrees);
         this._onDidChangeTreeData.fire(undefined);
@@ -488,6 +493,18 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
     });
     this.syncAgentStatusDecorations();
     return nodes;
+  }
+
+  private async pruneWorktreeOrder(commonDir: string | undefined, gitWorktrees: readonly Worktree[]): Promise<void> {
+    if (commonDir === undefined) return;
+
+    const storedOrder = this.worktreeOrders.get(commonDir);
+    if (storedOrder === undefined) return;
+
+    const prunedOrder = pruneOrder(storedOrder, new Set(gitWorktrees.map((worktree) => worktree.path)));
+    if (prunedOrder.changed) {
+      await this.worktreeOrders.set(commonDir, prunedOrder.order).catch(() => undefined);
+    }
   }
 
   private visibleWorktrees(
@@ -555,15 +572,4 @@ function sameWorktree(left: Worktree, right: Worktree): boolean {
     left.detached === right.detached &&
     left.locked === right.locked
   );
-}
-
-function pruneTerminalOrder<T extends { sessionName: string }>(
-  storedOrder: readonly string[] | undefined,
-  liveTerminals: readonly T[],
-): readonly string[] | undefined {
-  if (storedOrder === undefined) return undefined;
-
-  const liveSessionNames = new Set(liveTerminals.map((terminal) => terminal.sessionName));
-  const pruned = storedOrder.filter((sessionName) => liveSessionNames.has(sessionName));
-  return pruned.length === storedOrder.length ? storedOrder : pruned;
 }
