@@ -17,7 +17,7 @@ const HOOK_EVENTS_BY_AGENT = {
     'StopFailure',
     'SessionEnd',
   ],
-  codex: ['SessionStart', 'UserPromptSubmit'],
+  codex: ['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'PermissionRequest', 'Stop'],
 } as const satisfies Record<AgentName, readonly string[]>;
 
 export interface HookInstallerPaths {

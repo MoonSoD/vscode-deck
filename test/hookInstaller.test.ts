@@ -112,6 +112,7 @@ describe('HookInstaller', () => {
       contents: `${JSON.stringify({
         model: 'gpt-5',
         hooks: {
+          ...codexDeckHooks(scriptPath),
           SessionStart: [
             {
               matcher: 'startup',
@@ -119,7 +120,6 @@ describe('HookInstaller', () => {
             },
             codexDeckHookGroup(scriptPath),
           ],
-          UserPromptSubmit: [codexDeckHookGroup(scriptPath)],
         },
       }, null, 2)}\n`,
     }]);
@@ -192,6 +192,7 @@ describe('HookInstaller', () => {
 
     expect(JSON.parse(readFileSync(hooksPath, 'utf8'))).toEqual({
       hooks: {
+        ...codexDeckHooks(scriptPath),
         SessionStart: [
           {
             matcher: 'startup',
@@ -199,7 +200,6 @@ describe('HookInstaller', () => {
           },
           codexDeckHookGroup(scriptPath),
         ],
-        UserPromptSubmit: [codexDeckHookGroup(scriptPath)],
       },
     });
   });
@@ -229,12 +229,12 @@ describe('HookInstaller', () => {
 
     expect(JSON.parse(readFileSync(hooksPath, 'utf8'))).toEqual({
       hooks: {
+        ...codexDeckHooks(scriptPath),
         SessionStart: [
           { matcher: 'startup', hooks: [] },
           { matcher: 'resume' },
           codexDeckHookGroup(scriptPath),
         ],
-        UserPromptSubmit: [codexDeckHookGroup(scriptPath)],
       },
     });
   });
@@ -255,10 +255,7 @@ describe('HookInstaller', () => {
     expect(existsSync(codexScriptPath)).toBe(true);
     expect(statSync(codexScriptPath).mode & 0o111).not.toBe(0);
     expect(JSON.parse(readFileSync(join(root, '.codex', 'hooks.json'), 'utf8'))).toEqual({
-      hooks: {
-        SessionStart: [codexDeckHookGroup(codexScriptPath)],
-        UserPromptSubmit: [codexDeckHookGroup(codexScriptPath)],
-      },
+      hooks: codexDeckHooks(codexScriptPath),
     });
     await expect(installer.isCurrentInstall('codex')).resolves.toBe(true);
     await expect(installer.isCurrentInstall('claude')).resolves.toBe(false);
@@ -500,7 +497,7 @@ describe('HookInstaller', () => {
     });
   });
 
-  it('reconciles Codex installs through the same activation path', async () => {
+  it('reconciles a legacy two-event Codex install through the same activation path', async () => {
     const root = tempRoot();
     const hooksPath = join(root, '.codex', 'hooks.json');
     const scriptPath = join(root, '.local', 'share', 'deck', 'bin', 'deck-codex-hook.sh');
@@ -510,6 +507,7 @@ describe('HookInstaller', () => {
     writeFileSync(hooksPath, JSON.stringify({
       hooks: {
         SessionStart: [codexDeckHookGroup(scriptPath)],
+        UserPromptSubmit: [codexDeckHookGroup(scriptPath)],
       },
     }), 'utf8');
     writeFileSync(scriptPath, '#!/bin/sh\n# stale codex script\n', 'utf8');
@@ -527,10 +525,7 @@ describe('HookInstaller', () => {
     ]);
 
     expect(JSON.parse(readFileSync(hooksPath, 'utf8'))).toEqual({
-      hooks: {
-        SessionStart: [codexDeckHookGroup(scriptPath)],
-        UserPromptSubmit: [codexDeckHookGroup(scriptPath)],
-      },
+      hooks: codexDeckHooks(scriptPath),
     });
     expect(readFileSync(`${hooksPath}.deck.bak`, 'utf8')).toBe(originalHooks);
     expect(readFileSync(scriptPath, 'utf8')).toBe(renderAgentHookScript(sidecarDir, 'codex'));
@@ -628,5 +623,15 @@ function codexDeckHookGroup(scriptPath: string) {
       type: 'command',
       command: `'${scriptPath}' --deck-agent-session-hook codex`,
     }],
+  };
+}
+
+function codexDeckHooks(scriptPath: string) {
+  return {
+    SessionStart: [codexDeckHookGroup(scriptPath)],
+    UserPromptSubmit: [codexDeckHookGroup(scriptPath)],
+    PreToolUse: [codexDeckHookGroup(scriptPath)],
+    PermissionRequest: [codexDeckHookGroup(scriptPath)],
+    Stop: [codexDeckHookGroup(scriptPath)],
   };
 }

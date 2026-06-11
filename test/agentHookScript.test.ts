@@ -397,6 +397,7 @@ describe('renderAgentHookScript', () => {
   it('writes a Codex sidecar keyed by DECK_SESSION', async () => {
     const root = tempRoot();
     const sidecarDir = join(root, 'hooks');
+    const statusDir = join(root, 'status');
     const scriptPath = writeScript(root, renderAgentHookScript(sidecarDir, 'codex'));
 
     await runScript(scriptPath, {
@@ -408,9 +409,10 @@ describe('renderAgentHookScript', () => {
       agent: 'codex',
       session_id: 'codex-123',
     });
+    expect(existsSync(statusDir)).toBe(false);
   });
 
-  it('keeps Codex hooks identity-only on UserPromptSubmit', async () => {
+  it('writes Codex in-progress status on UserPromptSubmit without breaking the sidecar', async () => {
     const root = tempRoot();
     const sidecarDir = join(root, 'hooks');
     const statusDir = join(root, 'status');
@@ -425,6 +427,45 @@ describe('renderAgentHookScript', () => {
       agent: 'codex',
       session_id: 'codex-123',
     });
+    const status = JSON.parse(readFileSync(join(statusDir, 'wt-_work_repo__term-1.json'), 'utf8'));
+    expect(status.status).toBe('inProgress');
+    expect(typeof status.statusAt).toBe('number');
+  });
+
+  it.each([
+    ['PreToolUse', 'inProgress'],
+    ['Stop', 'completed'],
+  ])('writes Codex %s as %s without writing a sidecar', async (hookEventName, expectedStatus) => {
+    const root = tempRoot();
+    const sidecarDir = join(root, 'hooks');
+    const statusDir = join(root, 'status');
+    const scriptPath = writeScript(root, renderAgentHookScript(sidecarDir, 'codex'));
+
+    await runScript(scriptPath, {
+      env: { ...process.env, DECK_SESSION: 'wt-_work_repo__term-1' },
+      input: `{"session_id":"codex-123","hook_event_name":"${hookEventName}"}`,
+    });
+
+    expect(existsSync(sidecarDir)).toBe(false);
+    const status = JSON.parse(readFileSync(join(statusDir, 'wt-_work_repo__term-1.json'), 'utf8'));
+    expect(status.status).toBe(expectedStatus);
+    expect(typeof status.statusAt).toBe('number');
+  });
+
+  it.each([
+    ['PermissionRequest'],
+    ['StopFailure'],
+  ])('does not map Codex %s to status in this slice', async (hookEventName) => {
+    const root = tempRoot();
+    const sidecarDir = join(root, 'hooks');
+    const statusDir = join(root, 'status');
+    const scriptPath = writeScript(root, renderAgentHookScript(sidecarDir, 'codex'));
+
+    await runScript(scriptPath, {
+      env: { ...process.env, DECK_SESSION: 'wt-_work_repo__term-1' },
+      input: `{"session_id":"codex-123","hook_event_name":"${hookEventName}","message":"Allow Bash?"}`,
+    });
+
     expect(existsSync(statusDir)).toBe(false);
   });
 
