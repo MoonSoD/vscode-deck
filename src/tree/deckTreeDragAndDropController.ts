@@ -1,7 +1,11 @@
 import * as vscode from 'vscode';
 import { getCommonDirSafe, listWorktrees } from '../git/worktrees';
 import { RepositoryRegistryStore } from '../repository/repositoryRegistryStore';
+import { TerminalOrderStore } from '../terminal/terminalOrderStore';
+import type { TmuxSession } from '../terminal/tmuxCli';
+import { terminalSessionPrefix } from '../terminal/tmuxSafe';
 import { WorktreeOrderStore } from '../worktree/worktreeOrderStore';
+import { reconcileTerminalOrder } from './reconcileTerminalOrder';
 import { reconcileWorktreeOrder } from './reconcileWorktreeOrder';
 import { DropPosition, reorderArray } from './reorderArray';
 
@@ -16,6 +20,11 @@ type DragPayload =
       kind: 'worktree';
       sourcePath: string;
       repositoryPath: string;
+    }
+  | {
+      kind: 'terminal';
+      sourceSessionName: string;
+      worktreePath: string;
     };
 
 interface RepositoryNodeLike {
@@ -31,7 +40,20 @@ interface WorktreeNodeLike {
   };
 }
 
-type DeckNodeLike = RepositoryNodeLike | WorktreeNodeLike;
+interface TerminalNodeLike {
+  contextValue: string;
+  repositoryPath: string;
+  worktreePath: string;
+  terminal: {
+    sessionName: string;
+  };
+}
+
+interface TerminalSessionLister {
+  listSessions(prefix?: string): Promise<TmuxSession[]>;
+}
+
+type DeckNodeLike = RepositoryNodeLike | WorktreeNodeLike | TerminalNodeLike;
 
 export class DeckTreeDragAndDropController
   implements vscode.TreeDragAndDropController<DeckNodeLike>
@@ -43,6 +65,8 @@ export class DeckTreeDragAndDropController
     private readonly refresh: () => void,
     private readonly repositoryRegistry: Pick<RepositoryRegistryStore, 'list' | 'replace'>,
     private readonly worktreeOrders: WorktreeOrderStore,
+    private readonly terminalOrders?: Pick<TerminalOrderStore, 'get' | 'set'>,
+    private readonly tmux?: TerminalSessionLister,
   ) {}
 
   handleDrag(
@@ -68,6 +92,12 @@ export class DeckTreeDragAndDropController
     if (payload.kind === 'worktree') {
       if (!target) return;
       await this.dropWorktree(payload, target);
+      return;
+    }
+
+    if (payload.kind === 'terminal') {
+      if (!target) return;
+      await this.dropTerminal(payload, target);
       return;
     }
 
@@ -119,6 +149,33 @@ export class DeckTreeDragAndDropController
     await this.worktreeOrders.set(commonDir, reordered);
     this.refresh();
   }
+
+  private async dropTerminal(
+    payload: Extract<DragPayload, { kind: 'terminal' }>,
+    target: DeckNodeLike,
+  ): Promise<void> {
+    if (!isTerminalNode(target) || payload.worktreePath !== target.worktreePath) return;
+    if (!this.terminalOrders || !this.tmux) return;
+
+    const liveSessions = await this.tmux.listSessions(terminalSessionPrefix(payload.worktreePath));
+    const sessions = reconcileTerminalOrder(
+      this.terminalOrders.get(payload.worktreePath),
+      liveSessions,
+    );
+    const sessionNames = sessions.map((session) => session.sessionName);
+    const position = dropPosition(sessionNames, payload.sourceSessionName, target.terminal.sessionName);
+    const reordered = reorderArray(
+      sessionNames,
+      payload.sourceSessionName,
+      target.terminal.sessionName,
+      position,
+    );
+
+    if (sameOrder(sessionNames, reordered)) return;
+
+    await this.terminalOrders.set(payload.worktreePath, reordered);
+    this.refresh();
+  }
 }
 
 function toPayload(node: DeckNodeLike): DragPayload | undefined {
@@ -132,6 +189,13 @@ function toPayload(node: DeckNodeLike): DragPayload | undefined {
       repositoryPath: node.repositoryPath,
     };
   }
+  if (isTerminalNode(node)) {
+    return {
+      kind: 'terminal',
+      sourceSessionName: node.terminal.sessionName,
+      worktreePath: node.worktreePath,
+    };
+  }
   return undefined;
 }
 
@@ -143,6 +207,14 @@ function isWorktreeNode(node: DeckNodeLike): node is WorktreeNodeLike {
   return (
     node.contextValue?.startsWith('deck.worktree') === true &&
     'worktree' in node
+  );
+}
+
+function isTerminalNode(node: DeckNodeLike): node is TerminalNodeLike {
+  return (
+    node.contextValue?.startsWith('deck.terminal') === true &&
+    'terminal' in node &&
+    'worktreePath' in node
   );
 }
 

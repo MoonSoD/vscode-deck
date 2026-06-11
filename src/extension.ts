@@ -25,6 +25,7 @@ import { OpenTerminalCommand } from './terminal/openTerminalCommand';
 import { OpenTerminalInNewWindowCommand } from './terminal/openTerminalInNewWindowCommand';
 import { PendingTerminalOpenStore } from './terminal/pendingTerminalOpenStore';
 import { TerminalCascade } from './terminal/terminalCascade';
+import { TerminalOrderStore } from './terminal/terminalOrderStore';
 import {
   TerminalEditorProvider,
   terminalEditorViewType,
@@ -122,6 +123,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const activeWorktrees = new ActiveWorktreeStore(context.globalState);
   const worktreeRoots = new WorktreeRootStore(context.globalState);
   const worktreeOrders = new WorktreeOrderStore(context.globalState);
+  const terminalOrders = new TerminalOrderStore(context.globalState);
   const worktreeListCache = new WorktreeListCacheStore(context.globalState);
   const pendingTerminalOpens = new PendingTerminalOpenStore(context.globalState);
   const pendingWorktreeRemovals = new Set<string>();
@@ -139,6 +141,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     tmuxAvailability.available,
     pendingWorktreeRemovals,
     agentStatuses,
+    terminalOrders,
   );
   agentExitSweep = tmuxAvailability.available
     ? new AgentExitSweep({
@@ -211,6 +214,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     refreshTree,
     repositoryRegistry,
     worktreeOrders,
+    terminalOrders,
+    tmux,
   );
   const removeWorktree = new WorktreeRemovalCommand(
     activeWorktrees,

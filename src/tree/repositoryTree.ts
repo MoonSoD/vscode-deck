@@ -7,6 +7,7 @@ import { ActiveWorktreeStore } from '../switch/activeWorktreeStore';
 import { WorktreeListCacheStore } from '../worktree/worktreeListCacheStore';
 import { WorktreeOrderStore } from '../worktree/worktreeOrderStore';
 import { terminalSessionPrefix } from '../terminal/tmuxSafe';
+import { TerminalOrderStore } from '../terminal/terminalOrderStore';
 import type { TmuxSession } from '../terminal/tmuxCli';
 import {
   type CachedTerminalSession,
@@ -21,6 +22,7 @@ import {
 import { resolveAgentIcon } from '../agent/agentIconResolver';
 import { excludePending } from './excludePending';
 import { reconcileWorktreeOrder } from './reconcileWorktreeOrder';
+import { reconcileTerminalOrder } from './reconcileTerminalOrder';
 import {
   describeRepositoryTreeItem,
   describeTmuxUnavailableTreeItem,
@@ -161,6 +163,7 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
     tmuxAvailable?: boolean,
     private readonly pendingWorktreeRemovals: ReadonlySet<string> = new Set(),
     private readonly agentStatuses?: AgentStatusLookup,
+    private readonly terminalOrders?: Pick<TerminalOrderStore, 'get' | 'set'>,
   ) {
     this.syncAgentStatusDecorations();
     this.agentStatuses?.onDidChange(() => {
@@ -400,9 +403,18 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
   }
 
   private async getTerminalChildren(element: WorktreeNode): Promise<RepositoryTreeNode[]> {
-    const terminals = toCachedTerminalSessions(
+    const liveTerminals = toCachedTerminalSessions(
       element.worktree.path,
       await this.tmux.listSessions(terminalSessionPrefix(element.worktree.path)),
+    );
+    const storedOrder = this.terminalOrders?.get(element.worktree.path);
+    const prunedStoredOrder = pruneTerminalOrder(storedOrder, liveTerminals);
+    if (storedOrder !== undefined && prunedStoredOrder !== undefined && prunedStoredOrder !== storedOrder) {
+      await this.terminalOrders?.set(element.worktree.path, prunedStoredOrder);
+    }
+    const terminals = reconcileTerminalOrder(
+      prunedStoredOrder,
+      liveTerminals,
     );
     return this.toTerminalNodes(element, terminals);
   }
@@ -543,4 +555,15 @@ function sameWorktree(left: Worktree, right: Worktree): boolean {
     left.detached === right.detached &&
     left.locked === right.locked
   );
+}
+
+function pruneTerminalOrder<T extends { sessionName: string }>(
+  storedOrder: readonly string[] | undefined,
+  liveTerminals: readonly T[],
+): readonly string[] | undefined {
+  if (storedOrder === undefined) return undefined;
+
+  const liveSessionNames = new Set(liveTerminals.map((terminal) => terminal.sessionName));
+  const pruned = storedOrder.filter((sessionName) => liveSessionNames.has(sessionName));
+  return pruned.length === storedOrder.length ? storedOrder : pruned;
 }
