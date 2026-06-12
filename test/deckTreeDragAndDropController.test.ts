@@ -275,6 +275,36 @@ describe('DeckTreeDragAndDropController', () => {
     expect(refresh).toHaveBeenCalledOnce();
   });
 
+  it('reorders an internal Terminal drag even when VS Code also adds a resourceUri uri-list', async () => {
+    const { controller, refresh, terminalOrders } = createController();
+    const dataTransfer = new DataTransferMock();
+
+    controller.handleDrag?.(
+      [terminal('/repo/a', '/repo/a-main', 'wt-_repo_a-main__term-3')],
+      dataTransfer as vscode.DataTransfer,
+      {} as never,
+    );
+    // VS Code auto-adds the dragged node's resourceUri to text/uri-list; this
+    // must not be mistaken for an external folder drop.
+    dataTransfer.set(
+      'text/uri-list',
+      new vscode.DataTransferItem('file:///terminal/wt-_repo_a-main__term-3'),
+    );
+    await controller.handleDrop?.(
+      terminal('/repo/a', '/repo/a-main', 'wt-_repo_a-main__term-1'),
+      dataTransfer as vscode.DataTransfer,
+      {} as never,
+    );
+
+    expect(terminalOrders.set).toHaveBeenCalledWith('/repo/a-main', [
+      'wt-_repo_a-main__term-3',
+      'wt-_repo_a-main__term-1',
+      'wt-_repo_a-main__term-2',
+    ]);
+    expect(vscode.window.showErrorMessage).not.toHaveBeenCalled();
+    expect(refresh).toHaveBeenCalledOnce();
+  });
+
   it('reorders Terminals from live term-N order when no TerminalOrder is stored', async () => {
     const { controller, refresh, terminalOrders } = createController();
     vi.mocked(terminalOrders.get).mockReturnValue(undefined);

@@ -103,14 +103,16 @@ export class DeckTreeDragAndDropController
     target: DeckNodeLike | undefined,
     dataTransfer: vscode.DataTransfer,
   ): Promise<void> {
-    const uriList = dataTransfer.get(URI_LIST_MIME)?.value;
-    if (typeof uriList === 'string') {
-      await this.dropRepositorySeeds(uriList);
+    // An internal drag always carries our own MIME — and VS Code *also*
+    // auto-adds a `text/uri-list` entry for any node with a `resourceUri` (used
+    // for the agent-status decorations). Check our payload first so internal
+    // reorders aren't misrouted into the external register-a-Repository path.
+    const payload = dataTransfer.get(DECK_TREE_MIME)?.value as DragPayload | undefined;
+    if (!payload) {
+      const uriList = dataTransfer.get(URI_LIST_MIME)?.value;
+      if (typeof uriList === 'string') await this.dropRepositorySeeds(uriList);
       return;
     }
-
-    const payload = dataTransfer.get(DECK_TREE_MIME)?.value as DragPayload | undefined;
-    if (!payload) return;
 
     if (payload.kind === 'worktree') {
       if (!target) return;
