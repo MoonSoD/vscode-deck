@@ -1,16 +1,19 @@
 import { constants } from 'node:fs';
-import { mkdir, open, rm, stat } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+import { mkdir, open, readFile, rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 
 export const RECOVERY_LOCK_FILENAME = 'deck-socket-recovery.lock';
 
 export interface RecoveryLockFileHandle {
+  writeFile(data: string): Promise<void>;
   close(): Promise<void>;
 }
 
 export interface RecoveryLockFs {
   mkdir(path: string, options: { recursive: true }): Promise<void>;
   open(path: string, flags: number): Promise<RecoveryLockFileHandle>;
+  readFile(path: string, encoding: 'utf8'): Promise<string>;
   stat(path: string): Promise<{ mtimeMs: number }>;
   rm(path: string, options: { force: true }): Promise<void>;
 }
@@ -41,6 +44,7 @@ export class RecoveryLock {
   private readonly ttlMs: number;
   private readonly pollIntervalMs: number;
   private readonly timeoutMs: number;
+  private readonly ownerToken = randomUUID();
   private held = false;
 
   constructor(private readonly options: RecoveryLockOptions) {
@@ -73,6 +77,17 @@ export class RecoveryLock {
   async release(): Promise<void> {
     if (!this.held) return;
     this.held = false;
+
+    let ownerToken: string;
+    try {
+      ownerToken = await this.fs.readFile(this.lockPath, 'utf8');
+    } catch (error) {
+      if (isNotFound(error)) return;
+      throw error;
+    }
+
+    if (ownerToken !== this.ownerToken) return;
+
     await this.fs.rm(this.lockPath, { force: true });
   }
 
@@ -93,6 +108,7 @@ export class RecoveryLock {
         this.lockPath,
         constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY,
       );
+      await handle.writeFile(this.ownerToken);
       await handle.close();
       this.held = true;
       return true;
@@ -108,6 +124,7 @@ const nodeFs: RecoveryLockFs = {
     await mkdir(path, options);
   },
   open,
+  readFile,
   stat,
   rm,
 };

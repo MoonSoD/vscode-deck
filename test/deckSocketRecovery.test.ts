@@ -71,7 +71,7 @@ describe('RecoveryLock', () => {
   it('takes over a stale lock', async () => {
     let now = 62_000;
     const fs = new FakeRecoveryLockFs(() => now);
-    fs.files.set(`/deck/${RECOVERY_LOCK_FILENAME}`, { mtimeMs: 1_000 });
+    fs.files.set(`/deck/${RECOVERY_LOCK_FILENAME}`, { mtimeMs: 1_000, content: 'stale' });
     const lock = new RecoveryLock({
       deckDir: '/deck',
       fs,
@@ -83,6 +83,37 @@ describe('RecoveryLock', () => {
     await expect(lock.acquire()).resolves.toBe(true);
 
     expect(fs.files.get(`/deck/${RECOVERY_LOCK_FILENAME}`)?.mtimeMs).toBe(now);
+  });
+
+  it('does not release a stale lock taken over by a peer', async () => {
+    let now = 1_000;
+    const fs = new FakeRecoveryLockFs(() => now);
+    const first = new RecoveryLock({
+      deckDir: '/deck',
+      fs,
+      clock: { now: () => now, sleep: async () => undefined },
+      ttlMs: 60_000,
+      isHealthy: async () => true,
+    });
+    const second = new RecoveryLock({
+      deckDir: '/deck',
+      fs,
+      clock: { now: () => now, sleep: async () => undefined },
+      ttlMs: 60_000,
+      isHealthy: async () => true,
+    });
+
+    await expect(first.acquire()).resolves.toBe(true);
+    now = 62_000;
+    await expect(second.acquire()).resolves.toBe(true);
+
+    await first.release();
+
+    expect(fs.files.has(`/deck/${RECOVERY_LOCK_FILENAME}`)).toBe(true);
+
+    await second.release();
+
+    expect(fs.files.has(`/deck/${RECOVERY_LOCK_FILENAME}`)).toBe(false);
   });
 
   it('waits until the server becomes healthy', async () => {
@@ -325,16 +356,30 @@ function next<T>(values: T[], fallback: T): T {
 }
 
 class FakeRecoveryLockFs {
-  readonly files = new Map<string, { mtimeMs: number }>();
+  readonly files = new Map<string, { mtimeMs: number; content: string }>();
 
   constructor(private readonly now: () => number) {}
 
   async mkdir(_path: string, _options: { recursive: true }): Promise<void> {}
 
-  async open(path: string, _flags: number): Promise<{ close(): Promise<void> }> {
+  async open(path: string, _flags: number): Promise<{
+    writeFile(data: string): Promise<void>;
+    close(): Promise<void>;
+  }> {
     if (this.files.has(path)) throw errorWithCode('EEXIST');
-    this.files.set(path, { mtimeMs: this.now() });
-    return { close: async () => undefined };
+    this.files.set(path, { mtimeMs: this.now(), content: '' });
+    return {
+      writeFile: async (data) => {
+        this.files.set(path, { mtimeMs: this.now(), content: data });
+      },
+      close: async () => undefined,
+    };
+  }
+
+  async readFile(path: string, _encoding: 'utf8'): Promise<string> {
+    const file = this.files.get(path);
+    if (!file) throw errorWithCode('ENOENT');
+    return file.content;
   }
 
   async stat(path: string): Promise<{ mtimeMs: number }> {
