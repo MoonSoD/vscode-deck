@@ -11,6 +11,11 @@ export interface WedgeRecoveryDeps {
   socketPath(): string;
   socketExists(path: string): Promise<boolean>;
   removeSocket(path: string): Promise<void>;
+  recoveryLock: {
+    acquire(): Promise<boolean>;
+    release(): Promise<void>;
+    waitForHealthy(): Promise<boolean>;
+  };
 }
 
 export interface WedgeRecoveryOutcome {
@@ -37,9 +42,20 @@ export class WedgeRecovery {
 
       if (!(await this.confirmWedge(socketPath))) return { recovered: false, started: false };
 
-      await this.deps.removeSocket(socketPath);
-      await this.deps.startServer();
-      return { recovered: true, started: true };
+      if (!(await this.deps.recoveryLock.acquire())) {
+        await this.deps.recoveryLock.waitForHealthy();
+        return { recovered: false, started: false };
+      }
+
+      try {
+        if (!(await this.confirmWedge(socketPath))) return { recovered: false, started: false };
+
+        await this.deps.removeSocket(socketPath);
+        await this.deps.startServer();
+        return { recovered: true, started: true };
+      } finally {
+        await this.deps.recoveryLock.release();
+      }
     }
   }
 

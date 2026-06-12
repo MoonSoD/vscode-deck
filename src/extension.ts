@@ -42,6 +42,7 @@ import {
 } from './terminal/terminalSnapshotRuntime';
 import { createRestoreGate } from './terminal/restoreGate';
 import { deckSocketPath, WedgeRecovery } from './terminal/deckSocketRecovery';
+import { RecoveryLock } from './terminal/recoveryLock';
 import { AgentSidecarStore } from './agent/agentSidecarStore';
 import { AgentExitSweep } from './agent/agentExitSweep';
 import { AgentStatusFileDecorationProvider } from './agent/agentStatusFileDecorationProvider';
@@ -110,6 +111,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           socketPath: () => deckSocketPath(),
           socketExists,
           removeSocket: (path) => rm(path, { force: true }),
+          recoveryLock: new RecoveryLock({
+            deckDir,
+            isHealthy: () => tmux.isServerRunning(),
+          }),
         }),
       )
     : undefined;

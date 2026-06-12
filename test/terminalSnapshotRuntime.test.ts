@@ -115,6 +115,19 @@ describe('TerminalSnapshotRuntime', () => {
       removeSocket: async (path) => {
         tmux.calls.push(`removeSocket:${path}`);
       },
+      recoveryLock: {
+        acquire: async () => {
+          tmux.calls.push('lock.acquire');
+          return true;
+        },
+        release: async () => {
+          tmux.calls.push('lock.release');
+        },
+        waitForHealthy: async () => {
+          tmux.calls.push('lock.waitForHealthy');
+          return true;
+        },
+      },
     });
     const runtime = new TerminalSnapshotRuntime(
       tmux,
@@ -139,10 +152,43 @@ describe('TerminalSnapshotRuntime', () => {
       'isServerRunning',
       'socketExists:/tmp/tmux-1000/deck',
       'isServerRunning',
+      'lock.acquire',
+      'socketExists:/tmp/tmux-1000/deck',
+      'isServerRunning',
+      'socketExists:/tmp/tmux-1000/deck',
+      'isServerRunning',
+      'socketExists:/tmp/tmux-1000/deck',
+      'isServerRunning',
       'removeSocket:/tmp/tmux-1000/deck',
       'newAnchorSession:__deck_anchor:/deck/global-storage',
+      'lock.release',
       'runShell:/ext/resources/plugins/tmux-resurrect/scripts/restore.sh',
       'killSession:__deck_anchor',
+    ]);
+  });
+
+  it('does not restore when wedge recovery only waited for a peer', async () => {
+    const tmux = new FakeTmux();
+    const runtime = new TerminalSnapshotRuntime(
+      tmux,
+      () => '/ext/resources/plugins/tmux-resurrect/scripts/save.sh',
+      () => '/ext/resources/plugins/tmux-resurrect/scripts/restore.sh',
+      () => '/deck/global-storage',
+      () => Promise.resolve(),
+      {
+        ensureHealthyServer: async () => {
+          tmux.calls.push('wedgeRecovery.waitForPeer');
+          return { started: false };
+        },
+      },
+    );
+
+    await expect(runtime.restoreOnActivation()).resolves.toEqual({ restored: false });
+
+    expect(tmux.calls).toEqual([
+      'killSession:__deck_anchor',
+      'isServerRunning',
+      'wedgeRecovery.waitForPeer',
     ]);
   });
 
