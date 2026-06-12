@@ -108,6 +108,19 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
 
   dispose(): void {
     this.configChangeSubscription.dispose();
+    // Detach this window's control clients on graceful shutdown (reload, window
+    // close, quit) by disposing their panels, which cascades through onDidDispose
+    // to transport.dispose() → client.kill() (a SIGTERM detach, not a
+    // kill-session; the session survives via `destroy-unattached off`).
+    //
+    // The SIGTERM matters: a `tmux -C` client normally reaps itself on pipe-close
+    // when the host exits, but only if it can reach the server — a wedged/
+    // unresponsive server leaves it blocked, so it lingers as a PID-1 orphan
+    // (the failure behind the kill-server incident). An explicit SIGTERM reaps it
+    // regardless of server state. A hard crash (SIGKILL/OOM) can't run this; any
+    // orphans it leaks are benign against a healthy server, and PTY-based reaping
+    // that would also cover crashes is declined per ADR-0012.
+    for (const panel of [...this.panels.values()]) panel.dispose();
   }
 
   openCustomDocument(uri: vscode.Uri): TerminalDocument {

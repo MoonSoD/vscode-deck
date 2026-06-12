@@ -101,6 +101,54 @@ describe('TerminalEditorProvider', () => {
     expect(closeSession).toHaveBeenCalledWith('wt-_work_alpha-main__term-1');
   });
 
+  it('detaches every live terminal control client when the provider is disposed', () => {
+    // Mirror VS Code: disposing a panel fires onDidDispose synchronously, which
+    // is what carries the transport teardown through before the host exits.
+    const selfFiringPanel = () => {
+      const created = panel();
+      let onDispose: (() => void) | undefined;
+      created.onDidDispose.mockImplementation((handler: () => void) => {
+        onDispose = handler;
+        return { dispose: vi.fn() };
+      });
+      created.dispose.mockImplementation(() => onDispose?.());
+      return created;
+    };
+
+    const bridges: ReturnType<typeof bridge>[] = [];
+    const provider = new TerminalEditorProvider(
+      { fsPath: '/extension' } as never,
+      '/extension/resources/deck.conf',
+      undefined,
+      () => {
+        const created = bridge();
+        bridges.push(created);
+        return created;
+      },
+    );
+
+    const panelA = selfFiringPanel();
+    const panelB = selfFiringPanel();
+    provider.resolveCustomEditor(
+      provider.openCustomDocument({ scheme: 'deck-terminal', path: '/work/alpha-main/term-1' } as never),
+      panelA as never,
+    );
+    provider.resolveCustomEditor(
+      provider.openCustomDocument({ scheme: 'deck-terminal', path: '/work/beta-main/term-2' } as never),
+      panelB as never,
+    );
+    expect(bridges).toHaveLength(2);
+
+    provider.dispose();
+
+    expect(panelA.dispose).toHaveBeenCalledOnce();
+    expect(panelB.dispose).toHaveBeenCalledOnce();
+    expect(bridges[0].dispose).toHaveBeenCalledOnce();
+    expect(bridges[1].dispose).toHaveBeenCalledOnce();
+    expect(provider.panelFor('wt-_work_alpha-main__term-1')).toBeUndefined();
+    expect(provider.panelFor('wt-_work_beta-main__term-2')).toBeUndefined();
+  });
+
   it('titles the tab with the tmux window name and updates it on rename', async () => {
     let renameHandler: (() => void) | undefined;
     const terminalBridge = bridge();
