@@ -404,6 +404,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   if (terminalSnapshotRuntime) {
     context.subscriptions.push(terminalSnapshotRuntime.startPeriodicSave(5 * 60 * 1000));
     await openPendingTerminalForCurrentWorktree(pendingTerminalOpens, tmux);
+    // Let restore (and its agent-session rewrite) finish before pruning, so prune
+    // never deletes a sidecar for a session restore is about to bring back — that
+    // race left restored agents at a bare shell instead of resuming.
+    await activationRestore?.catch(() => undefined);
     try {
       const liveSessions = new Set((await tmux.listSessions()).map((session) => session.sessionName));
       try {

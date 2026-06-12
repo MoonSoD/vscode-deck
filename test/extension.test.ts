@@ -26,6 +26,7 @@ const vscodeState = vi.hoisted(() => ({
     },
   ]>,
   agentStatusStorePrune: vi.fn(async () => undefined),
+  restoreOnActivationImpl: (async () => ({ restored: true })) as () => Promise<{ restored: boolean }>,
   agentStatusStoreStart: vi.fn(async () => ({ dispose: vi.fn() })),
   agentStatusStoreChangeListeners: [] as Array<() => void>,
   agentStatusStoreChangeListener: undefined as (() => void) | undefined,
@@ -331,7 +332,7 @@ vi.mock('../src/terminal/tmuxCli', () => ({
 vi.mock('../src/terminal/terminalSnapshotRuntime', () => ({
   TerminalSnapshotRuntime: class {
     save = vi.fn(async () => undefined);
-    restoreOnActivation = vi.fn(async () => ({ restored: true }));
+    restoreOnActivation = vi.fn(() => vscodeState.restoreOnActivationImpl());
     periodicSave = { dispose: vi.fn() };
     startPeriodicSave = vi.fn(() => this.periodicSave);
 
@@ -464,6 +465,7 @@ describe('activate', () => {
     vscodeState.agentStatusStoreChangeListeners = [];
     vscodeState.agentStatusStoreEntries = [];
     vscodeState.agentStatusStorePrune.mockResolvedValue(undefined);
+    vscodeState.restoreOnActivationImpl = async () => ({ restored: true });
     vscodeState.agentStatusStoreStart.mockResolvedValue({ dispose: vi.fn() });
     vscodeState.hookInstallerArgs = undefined;
     vscodeState.hookInstallerReconcile.mockResolvedValue([]);
@@ -703,6 +705,29 @@ describe('activate', () => {
 
     const runtime = vscodeState.terminalSnapshotRuntimeInstances[0];
     expect(runtime.restoreOnActivation).toHaveBeenCalledOnce();
+  });
+
+  it('prunes agent sidecars only after the activation restore completes', async () => {
+    // Regression guard: prune deletes sidecars for sessions not currently live,
+    // so running it before restore re-creates the sessions wipes the session_ids
+    // the snapshot rewrite needs — leaving restored agents at a bare shell.
+    let resolveRestore: (value: { restored: boolean }) => void = () => undefined;
+    vscodeState.restoreOnActivationImpl = () =>
+      new Promise((resolve) => {
+        resolveRestore = resolve;
+      });
+
+    const context = createContext();
+    const activation = activate(context as never);
+    for (let i = 0; i < 5; i += 1) await new Promise((resolve) => setTimeout(resolve, 0));
+
+    // Restore is still in flight → prune must not have run yet.
+    expect(vscodeState.agentStatusStorePrune).not.toHaveBeenCalled();
+
+    resolveRestore({ restored: true });
+    await activation;
+
+    expect(vscodeState.agentStatusStorePrune).toHaveBeenCalled();
   });
 
   it('refreshes the tree after the activation TerminalSnapshot restore completes', async () => {
