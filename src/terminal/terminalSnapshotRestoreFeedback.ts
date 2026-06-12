@@ -17,13 +17,15 @@ export interface TerminalSnapshotRestoreProgressCopy {
 export function formatTerminalSnapshotRestoreProgress(options: {
   unresponsive: boolean;
   lastSavedAt?: Date;
+  // Defaults to the user's local zone; tests pass a fixed zone for determinism.
+  timeZone?: string;
 }): TerminalSnapshotRestoreProgressCopy {
   return {
     title: options.unresponsive
       ? "Deck's terminal server is unresponsive. Restarting…"
       : "Restoring Deck's terminals…",
     message: options.lastSavedAt
-      ? `Restoring terminals from ${formatLastSavedAt(options.lastSavedAt)}.`
+      ? `Restoring terminals from ${formatLastSavedAt(options.lastSavedAt, options.timeZone)}.`
       : 'Restoring terminals…',
   };
 }
@@ -42,13 +44,13 @@ export async function terminalSnapshotLastSaveTime(
   }
 }
 
-function formatLastSavedAt(lastSavedAt: Date): string {
+function formatLastSavedAt(lastSavedAt: Date, timeZone?: string): string {
   return new Intl.DateTimeFormat('en-US', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
     hour: 'numeric',
     minute: '2-digit',
-    timeZone: 'UTC',
+    ...(timeZone ? { timeZone } : {}),
   }).format(lastSavedAt);
 }

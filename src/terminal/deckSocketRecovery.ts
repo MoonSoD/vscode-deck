@@ -14,8 +14,9 @@ export interface WedgeRecoveryDeps {
   recoveryLock: {
     acquire(): Promise<boolean>;
     release(): Promise<void>;
-    waitForHealthy(): Promise<boolean>;
+    waitForHealthy(): Promise<void>;
   };
+  sleep?(ms: number): Promise<void>;
 }
 
 export interface WedgeRecoveryOutcome {
@@ -24,6 +25,13 @@ export interface WedgeRecoveryOutcome {
 }
 
 const WEDGE_CONFIRMATION_PROBES = 3;
+// Space the confirmation probes so a server that is only slow / CPU-starved (not
+// wedged) gets a window to answer on a later probe before we treat the socket as
+// dead and reset it (ADR-0030 decision 3).
+const WEDGE_CONFIRMATION_PROBE_INTERVAL_MS = 400;
+
+const defaultSleep = (ms: number): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, ms));
 
 export class WedgeRecovery {
   constructor(private readonly deps: WedgeRecoveryDeps) {}
@@ -61,6 +69,7 @@ export class WedgeRecovery {
 
   private async confirmWedge(socketPath: string): Promise<boolean> {
     for (let probe = 0; probe < WEDGE_CONFIRMATION_PROBES; probe += 1) {
+      if (probe > 0) await (this.deps.sleep ?? defaultSleep)(WEDGE_CONFIRMATION_PROBE_INTERVAL_MS);
       if (!(await this.deps.socketExists(socketPath))) return false;
       if (await this.deps.isServerRunning()) return false;
     }
@@ -71,7 +80,7 @@ export class WedgeRecovery {
 export function deckSocketPath(options: DeckSocketPathOptions = {}): string {
   const env = options.env ?? process.env;
   const uid = options.uid ?? process.getuid?.() ?? 0;
-  return join(env.TMUX_TMPDIR ?? '/tmp', `tmux-${uid}`, 'deck');
+  return join(env.TMUX_TMPDIR || '/tmp', `tmux-${uid}`, 'deck');
 }
 
 export function isWedged(error: unknown): boolean {

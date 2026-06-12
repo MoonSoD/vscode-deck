@@ -91,10 +91,10 @@ export class RecoveryLock {
     await this.fs.rm(this.lockPath, { force: true });
   }
 
-  async waitForHealthy(): Promise<boolean> {
+  async waitForHealthy(): Promise<void> {
     const deadline = this.clock.now() + this.timeoutMs;
     while (this.clock.now() <= deadline) {
-      if (await this.options.isHealthy()) return true;
+      if (await this.options.isHealthy()) return;
       const delayMs = Math.min(this.pollIntervalMs, deadline - this.clock.now());
       if (delayMs <= 0) break;
       await this.clock.sleep(delayMs);

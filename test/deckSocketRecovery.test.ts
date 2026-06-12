@@ -133,7 +133,7 @@ describe('RecoveryLock', () => {
     healthy = true;
     await vi.advanceTimersByTimeAsync(100);
 
-    await expect(waiting).resolves.toBe(true);
+    await expect(waiting).resolves.toBeUndefined();
   });
 
   it('times out when the server never becomes healthy', async () => {
@@ -330,9 +330,9 @@ function createRecoveryHarness(options: {
       },
       waitForHealthy: async () => {
         lockCalls.push('waitForHealthy');
-        return true;
       },
     },
+    sleep: async () => undefined,
   });
 
   return {

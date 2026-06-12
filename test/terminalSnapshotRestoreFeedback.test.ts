@@ -9,6 +9,7 @@ describe('formatTerminalSnapshotRestoreProgress', () => {
     expect(formatTerminalSnapshotRestoreProgress({
       unresponsive: true,
       lastSavedAt: new Date('2026-06-12T15:04:05Z'),
+      timeZone: 'UTC',
     })).toEqual({
       title: "Deck's terminal server is unresponsive. Restarting…",
       message: 'Restoring terminals from Jun 12, 2026, 3:04 PM.',
