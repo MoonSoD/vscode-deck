@@ -27,8 +27,8 @@ const SWITCH_LABEL = 'Switch';
 const OPEN_IN_NEW_WINDOW_LABEL = 'Open in New Window';
 
 export type RegisterRepositorySeedResult =
-  | { kind: 'registered'; repositoryPath: string }
-  | { kind: 'duplicate'; repositoryPath: string }
+  | { kind: 'registered'; repositoryPath: string; commonDir: string }
+  | { kind: 'duplicate'; repositoryPath: string; commonDir: string }
   | { kind: 'notGit'; repositoryPath: string };
 
 export interface RegisterRepositorySeedOptions {
@@ -55,13 +55,13 @@ export async function registerRepositorySeed({
   }
 
   const isRegistered = await hasRegisteredCommonDir(registry, repositoryCommonDirCache, commonDir);
-  if (isRegistered) return { kind: 'duplicate', repositoryPath: seedPath };
+  if (isRegistered) return { kind: 'duplicate', repositoryPath: seedPath, commonDir };
 
   await registry.append(seedPath);
   await activeWorktrees.set(commonDir, seedPath);
   refresh();
   await reveal(seedPath);
-  return { kind: 'registered', repositoryPath: seedPath };
+  return { kind: 'registered', repositoryPath: seedPath, commonDir };
 }
 
 export async function showRepositoryPostAddPrompt(

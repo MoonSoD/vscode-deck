@@ -47,7 +47,7 @@ describe('registerRepositorySeed', () => {
       reveal,
     });
 
-    expect(result).toEqual({ kind: 'registered', repositoryPath: '/repo/main' });
+    expect(result).toEqual({ kind: 'registered', repositoryPath: '/repo/main', commonDir: '/git/repo' });
     expect(registry.append).toHaveBeenCalledWith('/repo/main');
     expect(registry.list()).toEqual(['/other/main', '/repo/main']);
     expect(activeWorktrees.set).toHaveBeenCalledWith('/git/repo', '/repo/main');
@@ -67,7 +67,7 @@ describe('registerRepositorySeed', () => {
       reveal,
     });
 
-    expect(result).toEqual({ kind: 'duplicate', repositoryPath: '/repo/main' });
+    expect(result).toEqual({ kind: 'duplicate', repositoryPath: '/repo/main', commonDir: '/git/repo' });
     expect(registry.append).not.toHaveBeenCalled();
     expect(activeWorktrees.set).not.toHaveBeenCalled();
     expect(refresh).not.toHaveBeenCalled();
@@ -106,7 +106,7 @@ describe('registerRepositorySeed', () => {
       reveal,
     });
 
-    expect(result).toEqual({ kind: 'registered', repositoryPath: '/repo/main/src' });
+    expect(result).toEqual({ kind: 'registered', repositoryPath: '/repo/main/src', commonDir: '/git/repo' });
     expect(registry.append).toHaveBeenCalledWith('/repo/main/src');
     expect(activeWorktrees.set).toHaveBeenCalledWith('/git/repo', '/repo/main/src');
     expect(refresh).toHaveBeenCalledOnce();

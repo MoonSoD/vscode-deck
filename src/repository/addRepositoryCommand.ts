@@ -52,7 +52,16 @@ export class AddRepositoryCommand {
       reveal: this.reveal,
       repositoryCommonDirCache: this.repositoryCommonDirCache,
     });
-    if (result.kind !== 'registered') return;
+    if (result.kind === 'notGit') return;
+
+    // An already-registered pick still reveals the existing Repository and
+    // offers the post-add actions — the drag path treats a duplicate as a
+    // no-op, but the explicit menu command should never feel like a dead click.
+    if (result.kind === 'duplicate') {
+      await this.activeWorktrees.set(result.commonDir, seedPath);
+      this.refresh();
+      await this.reveal(seedPath);
+    }
 
     await showRepositoryPostAddPrompt(seedPath, this.switcher, this.detachedOpener);
   }
