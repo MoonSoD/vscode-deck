@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process';
+import { isWedged } from './deckSocketRecovery';
 
 export interface CommandResult {
   code: number;
@@ -104,7 +105,7 @@ export class TmuxCli {
       '-F',
       '#{session_name}\t#{window_name}',
     ]);
-    if (result.code !== 0 && isMissingSession(result)) return [];
+    if (result.code !== 0 && (isMissingSession(result) || isWedged(result))) return [];
     if (result.code !== 0) {
       throw new Error(result.stderr || result.stdout || `tmux list-sessions failed: ${result.code}`);
     }

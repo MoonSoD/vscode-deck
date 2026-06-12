@@ -13,7 +13,11 @@ export interface RestoreOutcome {
   restored: boolean;
 }
 
-const ANCHOR_SESSION = '__deck_anchor';
+export interface TerminalSnapshotWedgeRecovery {
+  ensureHealthyServer(): Promise<{ started: boolean }>;
+}
+
+export const TERMINAL_SNAPSHOT_ANCHOR_SESSION = '__deck_anchor';
 
 export class TerminalSnapshotRuntime {
   constructor(
@@ -22,6 +26,7 @@ export class TerminalSnapshotRuntime {
     private readonly restoreScriptPath: () => string,
     private readonly anchorCwd: () => string,
     private readonly beforeRestore: () => Promise<void> = () => Promise.resolve(),
+    private readonly wedgeRecovery?: TerminalSnapshotWedgeRecovery,
   ) {}
 
   async save(): Promise<void> {
@@ -39,7 +44,7 @@ export class TerminalSnapshotRuntime {
 
       if (await this.tmux.isServerRunning()) return { restored: false };
 
-      await this.tmux.newAnchorSession(ANCHOR_SESSION, this.anchorCwd());
+      if (!(await this.ensureHealthyServer())) return { restored: false };
       let restored = false;
       try {
         // Best-effort: a failed agent-session rewrite must never abort terminal
@@ -63,10 +68,17 @@ export class TerminalSnapshotRuntime {
 
   private async killAnchor(): Promise<void> {
     try {
-      await this.tmux.killSession(ANCHOR_SESSION);
+      await this.tmux.killSession(TERMINAL_SNAPSHOT_ANCHOR_SESSION);
     } catch (error) {
       console.warn('Deck: removing TerminalSnapshot anchor failed', error);
     }
+  }
+
+  private async ensureHealthyServer(): Promise<boolean> {
+    if (this.wedgeRecovery) return (await this.wedgeRecovery.ensureHealthyServer()).started;
+
+    await this.tmux.newAnchorSession(TERMINAL_SNAPSHOT_ANCHOR_SESSION, this.anchorCwd());
+    return true;
   }
 
   startPeriodicSave(intervalMs: number): Disposable {

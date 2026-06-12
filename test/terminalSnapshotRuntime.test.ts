@@ -1,10 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { WedgeRecovery } from '../src/terminal/deckSocketRecovery';
 import { TerminalSnapshotRuntime } from '../src/terminal/terminalSnapshotRuntime';
 
 class FakeTmux {
   readonly calls: string[] = [];
   serverRunning = false;
   runShellError: Error | undefined;
+  newAnchorErrors: Error[] = [];
 
   async runShell(scriptPath: string): Promise<void> {
     this.calls.push(`runShell:${scriptPath}`);
@@ -18,6 +20,8 @@ class FakeTmux {
 
   async newAnchorSession(session: string, cwd: string): Promise<void> {
     this.calls.push(`newAnchorSession:${session}:${cwd}`);
+    const error = this.newAnchorErrors.shift();
+    if (error) throw error;
   }
 
   async killSession(session: string): Promise<void> {
@@ -91,6 +95,51 @@ describe('TerminalSnapshotRuntime', () => {
     expect(tmux.calls).toEqual([
       'killSession:__deck_anchor',
       'isServerRunning',
+      'newAnchorSession:__deck_anchor:/deck/global-storage',
+      'runShell:/ext/resources/plugins/tmux-resurrect/scripts/restore.sh',
+      'killSession:__deck_anchor',
+    ]);
+  });
+
+  it('recovers a wedged Deck socket before restoring on activation', async () => {
+    const tmux = new FakeTmux();
+    tmux.newAnchorErrors = [new Error('server exited unexpectedly')];
+    const recovery = new WedgeRecovery({
+      isServerRunning: () => tmux.isServerRunning(),
+      startServer: () => tmux.newAnchorSession('__deck_anchor', '/deck/global-storage'),
+      socketPath: () => '/tmp/tmux-1000/deck',
+      socketExists: async (path) => {
+        tmux.calls.push(`socketExists:${path}`);
+        return true;
+      },
+      removeSocket: async (path) => {
+        tmux.calls.push(`removeSocket:${path}`);
+      },
+    });
+    const runtime = new TerminalSnapshotRuntime(
+      tmux,
+      () => '/ext/resources/plugins/tmux-resurrect/scripts/save.sh',
+      () => '/ext/resources/plugins/tmux-resurrect/scripts/restore.sh',
+      () => '/deck/global-storage',
+      () => Promise.resolve(),
+      recovery,
+    );
+
+    await expect(runtime.restoreOnActivation()).resolves.toEqual({ restored: true });
+
+    expect(tmux.calls).toEqual([
+      'killSession:__deck_anchor',
+      'isServerRunning',
+      'isServerRunning',
+      'newAnchorSession:__deck_anchor:/deck/global-storage',
+      'socketExists:/tmp/tmux-1000/deck',
+      'socketExists:/tmp/tmux-1000/deck',
+      'isServerRunning',
+      'socketExists:/tmp/tmux-1000/deck',
+      'isServerRunning',
+      'socketExists:/tmp/tmux-1000/deck',
+      'isServerRunning',
+      'removeSocket:/tmp/tmux-1000/deck',
       'newAnchorSession:__deck_anchor:/deck/global-storage',
       'runShell:/ext/resources/plugins/tmux-resurrect/scripts/restore.sh',
       'killSession:__deck_anchor',

@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { access, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import * as vscode from 'vscode';
@@ -36,8 +36,12 @@ import { tmuxPreflight } from './terminal/tmuxPreflight';
 import { SessionUriCodec } from './terminal/sessionUriCodec';
 import { renderDeckConf } from './terminal/deckConf';
 import { resolveDeckTmuxOptions, type DeckTmuxOptions } from './terminal/deckTmuxOptions';
-import { TerminalSnapshotRuntime } from './terminal/terminalSnapshotRuntime';
+import {
+  TERMINAL_SNAPSHOT_ANCHOR_SESSION,
+  TerminalSnapshotRuntime,
+} from './terminal/terminalSnapshotRuntime';
 import { createRestoreGate } from './terminal/restoreGate';
+import { deckSocketPath, WedgeRecovery } from './terminal/deckSocketRecovery';
 import { AgentSidecarStore } from './agent/agentSidecarStore';
 import { AgentExitSweep } from './agent/agentExitSweep';
 import { AgentStatusFileDecorationProvider } from './agent/agentStatusFileDecorationProvider';
@@ -100,6 +104,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           agentSidecars,
           new SnapshotRewriter(resumeTemplateFromSettings()),
         ),
+        new WedgeRecovery({
+          isServerRunning: () => tmux.isServerRunning(),
+          startServer: () => tmux.newAnchorSession(TERMINAL_SNAPSHOT_ANCHOR_SESSION, deckDir),
+          socketPath: () => deckSocketPath(),
+          socketExists,
+          removeSocket: (path) => rm(path, { force: true }),
+        }),
       )
     : undefined;
 
@@ -116,7 +127,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     : () => Promise.resolve();
   // Kick off the reboot restore now so the tree shows restored rows even before
   // any tab reattaches.
-  void ensureSnapshotRestored();
+  const activationRestore = snapshotRuntime ? ensureSnapshotRestored() : undefined;
 
   const repositoryRegistry = new RepositoryRegistryStore(context.globalState);
 
@@ -159,6 +170,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     tree.refresh();
     agentExitSweep?.wake();
     syncExternalGitWatches();
+  }
+
+  if (activationRestore) {
+    void activationRestore.then(refreshTree).catch((error) => {
+      console.warn('Deck: refreshing tree after TerminalSnapshot restore failed', error);
+    });
   }
 
   function syncExternalGitWatches(): void {
@@ -428,6 +445,15 @@ async function writeDeckConf(
   await mkdir(resurrectDir, { recursive: true });
   await writeFile(generatedPath, renderDeckConf(template, { pluginPath, resurrectDir }, tmuxOptions), 'utf8');
   return generatedPath;
+}
+
+async function socketExists(path: string): Promise<boolean> {
+  try {
+    await access(path);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function deckTmuxOptionsFromSettings(): DeckTmuxOptions {

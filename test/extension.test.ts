@@ -88,6 +88,7 @@ const vscodeState = vi.hoisted(() => ({
     isServerRunning: ReturnType<typeof vi.fn>;
     killSession: ReturnType<typeof vi.fn>;
     listSessions: ReturnType<typeof vi.fn>;
+    newAnchorSession: ReturnType<typeof vi.fn>;
     setOption: ReturnType<typeof vi.fn>;
     unsetOption: ReturnType<typeof vi.fn>;
   }>,
@@ -95,6 +96,7 @@ const vscodeState = vi.hoisted(() => ({
     tmux: unknown;
     saveScriptPath: () => string;
     beforeRestore: () => Promise<void>;
+    wedgeRecovery: unknown;
     save: ReturnType<typeof vi.fn>;
     restoreOnActivation: ReturnType<typeof vi.fn>;
     startPeriodicSave: ReturnType<typeof vi.fn>;
@@ -302,6 +304,7 @@ vi.mock('../src/terminal/tmuxCli', () => ({
   TmuxCli: class {
     configPath: string;
     killSession = vi.fn(async () => undefined);
+    newAnchorSession = vi.fn(async () => undefined);
     windowName = vi.fn(async () => 'zsh');
     isServerRunning = vi.fn(async () => vscodeState.tmuxServerRunning);
     listSessions = vi.fn(async () => {
@@ -331,6 +334,7 @@ vi.mock('../src/terminal/terminalSnapshotRuntime', () => ({
       public readonly restoreScriptPath: () => string,
       public readonly anchorCwd: () => string,
       public readonly beforeRestore: () => Promise<void>,
+      public readonly wedgeRecovery: unknown,
     ) {
       vscodeState.terminalSnapshotRuntimeInstances.push(this);
     }
@@ -691,6 +695,15 @@ describe('activate', () => {
     expect(runtime.restoreOnActivation).toHaveBeenCalledOnce();
   });
 
+  it('refreshes the tree after the activation TerminalSnapshot restore completes', async () => {
+    const context = createContext();
+
+    await activate(context as never);
+    await Promise.resolve();
+
+    expect(vscodeState.repositoryTreeInstances[0].refresh).toHaveBeenCalledOnce();
+  });
+
   it('uses agent resume template settings when rewriting the TerminalSnapshot', async () => {
     vscodeState.settingsAgentResumeTemplates.codex = 'codex --dangerously-bypass-approvals-and-sandbox resume {id}';
     const context = createContext();
@@ -767,10 +780,16 @@ describe('activate', () => {
     expect(vscodeState.onDidCloseTerminal).not.toHaveBeenCalled();
     expect(vscodeState.onDidChangeActiveTerminal).not.toHaveBeenCalled();
     // Tab restoration is now VS Code's native custom-editor restore — Deck no
-    // longer replays a snapshot. Three list-sessions run here: the one-shot
-    // agent exit sweep wake, the pending-intent open, then agent sidecar/status
-    // pruning share one live-session list.
-    expect(vscodeState.lifecycleOrder).toEqual(['pending-list', 'pending-list', 'pending-list']);
+    // longer replays a snapshot. Four list-sessions run here: the one-shot
+    // agent exit sweep wake, the activation-restore refresh waking the sweep,
+    // the pending-intent open, then agent sidecar/status pruning share one
+    // live-session list.
+    expect(vscodeState.lifecycleOrder).toEqual([
+      'pending-list',
+      'pending-list',
+      'pending-list',
+      'pending-list',
+    ]);
     expect(vscodeState.agentStatusStorePrune).toHaveBeenCalledWith(
       new Set(['wt-_work_alpha-main__term-1']),
     );
@@ -1105,6 +1124,7 @@ describe('activate', () => {
     };
 
     await activate(context as never);
+    vscodeState.repositoryTreeInstances[0].refresh.mockClear();
     const provider = vscodeState.registerCustomEditorProvider.mock.calls[0][1] as {
       openCustomDocument(uri: unknown): unknown;
       resolveCustomEditor(document: unknown, panel: unknown): void;

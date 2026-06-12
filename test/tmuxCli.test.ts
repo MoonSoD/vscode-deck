@@ -326,6 +326,19 @@ describe('TmuxCli', () => {
     await expect(tmux.listSessions('wt-_work_repo__term-')).resolves.toEqual([]);
   });
 
+  it('treats a wedged DeckSocket as empty while recovery runs', async () => {
+    const runner = new MockRunner([
+      {
+        code: 1,
+        stdout: '',
+        stderr: 'server exited unexpectedly',
+      },
+    ]);
+    const tmux = new TmuxCli('/ext/resources/deck.conf', runner);
+
+    await expect(tmux.listSessions('wt-_work_repo__term-')).resolves.toEqual([]);
+  });
+
   it('kills an exact Deck session target', async () => {
     const runner = new MockRunner([{ code: 0, stdout: '', stderr: '' }]);
     const tmux = new TmuxCli('/ext/resources/deck.conf', runner);
