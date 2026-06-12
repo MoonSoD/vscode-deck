@@ -248,6 +248,24 @@ describe('AgentStatusStore', () => {
     expect(store.get('term-1')).toEqual({ status: 'needsInput', statusAt: 1710000000 });
   });
 
+  it('drops legacy process identity fields from status records', async () => {
+    const root = tempRoot();
+    mkdirSync(root, { recursive: true });
+    writeFileSync(
+      join(root, 'term-1.json'),
+      '{"status":"inProgress","statusAt":1710000000,"agent":"codex","pid":1234,"startTime":"Thu Jun 11 20:00:00 2026"}',
+      'utf8',
+    );
+    const store = new AgentStatusStore(root, 10);
+    disposables.push(await store.start());
+
+    expect(store.get('term-1')).toEqual({
+      status: 'inProgress',
+      statusAt: 1710000000,
+      agent: 'codex',
+    });
+  });
+
   it('loads all hook statuses and keeps the needs-input message', async () => {
     const root = tempRoot();
     mkdirSync(root, { recursive: true });

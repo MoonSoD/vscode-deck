@@ -38,11 +38,15 @@ export class AgentSidecarStore {
     await writeFile(this.pathFor(sessionName), `${JSON.stringify(sidecar)}\n`, 'utf8');
   }
 
+  async remove(sessionName: string): Promise<void> {
+    await rm(this.pathFor(sessionName), { force: true });
+  }
+
   async prune(liveSessions: ReadonlySet<string>): Promise<void> {
     const sidecars = await this.readAll();
     for (const sessionName of sidecars.keys()) {
       if (!liveSessions.has(sessionName)) {
-        await rm(this.pathFor(sessionName), { force: true });
+        await this.remove(sessionName);
       }
     }
   }
@@ -64,7 +68,9 @@ function parseSidecar(text: string): AgentSidecar | undefined {
     value !== null &&
     ((value as { agent?: unknown }).agent === 'claude' ||
       (value as { agent?: unknown }).agent === 'codex') &&
-    typeof (value as { session_id?: unknown }).session_id === 'string'
+    typeof (value as { session_id?: unknown }).session_id === 'string' &&
+    typeof (value as { pid?: unknown }).pid === 'number' &&
+    typeof (value as { startTime?: unknown }).startTime === 'string'
   ) {
     return value as AgentSidecar;
   }

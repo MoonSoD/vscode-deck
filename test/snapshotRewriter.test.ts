@@ -34,7 +34,7 @@ describe('SnapshotRewriter', () => {
     ].join('\n');
 
     const rewritten = new SnapshotRewriter().rewrite(snapshot, new Map([
-      ['wt-_work_repo__term-1', { agent: 'claude', session_id: 'abc-123' }],
+      ['wt-_work_repo__term-1', sidecar('claude', 'abc-123')],
     ]));
 
     expect(rewritten.split('\n')).toEqual([
@@ -67,28 +67,26 @@ describe('SnapshotRewriter', () => {
     ]);
   });
 
-  it('resumes a Claude pane whose current command is the version string, not "claude"', () => {
-    // Claude Code reports its version (e.g. "2.1.168") as pane_current_command;
-    // the resumable command is recognized via the full-command column instead.
+  it('resumes a Claude pane from sidecar presence without command-column detection', () => {
     const snapshot = paneLine({
       session: 'wt-_work_repo__term-1',
       currentCommand: '2.1.168',
-      fullCommand: ':claude',
+      fullCommand: ':',
     });
 
     const rewritten = new SnapshotRewriter().rewrite(snapshot, new Map([
-      ['wt-_work_repo__term-1', { agent: 'claude', session_id: 'abc-123' }],
+      ['wt-_work_repo__term-1', sidecar('claude', 'abc-123')],
     ]));
 
     expect(rewritten.split('\t')[10]).toBe(':claude --resume abc-123');
   });
 
-  it('rewrites Codex panes, including truncated command names, to resume commands', () => {
+  it('rewrites Codex panes with sidecars to resume commands', () => {
     const snapshot = [
       paneLine({
         session: 'wt-_work_repo__term-1',
-        currentCommand: 'codex',
-        fullCommand: ':codex',
+        currentCommand: 'zsh',
+        fullCommand: ':',
       }),
       paneLine({
         session: 'wt-_work_repo__term-2',
@@ -98,8 +96,8 @@ describe('SnapshotRewriter', () => {
     ].join('\n');
 
     const sidecars = new Map<string, AgentSidecar>([
-      ['wt-_work_repo__term-1', { agent: 'codex', session_id: 'codex-123' }],
-      ['wt-_work_repo__term-2', { agent: 'codex', session_id: 'codex-456' }],
+      ['wt-_work_repo__term-1', sidecar('codex', 'codex-123')],
+      ['wt-_work_repo__term-2', sidecar('codex', 'codex-456')],
     ]);
 
     const rewritten = new SnapshotRewriter().rewrite(snapshot, sidecars);
@@ -109,15 +107,13 @@ describe('SnapshotRewriter', () => {
     expect(lines[1].split('\t')[10]).toBe(':codex resume codex-456');
   });
 
-  it('restores exited-agent and no-sidecar panes as plain shells', () => {
+  it('restores panes without sidecars as plain shells', () => {
     const snapshot = [
       paneLine({ session: 'wt-_work_repo__term-1', currentCommand: 'zsh', fullCommand: ':zsh' }),
       paneLine({ session: 'wt-_work_repo__term-2', currentCommand: 'claude', fullCommand: ':claude' }),
     ].join('\n');
 
-    const rewritten = new SnapshotRewriter().rewrite(snapshot, new Map([
-      ['wt-_work_repo__term-1', { agent: 'claude', session_id: 'abc-123' }],
-    ]));
+    const rewritten = new SnapshotRewriter().rewrite(snapshot, new Map());
 
     const lines = rewritten.split('\n');
     expect(lines[0].split('\t')[10]).toBe(':');
@@ -132,7 +128,7 @@ describe('SnapshotRewriter', () => {
     });
 
     const rewritten = new SnapshotRewriter().rewrite(snapshot, new Map([
-      ['wt-_work_repo__term-1', { agent: 'codex', session_id: 'codex-123' }],
+      ['wt-_work_repo__term-1', sidecar('codex', 'codex-123')],
     ]));
 
     expect(rewritten.split('\t')[10]).toBe(':codex resume codex-123');
@@ -148,7 +144,7 @@ describe('SnapshotRewriter', () => {
     const rewritten = new SnapshotRewriter(new ResumeTemplate({
       codex: 'codex --dangerously-bypass-approvals-and-sandbox resume {id}',
     })).rewrite(snapshot, new Map([
-      ['wt-_work_repo__term-1', { agent: 'codex', session_id: 'codex-123' }],
+      ['wt-_work_repo__term-1', sidecar('codex', 'codex-123')],
     ]));
 
     expect(rewritten.split('\t')[10]).toBe(
@@ -164,7 +160,7 @@ describe('SnapshotRewriter', () => {
     });
 
     const rewritten = new SnapshotRewriter().rewrite(snapshot, new Map([
-      ['wt-_work_repo__term-1', { agent: 'claude', session_id: 'session with spaces' }],
+      ['wt-_work_repo__term-1', sidecar('claude', 'session with spaces')],
     ]));
 
     const columns = rewritten.split('\t');
@@ -191,4 +187,13 @@ function paneLine(input: {
     input.currentCommand,
     input.fullCommand,
   ].join('\t');
+}
+
+function sidecar(agent: AgentSidecar['agent'], session_id: string): AgentSidecar {
+  return {
+    agent,
+    session_id,
+    pid: 1234,
+    startTime: 'Thu Jun 11 20:00:00 2026',
+  };
 }

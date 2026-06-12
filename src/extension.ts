@@ -164,7 +164,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   );
   agentExitSweep = tmuxAvailability.available
     ? new AgentExitSweep({
-        panes: tmux,
+        sidecars: agentSidecars,
         statuses: agentStatuses,
         teardown: tmux,
         onError: (error) => console.warn('Deck: agent exit sweep failed', error),

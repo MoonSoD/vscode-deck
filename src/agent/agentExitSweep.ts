@@ -1,19 +1,14 @@
 import type { AgentProcessIdentity } from './agentLivenessProbe';
 import { AgentLivenessProbe } from './agentLivenessProbe';
-import type { AgentStatus, Disposable } from './agentStatusStore';
-import type { AgentName } from './agentTypes';
+import type { Disposable } from './agentStatusStore';
+import type { AgentSidecar } from './snapshotRewriter';
 
-export interface AgentExitPane {
-  sessionName: string;
-  windowName: string;
-}
-
-export interface AgentExitPaneSource {
-  listSessions(): Promise<AgentExitPane[]>;
+export interface AgentExitSidecarStore {
+  readAll(): Promise<Map<string, AgentSidecar>>;
+  remove(sessionName: string): Promise<void>;
 }
 
 export interface AgentExitStatusStore {
-  get(sessionName: string): AgentStatus | undefined;
   remove(sessionName: string): Promise<void>;
 }
 
@@ -26,7 +21,7 @@ export interface AgentExitTeardown {
 }
 
 interface AgentExitSweepOptions {
-  panes: AgentExitPaneSource;
+  sidecars: AgentExitSidecarStore;
   statuses: AgentExitStatusStore;
   teardown: AgentExitTeardown;
   liveness?: AgentExitLiveness;
@@ -54,27 +49,27 @@ export class AgentExitSweep implements Disposable {
   }
 
   async runOnce(): Promise<boolean> {
-    const agentPanes = (await this.options.panes.listSessions()).flatMap((pane) => {
-      const agent = agentFromWindowName(pane.windowName);
-      return agent ? [{ ...pane, agent }] : [];
-    });
-    if (agentPanes.length === 0) return false;
+    const sidecars = await this.options.sidecars.readAll();
+    if (sidecars.size === 0) return false;
 
     let shouldKeepSweeping = false;
-    for (const pane of agentPanes) {
-      const status = this.options.statuses.get(pane.sessionName);
-      const process = agentProcess(status, pane.agent);
-      if (!process) continue;
+    for (const [sessionName, sidecar] of sidecars) {
       shouldKeepSweeping = true;
+      const process = agentProcess(sidecar);
       if (await this.liveness.isAgentAlive(process)) continue;
 
       try {
-        await this.options.teardown.restoreAutomaticRename(pane.sessionName);
+        await this.options.sidecars.remove(sessionName);
       } catch (error) {
         this.onError(error);
       }
       try {
-        await this.options.statuses.remove(pane.sessionName);
+        await this.options.teardown.restoreAutomaticRename(sessionName);
+      } catch (error) {
+        this.onError(error);
+      }
+      try {
+        await this.options.statuses.remove(sessionName);
       } catch (error) {
         this.onError(error);
       }
@@ -111,16 +106,9 @@ export class AgentExitSweep implements Disposable {
   }
 }
 
-function agentProcess(status: AgentStatus | undefined, fallbackAgent: AgentName): AgentProcessIdentity | undefined {
-  if (!status || status.pid === undefined || status.startTime === undefined) return undefined;
+function agentProcess(sidecar: AgentSidecar): AgentProcessIdentity {
   return {
-    agent: status.agent ?? fallbackAgent,
-    pid: status.pid,
-    startTime: status.startTime,
+    pid: sidecar.pid,
+    startTime: sidecar.startTime,
   };
-}
-
-function agentFromWindowName(windowName: string): AgentName | undefined {
-  if (windowName === 'claude' || windowName === 'codex') return windowName;
-  return undefined;
 }

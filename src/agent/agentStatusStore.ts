@@ -7,8 +7,6 @@ export interface AgentStatus {
   status: 'inProgress' | 'needsInput' | 'completed' | 'failed';
   statusAt: number;
   agent?: AgentName;
-  pid?: number;
-  startTime?: string;
   message?: string;
   unread?: boolean;
 }
@@ -333,21 +331,18 @@ function parseStatus(text: string): AgentStatus | undefined {
       (value as { agent?: unknown }).agent === 'codex'
     ) &&
     (
-      (value as { pid?: unknown }).pid === undefined ||
-      typeof (value as { pid?: unknown }).pid === 'number'
-    ) &&
-    (
-      (value as { startTime?: unknown }).startTime === undefined ||
-      typeof (value as { startTime?: unknown }).startTime === 'string'
-    ) &&
-    (
       (value as { message?: unknown }).message === undefined ||
       typeof (value as { message?: unknown }).message === 'string'
     )
   ) {
     const status = value as AgentStatus;
-    // An empty message defeats ?? fallbacks downstream; treat it as absent.
-    return status.message === '' ? { ...status, message: undefined } : status;
+    const message = status.message === '' ? undefined : status.message;
+    return {
+      status: status.status,
+      statusAt: status.statusAt,
+      ...(status.agent ? { agent: status.agent } : {}),
+      ...(message !== undefined ? { message } : {}),
+    };
   }
   return undefined;
 }

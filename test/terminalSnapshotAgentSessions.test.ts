@@ -23,7 +23,12 @@ describe('rewriteTerminalSnapshotAgentSessions', () => {
       'pane\twt-_work_repo__term-1\t0\t1\t:*\t0\t%0\t:/work/repo\t1\tclaude\t:claude',
       'window\twt-_work_repo__term-1\t0\tzsh\t1\t:*\tlayout\ton',
     ].join('\n'), 'utf8');
-    await sidecarStore.write('wt-_work_repo__term-1', { agent: 'claude', session_id: 'abc-123' });
+    await sidecarStore.write('wt-_work_repo__term-1', {
+      agent: 'claude',
+      session_id: 'abc-123',
+      pid: 111,
+      startTime: 'Thu Jun 11 20:00:00 2026',
+    });
 
     await rewriteTerminalSnapshotAgentSessions(snapshotPath, sidecarStore);
 
@@ -43,7 +48,11 @@ describe('rewriteTerminalSnapshotAgentSessions', () => {
       'pane\twt-_work_repo__term-1\t0\t1\t:*\t0\t%0\t:/work/repo\t1\tclaude\t:claude',
       'pane\twt-_work_repo__term-2\t0\t1\t:*\t0\t%1\t:/work/repo\t1\tclaude\t:claude',
     ].join('\n'), 'utf8');
-    writeFileSync(join(sidecarDir, 'wt-_work_repo__term-1.json'), '{"agent":"claude","session_id":"abc-123"}\n', 'utf8');
+    writeFileSync(
+      join(sidecarDir, 'wt-_work_repo__term-1.json'),
+      '{"agent":"claude","session_id":"abc-123","pid":111,"startTime":"Thu Jun 11 20:00:00 2026"}\n',
+      'utf8',
+    );
     writeFileSync(join(sidecarDir, 'wt-_work_repo__term-2.json'), '{"agent":"claude",', 'utf8');
 
     await rewriteTerminalSnapshotAgentSessions(snapshotPath, new AgentSidecarStore(sidecarDir));

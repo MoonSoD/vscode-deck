@@ -14,6 +14,11 @@ const vscodeState = vi.hoisted(() => ({
   agentSetupPromptArgs: undefined as unknown[] | undefined,
   agentSetupPromptRun: vi.fn(),
   agentSetupPromptUninstall: vi.fn(),
+  agentSidecarStoreArgs: undefined as unknown[] | undefined,
+  agentSidecarStoreInstance: undefined as unknown,
+  agentSidecarStorePrune: vi.fn(async () => undefined),
+  agentSidecarStoreReadAll: vi.fn(async () => new Map()),
+  agentSidecarStoreRemove: vi.fn(async () => undefined),
   agentStatusStoreArgs: undefined as unknown[] | undefined,
   agentStatusStoreMarkRead: vi.fn(async () => undefined),
   agentStatusStoreChange: undefined as (() => void) | undefined,
@@ -354,6 +359,19 @@ vi.mock('../src/agent/terminalSnapshotAgentSessions', () => ({
   rewriteTerminalSnapshotAgentSessions: vscodeState.rewriteTerminalSnapshotAgentSessions,
 }));
 
+vi.mock('../src/agent/agentSidecarStore', () => ({
+  AgentSidecarStore: class {
+    prune = vscodeState.agentSidecarStorePrune;
+    readAll = vscodeState.agentSidecarStoreReadAll;
+    remove = vscodeState.agentSidecarStoreRemove;
+
+    constructor(...args: unknown[]) {
+      vscodeState.agentSidecarStoreArgs = args;
+      vscodeState.agentSidecarStoreInstance = this;
+    }
+  },
+}));
+
 vi.mock('../src/agent/agentStatusStore', () => ({
   AgentStatusStore: class {
     get = vi.fn();
@@ -456,6 +474,11 @@ describe('activate', () => {
     vscodeState.addTerminalArgs = undefined;
     vscodeState.agentDetectionArgs = undefined;
     vscodeState.agentSetupPromptArgs = undefined;
+    vscodeState.agentSidecarStoreArgs = undefined;
+    vscodeState.agentSidecarStoreInstance = undefined;
+    vscodeState.agentSidecarStorePrune.mockResolvedValue(undefined);
+    vscodeState.agentSidecarStoreReadAll.mockResolvedValue(new Map());
+    vscodeState.agentSidecarStoreRemove.mockResolvedValue(undefined);
     vscodeState.agentStatusStoreChangeListener = undefined;
     vscodeState.agentStatusStoreMarkRead.mockResolvedValue(undefined);
     vscodeState.agentSetupPromptRun.mockResolvedValue(undefined);
@@ -707,6 +730,18 @@ describe('activate', () => {
     expect(runtime.restoreOnActivation).toHaveBeenCalledOnce();
   });
 
+  it('constructs the agent exit sweep from the sidecar store', async () => {
+    const context = createContext();
+
+    await activate(context as never);
+
+    const sweep = context.subscriptions.find((subscription) => 'runOnce' in subscription) as {
+      options?: { sidecars?: unknown; panes?: unknown };
+    } | undefined;
+    expect(sweep?.options?.sidecars).toBe(vscodeState.agentSidecarStoreInstance);
+    expect(sweep?.options?.panes).toBeUndefined();
+  });
+
   it('prunes agent sidecars only after the activation restore completes', async () => {
     // Regression guard: prune deletes sidecars for sessions not currently live,
     // so running it before restore re-creates the sessions wipes the session_ids
@@ -722,11 +757,13 @@ describe('activate', () => {
     for (let i = 0; i < 5; i += 1) await new Promise((resolve) => setTimeout(resolve, 0));
 
     // Restore is still in flight → prune must not have run yet.
+    expect(vscodeState.agentSidecarStorePrune).not.toHaveBeenCalled();
     expect(vscodeState.agentStatusStorePrune).not.toHaveBeenCalled();
 
     resolveRestore({ restored: true });
     await activation;
 
+    expect(vscodeState.agentSidecarStorePrune).toHaveBeenCalled();
     expect(vscodeState.agentStatusStorePrune).toHaveBeenCalled();
   });
 
@@ -842,16 +879,16 @@ describe('activate', () => {
     expect(vscodeState.onDidCloseTerminal).not.toHaveBeenCalled();
     expect(vscodeState.onDidChangeActiveTerminal).not.toHaveBeenCalled();
     // Tab restoration is now VS Code's native custom-editor restore — Deck no
-    // longer replays a snapshot. Four list-sessions run here: the one-shot
-    // agent exit sweep wake, the activation-restore refresh waking the sweep,
-    // the pending-intent open, then agent sidecar/status pruning share one
-    // live-session list.
+    // longer replays a snapshot. The pending-intent open and agent
+    // sidecar/status pruning each list tmux sessions; the agent exit sweep reads
+    // sidecars instead.
     expect(vscodeState.lifecycleOrder).toEqual([
       'pending-list',
       'pending-list',
-      'pending-list',
-      'pending-list',
     ]);
+    expect(vscodeState.agentSidecarStorePrune).toHaveBeenCalledWith(
+      new Set(['wt-_work_alpha-main__term-1']),
+    );
     expect(vscodeState.agentStatusStorePrune).toHaveBeenCalledWith(
       new Set(['wt-_work_alpha-main__term-1']),
     );

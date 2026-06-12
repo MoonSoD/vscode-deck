@@ -32,10 +32,15 @@ describe('renderAgentHookScript', () => {
       input: '{"session_id":"abc-123","hook_event_name":"SessionStart"}',
     });
 
-    expect(JSON.parse(readFileSync(join(sidecarDir, 'wt-_work_repo__term-1.json'), 'utf8'))).toEqual({
+    const sidecar = JSON.parse(readFileSync(join(sidecarDir, 'wt-_work_repo__term-1.json'), 'utf8'));
+    expect(sidecar).toMatchObject({
       agent: 'claude',
       session_id: 'abc-123',
     });
+    expect(typeof sidecar.pid).toBe('number');
+    expect(sidecar.pid).toBeGreaterThan(0);
+    expect(typeof sidecar.startTime).toBe('string');
+    expect(sidecar.startTime.length).toBeGreaterThan(0);
   });
 
   it('writes a completed status on Stop without writing a sidecar', async () => {
@@ -66,7 +71,7 @@ describe('renderAgentHookScript', () => {
       input: '{"session_id":"abc-123","hook_event_name":"UserPromptSubmit"}',
     });
 
-    expect(JSON.parse(readFileSync(join(sidecarDir, 'wt-_work_repo__term-1.json'), 'utf8'))).toEqual({
+    expect(JSON.parse(readFileSync(join(sidecarDir, 'wt-_work_repo__term-1.json'), 'utf8'))).toMatchObject({
       agent: 'claude',
       session_id: 'abc-123',
     });
@@ -373,7 +378,13 @@ describe('renderAgentHookScript', () => {
     const root = tempRoot();
     const sidecarDir = join(root, 'hooks');
     const statusDir = join(root, 'status');
+    mkdirSync(sidecarDir, { recursive: true });
     mkdirSync(statusDir, { recursive: true });
+    writeFileSync(
+      join(sidecarDir, 'wt-_work_repo__term-1.json'),
+      '{"agent":"claude","session_id":"abc-123","pid":111,"startTime":"Thu Jun 11 20:00:00 2026"}\n',
+      'utf8',
+    );
     writeFileSync(join(statusDir, 'wt-_work_repo__term-1.json'), '{"status":"completed","statusAt":1710000000}\n', 'utf8');
     const scriptPath = writeScript(root, renderAgentHookScript(sidecarDir));
     const tmuxLogPath = writeTmuxStub(root);
@@ -390,7 +401,7 @@ describe('renderAgentHookScript', () => {
     expect(readFileSync(tmuxLogPath, 'utf8')).toBe(
       '-L deck set -w -t wt-_work_repo__term-1 automatic-rename on\n',
     );
-    expect(existsSync(sidecarDir)).toBe(false);
+    expect(existsSync(join(sidecarDir, 'wt-_work_repo__term-1.json'))).toBe(false);
     expect(existsSync(join(statusDir, 'wt-_work_repo__term-1.json'))).toBe(false);
   });
 
@@ -405,7 +416,7 @@ describe('renderAgentHookScript', () => {
       input: '{"session_id":"codex-123","hook_event_name":"SessionStart"}',
     });
 
-    expect(JSON.parse(readFileSync(join(sidecarDir, 'wt-_work_repo__term-1.json'), 'utf8'))).toEqual({
+    expect(JSON.parse(readFileSync(join(sidecarDir, 'wt-_work_repo__term-1.json'), 'utf8'))).toMatchObject({
       agent: 'codex',
       session_id: 'codex-123',
     });
@@ -423,7 +434,7 @@ describe('renderAgentHookScript', () => {
       input: '{"session_id":"codex-123","hook_event_name":"UserPromptSubmit"}',
     });
 
-    expect(JSON.parse(readFileSync(join(sidecarDir, 'wt-_work_repo__term-1.json'), 'utf8'))).toEqual({
+    expect(JSON.parse(readFileSync(join(sidecarDir, 'wt-_work_repo__term-1.json'), 'utf8'))).toMatchObject({
       agent: 'codex',
       session_id: 'codex-123',
     });
@@ -432,7 +443,7 @@ describe('renderAgentHookScript', () => {
     expect(typeof status.statusAt).toBe('number');
   });
 
-  it('writes process liveness metadata to Codex status records only', async () => {
+  it('writes process liveness metadata to Codex sidecars only', async () => {
     const root = tempRoot();
     const sidecarDir = join(root, 'hooks');
     const statusDir = join(root, 'status');
@@ -445,14 +456,17 @@ describe('renderAgentHookScript', () => {
 
     const status = JSON.parse(readFileSync(join(statusDir, 'wt-_work_repo__term-1.json'), 'utf8'));
     expect(status.agent).toBe('codex');
-    expect(typeof status.pid).toBe('number');
-    expect(status.pid).toBeGreaterThan(0);
-    expect(typeof status.startTime).toBe('string');
-    expect(status.startTime.length).toBeGreaterThan(0);
-    expect(JSON.parse(readFileSync(join(sidecarDir, 'wt-_work_repo__term-1.json'), 'utf8'))).toEqual({
+    expect(status.pid).toBeUndefined();
+    expect(status.startTime).toBeUndefined();
+    const sidecar = JSON.parse(readFileSync(join(sidecarDir, 'wt-_work_repo__term-1.json'), 'utf8'));
+    expect(sidecar).toMatchObject({
       agent: 'codex',
       session_id: 'codex-123',
     });
+    expect(typeof sidecar.pid).toBe('number');
+    expect(sidecar.pid).toBeGreaterThan(0);
+    expect(typeof sidecar.startTime).toBe('string');
+    expect(sidecar.startTime.length).toBeGreaterThan(0);
   });
 
   it.each([
