@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { AgentExitSweep, type AgentExitSidecarStore, type AgentExitStatusStore } from '../src/agent/agentExitSweep';
 import type { AgentProcessIdentity } from '../src/agent/agentLivenessProbe';
-import type { AgentSidecar } from '../src/agent/snapshotRewriter';
+import type { AgentSidecar } from '../src/agent/agentSidecar';
 
 describe('AgentExitSweep', () => {
   it('removes dead agent sidecars, keeps live ones, and no-ops when there are no sidecars', async () => {

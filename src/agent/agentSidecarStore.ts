@@ -1,6 +1,6 @@
 import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { AgentSidecar } from './snapshotRewriter';
+import type { AgentSidecar } from './agentSidecar';
 
 export class AgentSidecarStore {
   constructor(private readonly root: string) {}

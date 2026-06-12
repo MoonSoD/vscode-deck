@@ -1,7 +1,7 @@
 import type { AgentProcessIdentity } from './agentLivenessProbe';
 import { AgentLivenessProbe } from './agentLivenessProbe';
+import type { AgentSidecar } from './agentSidecar';
 import type { Disposable } from './agentStatusStore';
-import type { AgentSidecar } from './snapshotRewriter';
 
 export interface AgentExitSidecarStore {
   readAll(): Promise<Map<string, AgentSidecar>>;

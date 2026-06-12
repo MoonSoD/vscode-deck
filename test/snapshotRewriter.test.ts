@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ResumeTemplate } from '../src/agent/resumeTemplate';
-import { SnapshotRewriter, type AgentSidecar } from '../src/agent/snapshotRewriter';
+import type { AgentSidecar } from '../src/agent/agentSidecar';
+import { SnapshotRewriter } from '../src/agent/snapshotRewriter';
 
 describe('SnapshotRewriter', () => {
   it('rewrites a Claude pane with a sidecar to its resume command', () => {

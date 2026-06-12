@@ -1,4 +1,4 @@
-import type { AgentName } from './agentTypes';
+import type { AgentSidecar } from './agentSidecar';
 import { ResumeTemplate } from './resumeTemplate';
 
 const LINE_TYPE_COLUMN = 0;
@@ -6,13 +6,6 @@ const SESSION_NAME_COLUMN = 1;
 const FULL_COMMAND_COLUMN = 10;
 const MIN_PANE_COLUMNS = FULL_COMMAND_COLUMN + 1;
 const SHELL_COMMAND = ':';
-
-export interface AgentSidecar {
-  agent: AgentName;
-  session_id: string;
-  pid: number;
-  startTime: string;
-}
 
 export class SnapshotRewriter {
   constructor(private readonly resumeTemplate = new ResumeTemplate()) {}
