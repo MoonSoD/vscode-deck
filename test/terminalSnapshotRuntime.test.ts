@@ -101,6 +101,59 @@ describe('TerminalSnapshotRuntime', () => {
     ]);
   });
 
+  it('wraps actual activation restore work in restore feedback', async () => {
+    const tmux = new FakeTmux();
+    const feedbackCalls: string[] = [];
+    const runtime = new TerminalSnapshotRuntime(
+      tmux,
+      () => '/ext/resources/plugins/tmux-resurrect/scripts/save.sh',
+      () => '/ext/resources/plugins/tmux-resurrect/scripts/restore.sh',
+      () => '/deck/global-storage',
+      () => Promise.resolve(),
+      undefined,
+      {
+        withProgress: async (context, task) => {
+          feedbackCalls.push(`withProgress:${context.unresponsive}`);
+          await task();
+          feedbackCalls.push('withProgress.done');
+        },
+      },
+    );
+
+    await expect(runtime.restoreOnActivation()).resolves.toEqual({ restored: true });
+
+    expect(feedbackCalls).toEqual(['withProgress:false', 'withProgress.done']);
+    expect(tmux.calls).toEqual([
+      'killSession:__deck_anchor',
+      'isServerRunning',
+      'newAnchorSession:__deck_anchor:/deck/global-storage',
+      'runShell:/ext/resources/plugins/tmux-resurrect/scripts/restore.sh',
+      'killSession:__deck_anchor',
+    ]);
+  });
+
+  it('does not show restore feedback when the Deck socket is already running', async () => {
+    const tmux = new FakeTmux();
+    tmux.serverRunning = true;
+    const restoreFeedback = {
+      withProgress: vi.fn(async (_context: { unresponsive: boolean }, task: () => Promise<void>) => task()),
+    };
+    const runtime = new TerminalSnapshotRuntime(
+      tmux,
+      () => '/ext/resources/plugins/tmux-resurrect/scripts/save.sh',
+      () => '/ext/resources/plugins/tmux-resurrect/scripts/restore.sh',
+      () => '/deck/global-storage',
+      () => Promise.resolve(),
+      undefined,
+      restoreFeedback,
+    );
+
+    await expect(runtime.restoreOnActivation()).resolves.toEqual({ restored: false });
+
+    expect(restoreFeedback.withProgress).not.toHaveBeenCalled();
+    expect(tmux.calls).toEqual(['killSession:__deck_anchor', 'isServerRunning']);
+  });
+
   it('recovers a wedged Deck socket before restoring on activation', async () => {
     const tmux = new FakeTmux();
     tmux.newAnchorErrors = [new Error('server exited unexpectedly')];
@@ -129,6 +182,7 @@ describe('TerminalSnapshotRuntime', () => {
         },
       },
     });
+    const feedbackContexts: boolean[] = [];
     const runtime = new TerminalSnapshotRuntime(
       tmux,
       () => '/ext/resources/plugins/tmux-resurrect/scripts/save.sh',
@@ -136,10 +190,17 @@ describe('TerminalSnapshotRuntime', () => {
       () => '/deck/global-storage',
       () => Promise.resolve(),
       recovery,
+      {
+        withProgress: async (context, task) => {
+          feedbackContexts.push(context.unresponsive);
+          await task();
+        },
+      },
     );
 
     await expect(runtime.restoreOnActivation()).resolves.toEqual({ restored: true });
 
+    expect(feedbackContexts).toEqual([true]);
     expect(tmux.calls).toEqual([
       'killSession:__deck_anchor',
       'isServerRunning',

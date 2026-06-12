@@ -40,6 +40,11 @@ import {
   TERMINAL_SNAPSHOT_ANCHOR_SESSION,
   TerminalSnapshotRuntime,
 } from './terminal/terminalSnapshotRuntime';
+import {
+  formatTerminalSnapshotRestoreProgress,
+  terminalSnapshotLastSaveTime,
+  type TerminalSnapshotRestoreFeedback,
+} from './terminal/terminalSnapshotRestoreFeedback';
 import { createRestoreGate } from './terminal/restoreGate';
 import { deckSocketPath, WedgeRecovery } from './terminal/deckSocketRecovery';
 import { RecoveryLock } from './terminal/recoveryLock';
@@ -66,6 +71,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const tmux = new TmuxCli(tmuxConfigPath);
   await applyDeckTmuxOptionsIfServerRunning(tmux, initialTmuxOptions, tmuxAvailability.available);
   const deckDir = deckDataDir();
+  let treeView: vscode.TreeView<RepositoryTreeNode> | undefined;
   const agentSidecars = new AgentSidecarStore(join(deckDir, 'hooks'));
   const agentStatuses = new AgentStatusStore(join(deckDir, 'status'), 100);
   const agentStatusWatch = await agentStatuses.start();
@@ -116,6 +122,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             isHealthy: () => tmux.isServerRunning(),
           }),
         }),
+        terminalSnapshotRestoreFeedback(deckDir, () => treeView),
       )
     : undefined;
 
@@ -130,10 +137,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         restore: () => snapshotRuntime.restoreOnActivation(),
       })
     : () => Promise.resolve();
-  // Kick off the reboot restore now so the tree shows restored rows even before
-  // any tab reattaches.
-  const activationRestore = snapshotRuntime ? ensureSnapshotRestored() : undefined;
-
   const repositoryRegistry = new RepositoryRegistryStore(context.globalState);
 
   const activeWorktrees = new ActiveWorktreeStore(context.globalState);
@@ -175,12 +178,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     tree.refresh();
     agentExitSweep?.wake();
     syncExternalGitWatches();
-  }
-
-  if (activationRestore) {
-    void activationRestore.then(refreshTree).catch((error) => {
-      console.warn('Deck: refreshing tree after TerminalSnapshot restore failed', error);
-    });
   }
 
   function syncExternalGitWatches(): void {
@@ -232,7 +229,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     worktreeListCache,
     repositoryCommonDirCache,
   );
-  let treeView: vscode.TreeView<RepositoryTreeNode> | undefined;
   const revealRepository = async (repositoryPath: string) => {
     const roots = tree.getChildren();
     if (!Array.isArray(roots)) return;
@@ -296,6 +292,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     tree.setCollapsed(event.element, false);
     agentStatusDecorationProvider.fire();
   });
+  // Kick off the reboot restore after the tree view exists so restore feedback
+  // can show the sidebar banner while the snapshot is being restored.
+  const activationRestore = snapshotRuntime ? ensureSnapshotRestored() : undefined;
+  if (activationRestore) {
+    void activationRestore.then(refreshTree).catch((error) => {
+      console.warn('Deck: refreshing tree after TerminalSnapshot restore failed', error);
+    });
+  }
   const agentStatusNotifierWatch = new AgentStatusNotifier({
     store: agentStatuses,
     settings: {
@@ -501,6 +505,37 @@ function terminalSnapshotRestoreScriptPath(context: vscode.ExtensionContext): st
 
 function tmuxResurrectPath(context: vscode.ExtensionContext, ...parts: string[]): string {
   return join(context.extensionPath, 'resources', 'plugins', 'tmux-resurrect', ...parts);
+}
+
+function terminalSnapshotRestoreFeedback(
+  deckDir: string,
+  currentTreeView: () => vscode.TreeView<RepositoryTreeNode> | undefined,
+): TerminalSnapshotRestoreFeedback {
+  return {
+    withProgress: async (context, task) => {
+      const treeView = currentTreeView();
+      if (treeView) treeView.message = 'Restoring terminals…';
+      try {
+        const copy = formatTerminalSnapshotRestoreProgress({
+          unresponsive: context.unresponsive,
+          lastSavedAt: await terminalSnapshotLastSaveTime(deckDir),
+        });
+        await vscode.window.withProgress(
+          {
+            location: vscode.ProgressLocation.Notification,
+            title: copy.title,
+            cancellable: false,
+          },
+          async (progress) => {
+            progress.report({ message: copy.message });
+            await task();
+          },
+        );
+      } finally {
+        if (treeView) treeView.message = undefined;
+      }
+    },
+  };
 }
 
 // Deck's machine-global runtime dir, holding the generated DeckSocket conf and

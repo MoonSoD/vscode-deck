@@ -1,3 +1,5 @@
+import type { TerminalSnapshotRestoreFeedback } from './terminalSnapshotRestoreFeedback';
+
 export interface TerminalSnapshotTmuxCli {
   runShell(scriptPath: string): Promise<void>;
   isServerRunning(): Promise<boolean>;
@@ -14,7 +16,7 @@ export interface RestoreOutcome {
 }
 
 export interface TerminalSnapshotWedgeRecovery {
-  ensureHealthyServer(): Promise<{ started: boolean }>;
+  ensureHealthyServer(): Promise<{ started: boolean; recovered?: boolean }>;
 }
 
 export const TERMINAL_SNAPSHOT_ANCHOR_SESSION = '__deck_anchor';
@@ -27,6 +29,7 @@ export class TerminalSnapshotRuntime {
     private readonly anchorCwd: () => string,
     private readonly beforeRestore: () => Promise<void> = () => Promise.resolve(),
     private readonly wedgeRecovery?: TerminalSnapshotWedgeRecovery,
+    private readonly restoreFeedback?: TerminalSnapshotRestoreFeedback,
   ) {}
 
   async save(): Promise<void> {
@@ -44,16 +47,19 @@ export class TerminalSnapshotRuntime {
 
       if (await this.tmux.isServerRunning()) return { restored: false };
 
-      if (!(await this.ensureHealthyServer())) return { restored: false };
+      const server = await this.ensureHealthyServer();
+      if (!server.started) return { restored: false };
       let restored = false;
       try {
-        // Best-effort: a failed agent-session rewrite must never abort terminal
-        // restore (ADR-0019). Log and restore regardless.
-        await this.beforeRestore().catch((error) => {
-          console.warn('Deck: agent-session snapshot rewrite failed; restoring without resume', error);
+        await this.withRestoreFeedback(Boolean(server.recovered), async () => {
+          // Best-effort: a failed agent-session rewrite must never abort terminal
+          // restore (ADR-0019). Log and restore regardless.
+          await this.beforeRestore().catch((error) => {
+            console.warn('Deck: agent-session snapshot rewrite failed; restoring without resume', error);
+          });
+          await this.tmux.runShell(this.restoreScriptPath());
+          restored = true;
         });
-        await this.tmux.runShell(this.restoreScriptPath());
-        restored = true;
       } catch (error) {
         console.warn('Deck: restoring TerminalSnapshot failed', error);
       } finally {
@@ -74,11 +80,23 @@ export class TerminalSnapshotRuntime {
     }
   }
 
-  private async ensureHealthyServer(): Promise<boolean> {
-    if (this.wedgeRecovery) return (await this.wedgeRecovery.ensureHealthyServer()).started;
+  private async ensureHealthyServer(): Promise<{ started: boolean; recovered: boolean }> {
+    if (this.wedgeRecovery) {
+      const outcome = await this.wedgeRecovery.ensureHealthyServer();
+      return { started: outcome.started, recovered: Boolean(outcome.recovered) };
+    }
 
     await this.tmux.newAnchorSession(TERMINAL_SNAPSHOT_ANCHOR_SESSION, this.anchorCwd());
-    return true;
+    return { started: true, recovered: false };
+  }
+
+  private async withRestoreFeedback(unresponsive: boolean, task: () => Promise<void>): Promise<void> {
+    if (!this.restoreFeedback) {
+      await task();
+      return;
+    }
+
+    await this.restoreFeedback.withProgress({ unresponsive }, task);
   }
 
   startPeriodicSave(intervalMs: number): Disposable {

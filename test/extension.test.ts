@@ -36,6 +36,7 @@ const vscodeState = vi.hoisted(() => ({
   externalWatchDisposables: [] as Array<{ dispose: ReturnType<typeof vi.fn> }>,
   tabGroups: [] as Array<{ viewColumn: number; tabs: Array<{ input?: unknown }> }>,
   createTreeView: vi.fn(() => ({
+    message: undefined as string | undefined,
     dispose: vi.fn(),
     onDidCollapseElement: vi.fn(() => ({ dispose: vi.fn() })),
     onDidExpandElement: vi.fn(() => ({ dispose: vi.fn() })),
@@ -97,6 +98,7 @@ const vscodeState = vi.hoisted(() => ({
     saveScriptPath: () => string;
     beforeRestore: () => Promise<void>;
     wedgeRecovery: unknown;
+    restoreFeedback: unknown;
     save: ReturnType<typeof vi.fn>;
     restoreOnActivation: ReturnType<typeof vi.fn>;
     startPeriodicSave: ReturnType<typeof vi.fn>;
@@ -109,6 +111,9 @@ const vscodeState = vi.hoisted(() => ({
   rewriteTerminalSnapshotAgentSessions: vi.fn(async () => undefined),
   showWarningMessage: vi.fn(),
   showInformationMessage: vi.fn(),
+  withProgress: vi.fn((_options, task: (progress: { report(update: unknown): void }) => Promise<unknown>) =>
+    task({ report: vi.fn() }),
+  ),
   showTextDocument: vi.fn(),
   workspaceFsStat: vi.fn(async () => ({})),
   treeViewSelection: [] as unknown[],
@@ -119,6 +124,7 @@ vi.mock('vscode', () => ({
     Global: 1,
   },
   ViewColumn: { Active: -1 },
+  ProgressLocation: { Notification: 15 },
   ColorThemeKind: {
     Light: 1,
     Dark: 2,
@@ -158,6 +164,7 @@ vi.mock('vscode', () => ({
     registerCustomEditorProvider: vscodeState.registerCustomEditorProvider,
     showWarningMessage: vscodeState.showWarningMessage,
     showInformationMessage: vscodeState.showInformationMessage,
+    withProgress: vscodeState.withProgress,
     showTextDocument: vscodeState.showTextDocument,
     state: {
       get focused() {
@@ -335,6 +342,7 @@ vi.mock('../src/terminal/terminalSnapshotRuntime', () => ({
       public readonly anchorCwd: () => string,
       public readonly beforeRestore: () => Promise<void>,
       public readonly wedgeRecovery: unknown,
+      public readonly restoreFeedback: unknown,
     ) {
       vscodeState.terminalSnapshotRuntimeInstances.push(this);
     }
@@ -494,6 +502,8 @@ describe('activate', () => {
     vscodeState.configListeners = [];
     vscodeState.showWarningMessage.mockClear();
     vscodeState.showInformationMessage.mockReset();
+    vscodeState.withProgress.mockClear();
+    vscodeState.withProgress.mockImplementation((_options, task) => task({ report: vi.fn() }));
     vscodeState.showTextDocument.mockClear();
     vscodeState.workspaceFsStat.mockResolvedValue({});
     vscodeState.workspaceFsStat.mockClear();
@@ -702,6 +712,33 @@ describe('activate', () => {
     await Promise.resolve();
 
     expect(vscodeState.repositoryTreeInstances[0].refresh).toHaveBeenCalledOnce();
+  });
+
+  it('passes restore feedback that shows progress and a sidebar banner', async () => {
+    const context = createContext();
+
+    await activate(context as never);
+    const runtime = vscodeState.terminalSnapshotRuntimeInstances[0];
+    const treeView = vscodeState.createTreeView.mock.results[0].value as { message?: string };
+    const restoreFeedback = runtime.restoreFeedback as {
+      withProgress(context: { unresponsive: boolean }, task: () => Promise<void>): Promise<void>;
+    };
+    const messagesDuringRestore: Array<string | undefined> = [];
+
+    await restoreFeedback.withProgress({ unresponsive: true }, async () => {
+      messagesDuringRestore.push(treeView.message);
+    });
+
+    expect(messagesDuringRestore).toEqual(['Restoring terminals…']);
+    expect(treeView.message).toBeUndefined();
+    expect(vscodeState.withProgress).toHaveBeenCalledWith(
+      {
+        location: 15,
+        title: "Deck's terminal server is unresponsive. Restarting…",
+        cancellable: false,
+      },
+      expect.any(Function),
+    );
   });
 
   it('uses agent resume template settings when rewriting the TerminalSnapshot', async () => {
