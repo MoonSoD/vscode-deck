@@ -45,7 +45,7 @@ describe('AgentExitSweep', () => {
       restoreAutomaticRename: vi.fn(async () => undefined),
     };
     const serverStart = {
-      startTime: vi.fn(async () => 'Thu Jun 11 20:01:00 2026'),
+      serverStartTime: vi.fn(async () => 'Thu Jun 11 20:01:00 2026'),
     };
     const sweep = new AgentExitSweep({
       sidecars,
@@ -57,7 +57,7 @@ describe('AgentExitSweep', () => {
 
     await expect(sweep.runOnce()).resolves.toBe(true);
 
-    expect(serverStart.startTime).toHaveBeenCalledOnce();
+    expect(serverStart.serverStartTime).toHaveBeenCalledOnce();
     expect(sidecars.removed).toEqual([]);
     expect(teardown.restoreAutomaticRename).not.toHaveBeenCalled();
     expect(statuses.removed).toEqual([]);
@@ -77,7 +77,7 @@ describe('AgentExitSweep', () => {
       liveness: { isAgentAlive: vi.fn(async () => false) },
       teardown,
       serverStart: {
-        startTime: vi.fn(async () => 'Thu Jun 11 20:00:00 2026'),
+        serverStartTime: vi.fn(async () => 'Thu Jun 11 20:00:00 2026'),
       },
     });
 

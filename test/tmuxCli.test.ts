@@ -296,7 +296,7 @@ describe('TmuxCli', () => {
     ]);
     const tmux = new TmuxCli('/ext/resources/deck.conf', runner);
 
-    await expect(tmux.startTime()).resolves.toBe('Thu Jun 11 20:01:00 2026');
+    await expect(tmux.serverStartTime()).resolves.toBe('Thu Jun 11 20:01:00 2026');
     expect(runner.calls).toEqual([
       {
         command: 'tmux',

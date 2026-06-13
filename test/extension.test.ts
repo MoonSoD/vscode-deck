@@ -96,7 +96,7 @@ const vscodeState = vi.hoisted(() => ({
     killSession: ReturnType<typeof vi.fn>;
     listSessions: ReturnType<typeof vi.fn>;
     newAnchorSession: ReturnType<typeof vi.fn>;
-    startTime: ReturnType<typeof vi.fn>;
+    serverStartTime: ReturnType<typeof vi.fn>;
     setOption: ReturnType<typeof vi.fn>;
     unsetOption: ReturnType<typeof vi.fn>;
   }>,
@@ -321,7 +321,7 @@ vi.mock('../src/terminal/tmuxCli', () => ({
     newAnchorSession = vi.fn(async () => undefined);
     windowName = vi.fn(async () => 'zsh');
     isServerRunning = vi.fn(async () => vscodeState.tmuxServerRunning);
-    startTime = vi.fn(async () => 'Thu Jun 11 20:01:00 2026');
+    serverStartTime = vi.fn(async () => 'Thu Jun 11 20:01:00 2026');
     listSessions = vi.fn(async () => {
       vscodeState.lifecycleOrder.push('pending-list');
       return [{ sessionName: 'wt-_work_alpha-main__term-1', windowName: 'zsh' }];

@@ -137,7 +137,7 @@ export class TmuxCli {
     return result.stdout.trim() || undefined;
   }
 
-  async startTime(): Promise<string | undefined> {
+  async serverStartTime(): Promise<string | undefined> {
     const pidResult = await this.runner.run('tmux', [
       ...this.baseArgs(),
       'display-message',

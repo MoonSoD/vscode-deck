@@ -21,7 +21,7 @@ export interface AgentExitTeardown {
 }
 
 export interface AgentExitServerStart {
-  startTime(): Promise<string | undefined>;
+  serverStartTime(): Promise<string | undefined>;
 }
 
 interface AgentExitSweepOptions {
@@ -114,7 +114,7 @@ export class AgentExitSweep implements Disposable {
   private async startedInCurrentServerLifetime(sidecar: AgentSidecar): Promise<boolean> {
     if (!this.options.serverStart) return true;
 
-    const serverStart = await this.options.serverStart.startTime();
+    const serverStart = await this.options.serverStart.serverStartTime();
     if (!serverStart) return false;
 
     const sidecarStartedAt = Date.parse(sidecar.startTime);
