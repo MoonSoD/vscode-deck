@@ -90,6 +90,7 @@ const vscodeState = vi.hoisted(() => ({
     automaticRenameFormat?: string;
   },
   tmuxServerRunning: false,
+  tmuxSessions: [{ sessionName: 'wt-_work_alpha-main__term-1', windowName: 'zsh' }],
   tmuxInstances: [] as Array<{
     configPath: string;
     isServerRunning: ReturnType<typeof vi.fn>;
@@ -324,7 +325,7 @@ vi.mock('../src/terminal/tmuxCli', () => ({
     serverStartTime = vi.fn(async () => 'Thu Jun 11 20:01:00 2026');
     listSessions = vi.fn(async () => {
       vscodeState.lifecycleOrder.push('pending-list');
-      return [{ sessionName: 'wt-_work_alpha-main__term-1', windowName: 'zsh' }];
+      return vscodeState.tmuxSessions;
     });
     setOption = vi.fn(async () => undefined);
     unsetOption = vi.fn(async () => undefined);
@@ -337,6 +338,7 @@ vi.mock('../src/terminal/tmuxCli', () => ({
 }));
 
 vi.mock('../src/terminal/terminalSnapshotRuntime', () => ({
+  TERMINAL_SNAPSHOT_ANCHOR_SESSION: '__deck_anchor',
   TerminalSnapshotRuntime: class {
     save = vi.fn(async () => undefined);
     restoreOnActivation = vi.fn(() => vscodeState.restoreOnActivationImpl());
@@ -509,6 +511,7 @@ describe('activate', () => {
     vscodeState.settingsAgentStatusNotifications = {};
     vscodeState.settingsDeckTmux = {};
     vscodeState.tmuxServerRunning = false;
+    vscodeState.tmuxSessions = [{ sessionName: 'wt-_work_alpha-main__term-1', windowName: 'zsh' }];
     vscodeState.tmuxInstances = [];
     vscodeState.terminalSnapshotRuntimeInstances = [];
     vscodeState.rewriteTerminalSnapshotAgentSessions.mockClear();
@@ -724,6 +727,7 @@ describe('activate', () => {
   });
 
   it('restores the TerminalSnapshot during activation when tmux is available', async () => {
+    vscodeState.tmuxSessions = [];
     const context = createContext();
 
     await activate(context as never);
@@ -749,10 +753,14 @@ describe('activate', () => {
     // Regression guard: prune deletes sidecars for sessions not currently live,
     // so running it before restore re-creates the sessions wipes the session_ids
     // the snapshot rewrite needs — leaving restored agents at a bare shell.
+    vscodeState.tmuxSessions = [];
     let resolveRestore: (value: { restored: boolean }) => void = () => undefined;
     vscodeState.restoreOnActivationImpl = () =>
       new Promise((resolve) => {
-        resolveRestore = resolve;
+        resolveRestore = (value) => {
+          vscodeState.tmuxSessions = [{ sessionName: 'wt-_work_alpha-main__term-1', windowName: 'zsh' }];
+          resolve(value);
+        };
       });
 
     const context = createContext();
@@ -770,11 +778,45 @@ describe('activate', () => {
     expect(vscodeState.agentStatusStorePrune).toHaveBeenCalled();
   });
 
-  it('wakes the agent exit sweep only after the activation restore completes', async () => {
+  it('restores an anchor-only DeckSocket before pruning agent sidecars', async () => {
+    vscodeState.tmuxSessions = [{ sessionName: '__deck_anchor', windowName: 'zsh' }];
     let resolveRestore: (value: { restored: boolean }) => void = () => undefined;
     vscodeState.restoreOnActivationImpl = () =>
       new Promise((resolve) => {
-        resolveRestore = resolve;
+        resolveRestore = (value) => {
+          vscodeState.tmuxSessions = [{ sessionName: 'wt-_work_alpha-main__term-1', windowName: 'claude' }];
+          resolve(value);
+        };
+      });
+
+    const context = createContext();
+    const activation = activate(context as never);
+    for (let i = 0; i < 5; i += 1) await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(vscodeState.terminalSnapshotRuntimeInstances[0].restoreOnActivation).toHaveBeenCalledOnce();
+    expect(vscodeState.agentSidecarStorePrune).not.toHaveBeenCalled();
+    expect(vscodeState.agentStatusStorePrune).not.toHaveBeenCalled();
+
+    resolveRestore({ restored: true });
+    await activation;
+
+    expect(vscodeState.agentSidecarStorePrune).toHaveBeenCalledWith(
+      new Set(['wt-_work_alpha-main__term-1']),
+    );
+    expect(vscodeState.agentStatusStorePrune).toHaveBeenCalledWith(
+      new Set(['wt-_work_alpha-main__term-1']),
+    );
+  });
+
+  it('wakes the agent exit sweep only after the activation restore completes', async () => {
+    vscodeState.tmuxSessions = [];
+    let resolveRestore: (value: { restored: boolean }) => void = () => undefined;
+    vscodeState.restoreOnActivationImpl = () =>
+      new Promise((resolve) => {
+        resolveRestore = (value) => {
+          vscodeState.tmuxSessions = [{ sessionName: 'wt-_work_alpha-main__term-1', windowName: 'zsh' }];
+          resolve(value);
+        };
       });
 
     const context = createContext();

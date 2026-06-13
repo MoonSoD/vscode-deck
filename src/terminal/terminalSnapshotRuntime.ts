@@ -2,7 +2,6 @@ import type { TerminalSnapshotRestoreFeedback } from './terminalSnapshotRestoreF
 
 export interface TerminalSnapshotTmuxCli {
   runShell(scriptPath: string): Promise<void>;
-  isServerRunning(): Promise<boolean>;
   newAnchorSession(session: string, cwd: string): Promise<void>;
   killSession(session: string): Promise<void>;
 }
@@ -40,12 +39,8 @@ export class TerminalSnapshotRuntime {
     try {
       // A prior activation that died between anchoring and cleanup leaves the
       // anchor behind; with `destroy-unattached off` it keeps an otherwise
-      // empty server alive, so `isServerRunning` would report true and every
-      // future activation would skip restore. Clear it first so a stale anchor
-      // can't masquerade as a live server.
+      // empty server alive. Clear it before starting this restore attempt.
       await this.killAnchor();
-
-      if (await this.tmux.isServerRunning()) return { restored: false };
 
       const server = await this.ensureHealthyServer();
       if (!server.started) return { restored: false };

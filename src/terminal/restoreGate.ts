@@ -1,27 +1,67 @@
-export interface RestoreGateDeps {
-  isServerRunning(): Promise<boolean>;
+import { TERMINAL_SNAPSHOT_ANCHOR_SESSION } from './terminalSnapshotRuntime';
+
+export type DeckSocketState =
+  | { kind: 'down' }
+  | { kind: 'bare' }
+  | { kind: 'restoring'; done: Promise<void> }
+  | RestoredDeckSocketState;
+
+export interface RestoredDeckSocketState {
+  kind: 'restored';
+  sessions: ReadonlySet<string>;
+}
+
+export interface RestoreCoordinatorDeps {
+  listSessions(): Promise<ReadonlyArray<{ sessionName: string }>>;
   restore(): Promise<unknown>;
 }
 
-// Gates terminal reattaches on a TerminalSnapshot restore. When the DeckSocket
-// is alive the reattach proceeds immediately (bind to the existing session);
-// when it's dead — reboot, or a crash / manual kill-server while VS Code stays
-// open — restore runs first, so the reattach binds to the restored session
-// instead of resurrecting it blank (which would then be saved over the good
-// snapshot). Dynamic, not a one-shot: it re-restores on every death. Concurrent
-// reattaches after a death share one in-flight restore.
-export function createRestoreGate(deps: RestoreGateDeps): () => Promise<void> {
+export interface RestoreCoordinator {
+  classify(): Promise<DeckSocketState>;
+  ensureRestored(): Promise<DeckSocketState>;
+}
+
+export function createRestoreCoordinator(deps: RestoreCoordinatorDeps): RestoreCoordinator {
   let inFlight: Promise<void> | undefined;
-  return async () => {
-    if (await deps.isServerRunning()) return;
-    if (!inFlight) {
-      inFlight = deps
-        .restore()
-        .then(() => undefined)
-        .finally(() => {
-          inFlight = undefined;
-        });
-    }
-    await inFlight;
+
+  const classify = async (): Promise<DeckSocketState> => {
+    if (inFlight) return { kind: 'restoring', done: inFlight };
+
+    const sessions = await deps.listSessions();
+    if (sessions.length === 0) return { kind: 'down' };
+
+    const realSessions = new Set(
+      sessions
+        .map((session) => session.sessionName)
+        .filter((sessionName) => sessionName !== TERMINAL_SNAPSHOT_ANCHOR_SESSION),
+    );
+    if (realSessions.size === 0) return { kind: 'bare' };
+
+    return { kind: 'restored', sessions: realSessions };
   };
+
+  const ensureRestored = async (): Promise<DeckSocketState> => {
+    const state = await classify();
+    switch (state.kind) {
+      case 'restored':
+        return state;
+      case 'restoring':
+        await state.done;
+        return classify();
+      case 'down':
+      case 'bare':
+        if (!inFlight) {
+          inFlight = deps
+            .restore()
+            .then(() => undefined)
+            .finally(() => {
+              inFlight = undefined;
+            });
+        }
+        await inFlight;
+        return classify();
+    }
+  };
+
+  return { classify, ensureRestored };
 }

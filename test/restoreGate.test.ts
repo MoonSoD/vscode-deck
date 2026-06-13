@@ -1,26 +1,68 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createRestoreGate } from '../src/terminal/restoreGate';
+import { createRestoreCoordinator } from '../src/terminal/restoreGate';
 
-describe('createRestoreGate', () => {
-  it('restores when the DeckSocket is dead, before letting the reattach proceed', async () => {
+describe('createRestoreCoordinator', () => {
+  it('classifies a missing DeckSocket as down', async () => {
+    const coordinator = createRestoreCoordinator({
+      listSessions: async () => [],
+      restore: async () => undefined,
+    });
+
+    await expect(coordinator.classify()).resolves.toEqual({ kind: 'down' });
+  });
+
+  it('classifies real sessions as restored without exposing the anchor', async () => {
+    const coordinator = createRestoreCoordinator({
+      listSessions: async () => [
+        { sessionName: '__deck_anchor' },
+        { sessionName: 'wt-_work_alpha-main__term-1' },
+      ],
+      restore: async () => undefined,
+    });
+
+    await expect(coordinator.classify()).resolves.toEqual({
+      kind: 'restored',
+      sessions: new Set(['wt-_work_alpha-main__term-1']),
+    });
+  });
+
+  it('restores when the DeckSocket has only the anchor session', async () => {
     const restore = vi.fn(async () => undefined);
-    const gate = createRestoreGate({ isServerRunning: async () => false, restore });
+    const coordinator = createRestoreCoordinator({
+      listSessions: async () => [{ sessionName: '__deck_anchor' }],
+      restore,
+    });
 
-    await gate();
+    await coordinator.ensureRestored();
 
     expect(restore).toHaveBeenCalledOnce();
   });
 
-  it('skips restore when the server is alive (reattach binds to the existing session)', async () => {
+  it('skips restore when real sessions already exist', async () => {
     const restore = vi.fn(async () => undefined);
-    const gate = createRestoreGate({ isServerRunning: async () => true, restore });
+    const coordinator = createRestoreCoordinator({
+      listSessions: async () => [{ sessionName: 'wt-_work_alpha-main__term-1' }],
+      restore,
+    });
 
-    await gate();
+    await coordinator.ensureRestored();
 
     expect(restore).not.toHaveBeenCalled();
   });
 
-  it('shares one in-flight restore across concurrent reattaches after a death', async () => {
+  it('returns down after an empty snapshot restore without looping', async () => {
+    const restore = vi.fn(async () => undefined);
+    const coordinator = createRestoreCoordinator({
+      listSessions: async () => [],
+      restore,
+    });
+
+    await expect(coordinator.ensureRestored()).resolves.toEqual({ kind: 'down' });
+
+    expect(restore).toHaveBeenCalledOnce();
+  });
+
+  it('shares one in-flight restore across concurrent callers', async () => {
     let release!: () => void;
     const restore = vi.fn(
       () =>
@@ -28,29 +70,42 @@ describe('createRestoreGate', () => {
           release = resolve;
         }),
     );
-    const gate = createRestoreGate({ isServerRunning: async () => false, restore });
+    let restored = false;
+    const coordinator = createRestoreCoordinator({
+      listSessions: async () =>
+        restored ? [{ sessionName: 'wt-_work_alpha-main__term-1' }] : [],
+      restore: async () => {
+        await restore();
+        restored = true;
+      },
+    });
 
-    const a = gate();
-    const b = gate();
-    const c = gate();
-    // Let each gate's isServerRunning() settle so the (single) restore is called.
+    const a = coordinator.ensureRestored();
+    const b = coordinator.ensureRestored();
+    const c = coordinator.ensureRestored();
     await new Promise((resolve) => setTimeout(resolve, 0));
+
+    await expect(coordinator.classify()).resolves.toMatchObject({ kind: 'restoring' });
+
     release();
     await Promise.all([a, b, c]);
 
     expect(restore).toHaveBeenCalledOnce();
   });
 
-  it('re-restores on a later death (not a one-shot barrier)', async () => {
+  it('restores again after a later DeckSocket death', async () => {
     const restore = vi.fn(async () => undefined);
-    let alive = false;
-    const gate = createRestoreGate({ isServerRunning: async () => alive, restore });
+    let sessions: Array<{ sessionName: string }> = [];
+    const coordinator = createRestoreCoordinator({
+      listSessions: async () => sessions,
+      restore,
+    });
 
-    await gate(); // dead → restore (1)
-    alive = true;
-    await gate(); // alive → skip
-    alive = false;
-    await gate(); // dead again → restore (2)
+    await coordinator.ensureRestored();
+    sessions = [{ sessionName: 'wt-_work_alpha-main__term-1' }];
+    await coordinator.ensureRestored();
+    sessions = [];
+    await coordinator.ensureRestored();
 
     expect(restore).toHaveBeenCalledTimes(2);
   });

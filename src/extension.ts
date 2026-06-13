@@ -45,7 +45,7 @@ import {
   terminalSnapshotLastSaveTime,
   type TerminalSnapshotRestoreFeedback,
 } from './terminal/terminalSnapshotRestoreFeedback';
-import { createRestoreGate } from './terminal/restoreGate';
+import { createRestoreCoordinator, type DeckSocketState } from './terminal/restoreGate';
 import { deckSocketPath, WedgeRecovery } from './terminal/deckSocketRecovery';
 import { RecoveryLock } from './terminal/recoveryLock';
 import { AgentSidecarStore } from './agent/agentSidecarStore';
@@ -140,11 +140,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   // restore — on reopen after reboot, or when the DeckSocket dies while VS Code
   // stays open. See restoreGate.ts.
   const snapshotRuntime = terminalSnapshotRuntime;
-  const ensureSnapshotRestored = snapshotRuntime
-    ? createRestoreGate({
-        isServerRunning: () => tmux.isServerRunning(),
+  const restoreCoordinator = snapshotRuntime
+    ? createRestoreCoordinator({
+        listSessions: () => tmux.listSessions(),
         restore: () => snapshotRuntime.restoreOnActivation(),
       })
+    : undefined;
+  const ensureSnapshotRestored = restoreCoordinator
+    ? async () => {
+        await restoreCoordinator.ensureRestored();
+      }
     : () => Promise.resolve();
   const repositoryRegistry = new RepositoryRegistryStore(context.globalState);
 
@@ -303,7 +308,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   });
   // Kick off the reboot restore after the tree view exists so restore feedback
   // can show the sidebar banner while the snapshot is being restored.
-  const activationRestore = snapshotRuntime ? ensureSnapshotRestored() : undefined;
+  const activationRestore = restoreCoordinator?.ensureRestored();
   if (activationRestore) {
     void activationRestore
       .then(refreshTree)
@@ -418,24 +423,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   if (terminalSnapshotRuntime) {
     context.subscriptions.push(terminalSnapshotRuntime.startPeriodicSave(5 * 60 * 1000));
     await openPendingTerminalForCurrentWorktree(pendingTerminalOpens, tmux);
-    // Let restore (and its agent-session rewrite) finish before pruning, so prune
-    // never deletes a sidecar for a session restore is about to bring back — that
-    // race left restored agents at a bare shell instead of resuming.
-    await activationRestore?.catch(() => undefined);
-    try {
-      const liveSessions = new Set((await tmux.listSessions()).map((session) => session.sessionName));
-      try {
-        await agentSidecars.prune(liveSessions);
-      } catch (error) {
-        console.warn('Deck: pruning agent sidecars failed', error);
-      }
-      try {
-        await agentStatuses.prune(liveSessions);
-      } catch (error) {
-        console.warn('Deck: pruning agent statuses failed', error);
-      }
-    } catch (error) {
-      console.warn('Deck: listing sessions for agent cleanup failed', error);
+    const restoredState = await activationRestore?.catch(() => undefined);
+    switch (restoredState?.kind) {
+      case 'restored':
+        await pruneAgentFilesForRestoredDeckSocket(restoredState, agentSidecars, agentStatuses);
+        break;
+      case 'down':
+      case 'bare':
+      case 'restoring':
+      case undefined:
+        break;
+      default:
+        assertNever(restoredState);
     }
     hookInstaller.reconcileInstalledHooks().then(showAgentHookUpgradeNotifications).catch((error) =>
       console.warn('Deck: reconciling agent hooks failed', error),
@@ -444,6 +443,27 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // setup when that's available.
     void agentSetupPrompt.run();
   }
+}
+
+async function pruneAgentFilesForRestoredDeckSocket(
+  restoredState: Extract<DeckSocketState, { kind: 'restored' }>,
+  agentSidecars: AgentSidecarStore,
+  agentStatuses: AgentStatusStore,
+): Promise<void> {
+  try {
+    await agentSidecars.prune(restoredState.sessions);
+  } catch (error) {
+    console.warn('Deck: pruning agent sidecars failed', error);
+  }
+  try {
+    await agentStatuses.prune(restoredState.sessions);
+  } catch (error) {
+    console.warn('Deck: pruning agent statuses failed', error);
+  }
+}
+
+function assertNever(value: never): never {
+  throw new Error(`Unexpected DeckSocket state: ${JSON.stringify(value)}`);
 }
 
 export function deactivate(): Promise<void> | undefined {
