@@ -769,7 +769,9 @@ describe('activate', () => {
 
     const context = createContext();
     const activation = activate(context as never);
-    for (let i = 0; i < 5; i += 1) await new Promise((resolve) => setTimeout(resolve, 0));
+    await vi.waitFor(() => {
+      expect(vscodeState.terminalSnapshotRuntimeInstances[0].restoreOnActivation).toHaveBeenCalledOnce();
+    });
 
     // Restore is still in flight → prune must not have run yet.
     expect(vscodeState.agentSidecarStorePrune).not.toHaveBeenCalled();
@@ -795,9 +797,9 @@ describe('activate', () => {
 
     const context = createContext();
     const activation = activate(context as never);
-    for (let i = 0; i < 5; i += 1) await new Promise((resolve) => setTimeout(resolve, 0));
-
-    expect(vscodeState.terminalSnapshotRuntimeInstances[0].restoreOnActivation).toHaveBeenCalledOnce();
+    await vi.waitFor(() => {
+      expect(vscodeState.terminalSnapshotRuntimeInstances[0].restoreOnActivation).toHaveBeenCalledOnce();
+    });
     expect(vscodeState.agentSidecarStorePrune).not.toHaveBeenCalled();
     expect(vscodeState.agentStatusStorePrune).not.toHaveBeenCalled();
 
@@ -821,7 +823,9 @@ describe('activate', () => {
 
     const context = createContext();
     const activation = activate(context as never);
-    for (let i = 0; i < 5; i += 1) await new Promise((resolve) => setTimeout(resolve, 0));
+    await vi.waitFor(() => {
+      expect(vscodeState.terminalSnapshotRuntimeInstances[0].restoreOnActivation).toHaveBeenCalledOnce();
+    });
 
     expect(vscodeState.agentSidecarStoreReadAll).not.toHaveBeenCalled();
 
