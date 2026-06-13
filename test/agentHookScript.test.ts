@@ -374,7 +374,7 @@ describe('renderAgentHookScript', () => {
     );
   });
 
-  it('restores automatic rename on SessionEnd and deletes status without writing a sidecar', async () => {
+  it('ignores SessionEnd so only the sweep removes sidecars', async () => {
     const root = tempRoot();
     const sidecarDir = join(root, 'hooks');
     const statusDir = join(root, 'status');
@@ -398,11 +398,13 @@ describe('renderAgentHookScript', () => {
       input: '{"hook_event_name":"SessionEnd"}',
     });
 
-    expect(readFileSync(tmuxLogPath, 'utf8')).toBe(
-      '-L deck set -w -t wt-_work_repo__term-1 automatic-rename on\n',
+    expect(existsSync(tmuxLogPath)).toBe(false);
+    expect(readFileSync(join(sidecarDir, 'wt-_work_repo__term-1.json'), 'utf8')).toBe(
+      '{"agent":"claude","session_id":"abc-123","pid":111,"startTime":"Thu Jun 11 20:00:00 2026"}\n',
     );
-    expect(existsSync(join(sidecarDir, 'wt-_work_repo__term-1.json'))).toBe(false);
-    expect(existsSync(join(statusDir, 'wt-_work_repo__term-1.json'))).toBe(false);
+    expect(readFileSync(join(statusDir, 'wt-_work_repo__term-1.json'), 'utf8')).toBe(
+      '{"status":"completed","statusAt":1710000000}\n',
+    );
   });
 
   it('writes a Codex sidecar keyed by DECK_SESSION', async () => {

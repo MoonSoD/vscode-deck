@@ -45,7 +45,7 @@ import {
   terminalSnapshotLastSaveTime,
   type TerminalSnapshotRestoreFeedback,
 } from './terminal/terminalSnapshotRestoreFeedback';
-import { createRestoreCoordinator, type DeckSocketState } from './terminal/restoreGate';
+import { createRestoreCoordinator } from './terminal/restoreGate';
 import { deckSocketPath, WedgeRecovery } from './terminal/deckSocketRecovery';
 import { RecoveryLock } from './terminal/recoveryLock';
 import { AgentSidecarStore } from './agent/agentSidecarStore';
@@ -423,19 +423,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   if (terminalSnapshotRuntime) {
     context.subscriptions.push(terminalSnapshotRuntime.startPeriodicSave(5 * 60 * 1000));
     await openPendingTerminalForCurrentWorktree(pendingTerminalOpens, tmux);
-    const restoredState = await activationRestore?.catch(() => undefined);
-    switch (restoredState?.kind) {
-      case 'restored':
-        await pruneAgentFilesForRestoredDeckSocket(restoredState, agentSidecars, agentStatuses);
-        break;
-      case 'down':
-      case 'bare':
-      case 'restoring':
-      case undefined:
-        break;
-      default:
-        assertNever(restoredState);
-    }
+    await activationRestore?.catch(() => undefined);
     hookInstaller.reconcileInstalledHooks().then(showAgentHookUpgradeNotifications).catch((error) =>
       console.warn('Deck: reconciling agent hooks failed', error),
     );
@@ -443,27 +431,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // setup when that's available.
     void agentSetupPrompt.run();
   }
-}
-
-async function pruneAgentFilesForRestoredDeckSocket(
-  restoredState: Extract<DeckSocketState, { kind: 'restored' }>,
-  agentSidecars: AgentSidecarStore,
-  agentStatuses: AgentStatusStore,
-): Promise<void> {
-  try {
-    await agentSidecars.prune(restoredState.sessions);
-  } catch (error) {
-    console.warn('Deck: pruning agent sidecars failed', error);
-  }
-  try {
-    await agentStatuses.prune(restoredState.sessions);
-  } catch (error) {
-    console.warn('Deck: pruning agent statuses failed', error);
-  }
-}
-
-function assertNever(value: never): never {
-  throw new Error(`Unexpected DeckSocket state: ${JSON.stringify(value)}`);
 }
 
 export function deactivate(): Promise<void> | undefined {

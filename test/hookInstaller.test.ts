@@ -607,7 +607,6 @@ function claudeDeckHooks(scriptPath: string) {
     Notification: [deckHookGroup(scriptPath)],
     Stop: [deckHookGroup(scriptPath)],
     StopFailure: [deckHookGroup(scriptPath)],
-    SessionEnd: [deckHookGroup(scriptPath)],
   };
 }
 

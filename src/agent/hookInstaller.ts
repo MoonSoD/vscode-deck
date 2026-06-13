@@ -15,7 +15,6 @@ const HOOK_EVENTS_BY_AGENT = {
     'Notification',
     'Stop',
     'StopFailure',
-    'SessionEnd',
   ],
   codex: ['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'PermissionRequest', 'Stop'],
 } as const satisfies Record<AgentName, readonly string[]>;
