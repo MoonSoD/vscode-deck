@@ -73,20 +73,6 @@ export class AgentStatusStore {
     };
   }
 
-  async prune(liveSessionNames: ReadonlySet<string>): Promise<void> {
-    let files: string[];
-    try {
-      files = await readdir(this.root);
-    } catch (error) {
-      if (!isNotFound(error)) throw error;
-      files = [];
-    }
-
-    await this.pruneFiles(this.root, files, liveSessionNames);
-    await this.pruneReadMarkers(liveSessionNames);
-    await this.reload();
-  }
-
   // For Deck-owned kills (TerminalRemoval, WorktreeRemoval cascade): the agent
   // never fires SessionEnd under tmux kill-session, so the file must go here.
   async remove(sessionName: string): Promise<void> {
@@ -270,17 +256,6 @@ export class AgentStatusStore {
     };
   }
 
-  private async pruneReadMarkers(liveSessionNames: ReadonlySet<string>): Promise<void> {
-    let files: string[];
-    try {
-      files = await readdir(this.readRoot);
-    } catch (error) {
-      if (isNotFound(error)) return;
-      throw error;
-    }
-    await this.pruneFiles(this.readRoot, files, liveSessionNames);
-  }
-
   private async pruneOrphanReadMarkers(
     statuses: ReadonlyMap<string, AgentStatus>,
     readMarkers: Map<string, number>,
@@ -289,15 +264,6 @@ export class AgentStatusStore {
       if (statuses.has(sessionName)) continue;
       await this.unlinkIfExists(this.readMarkerPath(sessionName));
       readMarkers.delete(sessionName);
-    }
-  }
-
-  private async pruneFiles(root: string, files: readonly string[], liveSessionNames: ReadonlySet<string>): Promise<void> {
-    for (const file of files) {
-      if (!file.endsWith('.json')) continue;
-      const sessionName = file.slice(0, -'.json'.length);
-      if (liveSessionNames.has(sessionName)) continue;
-      await this.unlinkIfExists(join(root, file));
     }
   }
 

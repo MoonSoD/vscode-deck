@@ -111,34 +111,6 @@ describe('AgentSidecarStore', () => {
       }],
     ]));
   });
-
-  it('prunes sidecars whose Terminal session no longer exists', async () => {
-    const root = tempRoot();
-    const store = new AgentSidecarStore(root);
-    await store.write('wt-_work_repo__term-1', {
-      agent: 'claude',
-      session_id: 'abc-123',
-      pid: 111,
-      startTime: 'Thu Jun 11 20:00:00 2026',
-    });
-    await store.write('wt-_work_repo__term-2', {
-      agent: 'claude',
-      session_id: 'def-456',
-      pid: 222,
-      startTime: 'Thu Jun 11 20:00:01 2026',
-    });
-
-    await store.prune(new Set(['wt-_work_repo__term-2']));
-
-    await expect(store.readAll()).resolves.toEqual(new Map([
-      ['wt-_work_repo__term-2', {
-        agent: 'claude',
-        session_id: 'def-456',
-        pid: 222,
-        startTime: 'Thu Jun 11 20:00:01 2026',
-      }],
-    ]));
-  });
 });
 
 function tempRoot(): string {

@@ -327,24 +327,6 @@ describe('AgentStatusStore', () => {
     await expect(store.remove('killed')).resolves.toBeUndefined();
   });
 
-  it('removes status and read marker files for Terminal sessions that no longer exist', async () => {
-    const root = tempRoot();
-    mkdirSync(root, { recursive: true });
-    writeFileSync(join(root, 'live.json'), '{"status":"inProgress","statusAt":1710000000}', 'utf8');
-    writeFileSync(join(root, 'dead.json'), '{"status":"completed","statusAt":1710000001}', 'utf8');
-    const store = new AgentStatusStore(root, 10);
-    disposables.push(await store.start());
-    await store.markRead('dead');
-
-    await store.prune(new Set(['live']));
-
-    expect(store.get('live')).toEqual({ status: 'inProgress', statusAt: 1710000000 });
-    expect(store.get('dead')).toBeUndefined();
-    expect(existsSync(join(root, 'live.json'))).toBe(true);
-    expect(existsSync(join(root, 'dead.json'))).toBe(false);
-    expect(existsSync(join(`${root}-reads`, 'dead.json'))).toBe(false);
-  });
-
   it('removes a read marker when its status file is removed externally', async () => {
     const root = tempRoot();
     mkdirSync(root, { recursive: true });

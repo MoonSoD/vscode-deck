@@ -42,15 +42,6 @@ export class AgentSidecarStore {
     await rm(this.pathFor(sessionName), { force: true });
   }
 
-  async prune(liveSessions: ReadonlySet<string>): Promise<void> {
-    const sidecars = await this.readAll();
-    for (const sessionName of sidecars.keys()) {
-      if (!liveSessions.has(sessionName)) {
-        await this.remove(sessionName);
-      }
-    }
-  }
-
   private pathFor(sessionName: string): string {
     return join(this.root, `${sessionName}.json`);
   }
