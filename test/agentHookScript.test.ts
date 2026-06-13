@@ -378,14 +378,14 @@ describe('renderAgentHookScript', () => {
     const root = tempRoot();
     const sidecarDir = join(root, 'hooks');
     const statusDir = join(root, 'status');
+    const sidecarPath = join(sidecarDir, 'wt-_work_repo__term-1.json');
+    const statusPath = join(statusDir, 'wt-_work_repo__term-1.json');
+    const originalSidecar = '{"agent":"claude","session_id":"abc-123","pid":111,"startTime":"Thu Jun 11 20:00:00 2026"}\n';
+    const originalStatus = '{"status":"completed","statusAt":1710000000}\n';
     mkdirSync(sidecarDir, { recursive: true });
     mkdirSync(statusDir, { recursive: true });
-    writeFileSync(
-      join(sidecarDir, 'wt-_work_repo__term-1.json'),
-      '{"agent":"claude","session_id":"abc-123","pid":111,"startTime":"Thu Jun 11 20:00:00 2026"}\n',
-      'utf8',
-    );
-    writeFileSync(join(statusDir, 'wt-_work_repo__term-1.json'), '{"status":"completed","statusAt":1710000000}\n', 'utf8');
+    writeFileSync(sidecarPath, originalSidecar, 'utf8');
+    writeFileSync(statusPath, originalStatus, 'utf8');
     const scriptPath = writeScript(root, renderAgentHookScript(sidecarDir));
     const tmuxLogPath = writeTmuxStub(root);
 
@@ -399,12 +399,8 @@ describe('renderAgentHookScript', () => {
     });
 
     expect(existsSync(tmuxLogPath)).toBe(false);
-    expect(readFileSync(join(sidecarDir, 'wt-_work_repo__term-1.json'), 'utf8')).toBe(
-      '{"agent":"claude","session_id":"abc-123","pid":111,"startTime":"Thu Jun 11 20:00:00 2026"}\n',
-    );
-    expect(readFileSync(join(statusDir, 'wt-_work_repo__term-1.json'), 'utf8')).toBe(
-      '{"status":"completed","statusAt":1710000000}\n',
-    );
+    expect(readFileSync(sidecarPath, 'utf8')).toBe(originalSidecar);
+    expect(readFileSync(statusPath, 'utf8')).toBe(originalStatus);
   });
 
   it('writes a Codex sidecar keyed by DECK_SESSION', async () => {

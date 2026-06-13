@@ -753,12 +753,12 @@ describe('activate', () => {
     // Regression guard: prune keys on a point-in-time session list, so a
     // concurrent or partial restore can wipe resume-candidate sidecars.
     vscodeState.tmuxSessions = [];
-    let resolveRestore: (value: unknown) => void = () => undefined;
+    let finishRestore = () => undefined;
     vscodeState.restoreOnActivationImpl = () =>
-      new Promise((resolve) => {
-        resolveRestore = (value) => {
+      new Promise<void>((resolve) => {
+        finishRestore = () => {
           vscodeState.tmuxSessions = [{ sessionName: 'wt-_work_alpha-main__term-1', windowName: 'zsh' }];
-          resolve(value);
+          resolve();
         };
       });
 
@@ -770,7 +770,7 @@ describe('activate', () => {
     expect(vscodeState.agentSidecarStorePrune).not.toHaveBeenCalled();
     expect(vscodeState.agentStatusStorePrune).not.toHaveBeenCalled();
 
-    resolveRestore(undefined);
+    finishRestore();
     await activation;
 
     expect(vscodeState.agentSidecarStorePrune).not.toHaveBeenCalled();
@@ -779,12 +779,12 @@ describe('activate', () => {
 
   it('restores an anchor-only DeckSocket without pruning agent files', async () => {
     vscodeState.tmuxSessions = [{ sessionName: '__deck_anchor', windowName: 'zsh' }];
-    let resolveRestore: (value: unknown) => void = () => undefined;
+    let finishRestore = () => undefined;
     vscodeState.restoreOnActivationImpl = () =>
-      new Promise((resolve) => {
-        resolveRestore = (value) => {
+      new Promise<void>((resolve) => {
+        finishRestore = () => {
           vscodeState.tmuxSessions = [{ sessionName: 'wt-_work_alpha-main__term-1', windowName: 'claude' }];
-          resolve(value);
+          resolve();
         };
       });
 
@@ -796,7 +796,7 @@ describe('activate', () => {
     expect(vscodeState.agentSidecarStorePrune).not.toHaveBeenCalled();
     expect(vscodeState.agentStatusStorePrune).not.toHaveBeenCalled();
 
-    resolveRestore(undefined);
+    finishRestore();
     await activation;
 
     expect(vscodeState.agentSidecarStorePrune).not.toHaveBeenCalled();
@@ -805,12 +805,12 @@ describe('activate', () => {
 
   it('wakes the agent exit sweep only after the activation restore completes', async () => {
     vscodeState.tmuxSessions = [];
-    let resolveRestore: (value: unknown) => void = () => undefined;
+    let finishRestore = () => undefined;
     vscodeState.restoreOnActivationImpl = () =>
-      new Promise((resolve) => {
-        resolveRestore = (value) => {
+      new Promise<void>((resolve) => {
+        finishRestore = () => {
           vscodeState.tmuxSessions = [{ sessionName: 'wt-_work_alpha-main__term-1', windowName: 'zsh' }];
-          resolve(value);
+          resolve();
         };
       });
 
@@ -820,7 +820,7 @@ describe('activate', () => {
 
     expect(vscodeState.agentSidecarStoreReadAll).not.toHaveBeenCalled();
 
-    resolveRestore(undefined);
+    finishRestore();
     await activation;
 
     expect(vscodeState.agentSidecarStoreReadAll).toHaveBeenCalled();
