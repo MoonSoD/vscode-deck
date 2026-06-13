@@ -18,6 +18,11 @@ export interface TerminalSnapshotWedgeRecovery {
   ensureHealthyServer(): Promise<{ started: boolean; recovered?: boolean }>;
 }
 
+export interface TerminalSnapshotSaveLock {
+  acquire(): Promise<boolean>;
+  release(): Promise<void>;
+}
+
 export const TERMINAL_SNAPSHOT_ANCHOR_SESSION = '__deck_anchor';
 
 export class TerminalSnapshotRuntime {
@@ -29,10 +34,17 @@ export class TerminalSnapshotRuntime {
     private readonly beforeRestore: () => Promise<void> = () => Promise.resolve(),
     private readonly wedgeRecovery?: TerminalSnapshotWedgeRecovery,
     private readonly restoreFeedback?: TerminalSnapshotRestoreFeedback,
+    private readonly saveLock?: TerminalSnapshotSaveLock,
   ) {}
 
   async save(): Promise<void> {
-    await this.tmux.runShell(this.saveScriptPath());
+    if (this.saveLock && !(await this.saveLock.acquire())) return;
+
+    try {
+      await this.tmux.runShell(this.saveScriptPath());
+    } finally {
+      await this.saveLock?.release();
+    }
   }
 
   async restoreOnActivation(): Promise<RestoreOutcome> {

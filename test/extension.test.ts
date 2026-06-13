@@ -107,6 +107,7 @@ const vscodeState = vi.hoisted(() => ({
     beforeRestore: () => Promise<void>;
     wedgeRecovery: unknown;
     restoreFeedback: unknown;
+    saveLock: unknown;
     save: ReturnType<typeof vi.fn>;
     restoreOnActivation: ReturnType<typeof vi.fn>;
     startPeriodicSave: ReturnType<typeof vi.fn>;
@@ -353,6 +354,7 @@ vi.mock('../src/terminal/terminalSnapshotRuntime', () => ({
       public readonly beforeRestore: () => Promise<void>,
       public readonly wedgeRecovery: unknown,
       public readonly restoreFeedback: unknown,
+      public readonly saveLock: unknown,
     ) {
       vscodeState.terminalSnapshotRuntimeInstances.push(this);
     }
@@ -716,6 +718,9 @@ describe('activate', () => {
     expect(runtime.tmux).toBe(vscodeState.tmuxInstances[0]);
     expect(runtime.saveScriptPath()).toBe(
       join(process.cwd(), 'resources', 'plugins', 'tmux-resurrect', 'scripts', 'save.sh'),
+    );
+    expect((runtime.saveLock as { options?: { lockFilename?: string } }).options?.lockFilename).toBe(
+      'deck-socket-save.lock',
     );
     expect(runtime.startPeriodicSave).toHaveBeenCalledWith(5 * 60 * 1000);
     expect(context.subscriptions).toContain(runtime.periodicSave);

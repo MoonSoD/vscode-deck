@@ -3,6 +3,7 @@ import { deckSocketPath, isWedged, WedgeRecovery } from '../src/terminal/deckSoc
 import {
   RECOVERY_LOCK_FILENAME,
   RESTORE_LOCK_FILENAME,
+  SAVE_LOCK_FILENAME,
   RecoveryLock,
 } from '../src/terminal/recoveryLock';
 
@@ -67,6 +68,23 @@ describe('RecoveryLock', () => {
 
     expect(fs.files.has(`/deck/${RESTORE_LOCK_FILENAME}`)).toBe(true);
     expect(fs.files.has(`/deck/${RECOVERY_LOCK_FILENAME}`)).toBe(false);
+  });
+
+  it('can acquire the save lock in a separate file', async () => {
+    const fs = new FakeRecoveryLockFs(() => 1_000);
+    const lock = new RecoveryLock({
+      deckDir: '/deck',
+      lockFilename: SAVE_LOCK_FILENAME,
+      fs,
+      clock: fakeClock(1_000),
+      isHealthy: async () => true,
+    });
+
+    await expect(lock.acquire()).resolves.toBe(true);
+
+    expect(fs.files.has(`/deck/${SAVE_LOCK_FILENAME}`)).toBe(true);
+    expect(fs.files.has(`/deck/${RECOVERY_LOCK_FILENAME}`)).toBe(false);
+    expect(fs.files.has(`/deck/${RESTORE_LOCK_FILENAME}`)).toBe(false);
   });
 
   it('does not acquire the lock while a peer holds it', async () => {

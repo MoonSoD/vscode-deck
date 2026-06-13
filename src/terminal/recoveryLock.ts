@@ -5,6 +5,7 @@ import { join } from 'node:path';
 
 export const RECOVERY_LOCK_FILENAME = 'deck-socket-recovery.lock';
 export const RESTORE_LOCK_FILENAME = 'deck-socket-restore.lock';
+export const SAVE_LOCK_FILENAME = 'deck-socket-save.lock';
 
 export interface RecoveryLockFileHandle {
   writeFile(data: string): Promise<void>;

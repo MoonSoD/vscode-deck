@@ -47,7 +47,7 @@ import {
 } from './terminal/terminalSnapshotRestoreFeedback';
 import { createRestoreCoordinator } from './terminal/restoreGate';
 import { deckSocketPath, WedgeRecovery } from './terminal/deckSocketRecovery';
-import { RESTORE_LOCK_FILENAME, RecoveryLock } from './terminal/recoveryLock';
+import { RESTORE_LOCK_FILENAME, SAVE_LOCK_FILENAME, RecoveryLock } from './terminal/recoveryLock';
 import { AgentSidecarStore } from './agent/agentSidecarStore';
 import { AgentExitSweep } from './agent/agentExitSweep';
 import { AgentStatusFileDecorationProvider } from './agent/agentStatusFileDecorationProvider';
@@ -132,6 +132,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           }),
         }),
         terminalSnapshotRestoreFeedback(deckDir, () => treeView),
+        new RecoveryLock({
+          deckDir,
+          lockFilename: SAVE_LOCK_FILENAME,
+          isHealthy: () => tmux.isServerRunning(),
+        }),
       )
     : undefined;
 

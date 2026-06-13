@@ -29,6 +29,36 @@ class FakeTmux {
   }
 }
 
+class FakeSaveLock {
+  releases = 0;
+
+  constructor(private readonly acquired: boolean) {}
+
+  async acquire(): Promise<boolean> {
+    return this.acquired;
+  }
+
+  async release(): Promise<void> {
+    this.releases += 1;
+  }
+}
+
+class SharedSaveLock {
+  releases = 0;
+  private held = false;
+
+  async acquire(): Promise<boolean> {
+    if (this.held) return false;
+    this.held = true;
+    return true;
+  }
+
+  async release(): Promise<void> {
+    this.releases += 1;
+    this.held = false;
+  }
+}
+
 describe('TerminalSnapshotRuntime', () => {
   afterEach(() => {
     vi.useRealTimers();
@@ -50,6 +80,76 @@ describe('TerminalSnapshotRuntime', () => {
       'runShell:/ext/resources/plugins/tmux-resurrect/scripts/save-1.sh',
       'runShell:/ext/resources/plugins/tmux-resurrect/scripts/save-2.sh',
     ]);
+  });
+
+  it('skips save when a peer holds the save lock', async () => {
+    const tmux = new FakeTmux();
+    const saveLock = new FakeSaveLock(false);
+    const runtime = new TerminalSnapshotRuntime(
+      tmux,
+      () => '/ext/resources/plugins/tmux-resurrect/scripts/save.sh',
+      () => '/ext/resources/plugins/tmux-resurrect/scripts/restore.sh',
+      () => '/deck/global-storage',
+      () => Promise.resolve(),
+      undefined,
+      undefined,
+      saveLock,
+    );
+
+    await runtime.save();
+
+    expect(tmux.calls).toEqual([]);
+    expect(saveLock.releases).toBe(0);
+  });
+
+  it('releases the save lock after saving', async () => {
+    const tmux = new FakeTmux();
+    const saveLock = new FakeSaveLock(true);
+    const runtime = new TerminalSnapshotRuntime(
+      tmux,
+      () => '/ext/resources/plugins/tmux-resurrect/scripts/save.sh',
+      () => '/ext/resources/plugins/tmux-resurrect/scripts/restore.sh',
+      () => '/deck/global-storage',
+      () => Promise.resolve(),
+      undefined,
+      undefined,
+      saveLock,
+    );
+
+    await runtime.save();
+
+    expect(tmux.calls).toEqual(['runShell:/ext/resources/plugins/tmux-resurrect/scripts/save.sh']);
+    expect(saveLock.releases).toBe(1);
+  });
+
+  it('runs only one concurrent save across runtimes sharing a save lock', async () => {
+    const tmux = new FakeTmux();
+    const saveLock = new SharedSaveLock();
+    const first = new TerminalSnapshotRuntime(
+      tmux,
+      () => '/ext/resources/plugins/tmux-resurrect/scripts/save.sh',
+      () => '/ext/resources/plugins/tmux-resurrect/scripts/restore.sh',
+      () => '/deck/global-storage',
+      () => Promise.resolve(),
+      undefined,
+      undefined,
+      saveLock,
+    );
+    const second = new TerminalSnapshotRuntime(
+      tmux,
+      () => '/ext/resources/plugins/tmux-resurrect/scripts/save.sh',
+      () => '/ext/resources/plugins/tmux-resurrect/scripts/restore.sh',
+      () => '/deck/global-storage',
+      () => Promise.resolve(),
+      undefined,
+      undefined,
+      saveLock,
+    );
+
+    await Promise.all([first.save(), second.save()]);
+
+    expect(tmux.calls).toEqual(['runShell:/ext/resources/plugins/tmux-resurrect/scripts/save.sh']);
+    expect(saveLock.releases).toBe(1);
   });
 
   it('saves periodically until disposed', async () => {
