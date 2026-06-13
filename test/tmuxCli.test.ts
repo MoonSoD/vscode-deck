@@ -231,7 +231,7 @@ describe('TmuxCli', () => {
         'set',
         '-w',
         '-t',
-        '=wt-_work_repo__term-1',
+        'wt-_work_repo__term-1',
         'automatic-rename',
         'on',
       ],

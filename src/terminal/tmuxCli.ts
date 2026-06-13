@@ -212,7 +212,12 @@ export class TmuxCli {
       'set',
       '-w',
       '-t',
-      exactTarget(session),
+      // A bare session name (not the `=`-exact form): `set -w -t =name` is
+      // rejected by tmux as "no such window", so the `=` form silently no-ops
+      // and the agent row keeps its `claude`/`codex` name after the agent exits.
+      // The exact session exists, so tmux resolves the bare name to it (and its
+      // active window) without prefix ambiguity.
+      session,
       'automatic-rename',
       'on',
     ]);
