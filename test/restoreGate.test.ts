@@ -93,7 +93,7 @@ describe('createRestoreCoordinator', () => {
     expect(restore).toHaveBeenCalledOnce();
   });
 
-  it('serializes restore across coordinators sharing a restore lock', async () => {
+  it('serializes restore across coordinators sharing a snapshot lock', async () => {
     let restored = false;
     let finishRestore!: () => void;
     const restoreDone = new Promise<void>((resolve) => {
@@ -128,7 +128,7 @@ describe('createRestoreCoordinator', () => {
     expect(restore).toHaveBeenCalledOnce();
   });
 
-  it('falls back when the first coordinator fails while holding the restore lock', async () => {
+  it('falls back when the first coordinator fails while holding the snapshot lock', async () => {
     let restored = false;
     let failFirstRestore!: () => void;
     const firstRestore = new Promise<void>((_resolve, reject) => {
@@ -203,7 +203,7 @@ describe('createRestoreCoordinator', () => {
     expect(restore).toHaveBeenCalledTimes(2);
   });
 
-  it('fails open when the restore lock cannot be acquired before timeout', async () => {
+  it('fails open when the snapshot lock cannot be acquired before timeout', async () => {
     let restored = false;
     const restore = vi.fn(async () => {
       restored = true;
@@ -224,6 +224,32 @@ describe('createRestoreCoordinator', () => {
     });
 
     expect(restore).toHaveBeenCalledOnce();
+  });
+
+  it('waits for a held snapshot lock before restoring', async () => {
+    let restored = false;
+    const restore = vi.fn(async () => {
+      restored = true;
+    });
+    const snapshotLock = new FakeRestoreLock();
+    await snapshotLock.acquireBlocking();
+    const coordinator = createRestoreCoordinator({
+      listSessions: async () =>
+        restored ? [{ sessionName: 'wt-_work_alpha-main__term-1' }] : [],
+      restore,
+      restoreLock: snapshotLock,
+    });
+
+    const restoreResult = coordinator.ensureRestored();
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(restore).not.toHaveBeenCalled();
+
+    await snapshotLock.release();
+    await expect(restoreResult).resolves.toEqual({
+      kind: 'restored',
+      sessions: new Set(['wt-_work_alpha-main__term-1']),
+    });
   });
 
   it('restores again after a later DeckSocket death', async () => {

@@ -82,7 +82,7 @@ describe('TerminalSnapshotRuntime', () => {
     ]);
   });
 
-  it('skips save when a peer holds the save lock', async () => {
+  it('skips save when a peer holds the snapshot lock', async () => {
     const tmux = new FakeTmux();
     const saveLock = new FakeSaveLock(false);
     const runtime = new TerminalSnapshotRuntime(
@@ -102,7 +102,7 @@ describe('TerminalSnapshotRuntime', () => {
     expect(saveLock.releases).toBe(0);
   });
 
-  it('releases the save lock after saving', async () => {
+  it('releases the snapshot lock after saving', async () => {
     const tmux = new FakeTmux();
     const saveLock = new FakeSaveLock(true);
     const runtime = new TerminalSnapshotRuntime(
@@ -122,7 +122,7 @@ describe('TerminalSnapshotRuntime', () => {
     expect(saveLock.releases).toBe(1);
   });
 
-  it('runs only one concurrent save across runtimes sharing a save lock', async () => {
+  it('runs only one concurrent save across runtimes sharing a snapshot lock', async () => {
     const tmux = new FakeTmux();
     const saveLock = new SharedSaveLock();
     const first = new TerminalSnapshotRuntime(

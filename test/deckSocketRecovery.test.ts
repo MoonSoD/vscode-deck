@@ -2,8 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { deckSocketPath, isWedged, WedgeRecovery } from '../src/terminal/deckSocketRecovery';
 import {
   RECOVERY_LOCK_FILENAME,
-  RESTORE_LOCK_FILENAME,
-  SAVE_LOCK_FILENAME,
+  SNAPSHOT_LOCK_FILENAME,
   RecoveryLock,
 } from '../src/terminal/recoveryLock';
 
@@ -54,11 +53,11 @@ describe('RecoveryLock', () => {
     await expect(lock.acquire()).resolves.toBe(true);
   });
 
-  it('can acquire the restore lock in a separate file', async () => {
+  it('can acquire the snapshot lock in a separate file', async () => {
     const fs = new FakeRecoveryLockFs(() => 1_000);
     const lock = new RecoveryLock({
       deckDir: '/deck',
-      lockFilename: RESTORE_LOCK_FILENAME,
+      lockFilename: SNAPSHOT_LOCK_FILENAME,
       fs,
       clock: fakeClock(1_000),
       isHealthy: async () => true,
@@ -66,25 +65,32 @@ describe('RecoveryLock', () => {
 
     await expect(lock.acquire()).resolves.toBe(true);
 
-    expect(fs.files.has(`/deck/${RESTORE_LOCK_FILENAME}`)).toBe(true);
+    expect(fs.files.has(`/deck/${SNAPSHOT_LOCK_FILENAME}`)).toBe(true);
     expect(fs.files.has(`/deck/${RECOVERY_LOCK_FILENAME}`)).toBe(false);
   });
 
-  it('can acquire the save lock in a separate file', async () => {
+  it('does not acquire the snapshot lock while a peer holds it', async () => {
     const fs = new FakeRecoveryLockFs(() => 1_000);
-    const lock = new RecoveryLock({
+    const first = new RecoveryLock({
       deckDir: '/deck',
-      lockFilename: SAVE_LOCK_FILENAME,
+      lockFilename: SNAPSHOT_LOCK_FILENAME,
       fs,
       clock: fakeClock(1_000),
       isHealthy: async () => true,
+      processProbe: new FakeProcessProbe({ alive: true, startTime: 'holder' }),
+    });
+    const second = new RecoveryLock({
+      deckDir: '/deck',
+      lockFilename: SNAPSHOT_LOCK_FILENAME,
+      fs,
+      clock: fakeClock(1_000),
+      isHealthy: async () => true,
+      processProbe: new FakeProcessProbe({ alive: true, startTime: 'holder' }),
     });
 
-    await expect(lock.acquire()).resolves.toBe(true);
+    await expect(first.acquire()).resolves.toBe(true);
 
-    expect(fs.files.has(`/deck/${SAVE_LOCK_FILENAME}`)).toBe(true);
-    expect(fs.files.has(`/deck/${RECOVERY_LOCK_FILENAME}`)).toBe(false);
-    expect(fs.files.has(`/deck/${RESTORE_LOCK_FILENAME}`)).toBe(false);
+    await expect(second.acquire()).resolves.toBe(false);
   });
 
   it('does not acquire the lock while a peer holds it', async () => {
@@ -125,6 +131,7 @@ describe('RecoveryLock', () => {
       pollIntervalMs: 100,
       timeoutMs: 1_000,
       isHealthy: async () => true,
+      processProbe: new FakeProcessProbe({ alive: true, startTime: 'holder' }),
     });
     const second = new RecoveryLock({
       deckDir: '/deck',
@@ -133,6 +140,7 @@ describe('RecoveryLock', () => {
       pollIntervalMs: 100,
       timeoutMs: 1_000,
       isHealthy: async () => true,
+      processProbe: new FakeProcessProbe({ alive: true, startTime: 'holder' }),
     });
 
     await expect(first.acquire()).resolves.toBe(true);
@@ -164,7 +172,7 @@ describe('RecoveryLock', () => {
     expect(fs.files.get(`/deck/${RECOVERY_LOCK_FILENAME}`)?.mtimeMs).toBe(now);
   });
 
-  it('waits long enough to steal a dead holder lock', async () => {
+  it('steals a dead holder lock without waiting for TTL', async () => {
     let now = 1_000;
     const fs = new FakeRecoveryLockFs(() => now);
     const clock = {
@@ -178,18 +186,52 @@ describe('RecoveryLock', () => {
       fs,
       clock,
       isHealthy: async () => true,
+      processProbe: new FakeProcessProbe({ alive: true, startTime: 'first' }),
     });
     const second = new RecoveryLock({
       deckDir: '/deck',
       fs,
       clock,
       isHealthy: async () => true,
+      processProbe: new FakeProcessProbe({ alive: false, startTime: '' }),
     });
 
     await expect(first.acquire()).resolves.toBe(true);
 
     await expect(second.acquireBlocking()).resolves.toBe(true);
-    expect(now).toBeGreaterThan(61_000);
+    expect(now).toBe(1_000);
+  });
+
+  it('steals a lock when the holder PID was reused', async () => {
+    const fs = new FakeRecoveryLockFs(() => 1_000);
+    fs.files.set(`/deck/${RECOVERY_LOCK_FILENAME}`, {
+      mtimeMs: 1_000,
+      content: JSON.stringify({ ownerToken: 'stale', pid: 123, startTime: 'old-process' }),
+    });
+    const lock = new RecoveryLock({
+      deckDir: '/deck',
+      fs,
+      clock: fakeClock(1_000),
+      isHealthy: async () => true,
+      processProbe: new FakeProcessProbe({ alive: true, startTime: 'new-process' }),
+    });
+
+    await expect(lock.acquire()).resolves.toBe(true);
+  });
+
+  it('keeps old-format lock files TTL-only', async () => {
+    const fs = new FakeRecoveryLockFs(() => 1_000);
+    fs.files.set(`/deck/${RECOVERY_LOCK_FILENAME}`, { mtimeMs: 1_000, content: 'old-owner-token' });
+    const lock = new RecoveryLock({
+      deckDir: '/deck',
+      fs,
+      clock: fakeClock(1_000),
+      ttlMs: 60_000,
+      isHealthy: async () => true,
+      processProbe: new FakeProcessProbe({ alive: false, startTime: '' }),
+    });
+
+    await expect(lock.acquire()).resolves.toBe(false);
   });
 
   it('does not release a stale lock taken over by a peer', async () => {
@@ -518,4 +560,16 @@ function errorWithCode(code: string): Error {
   const error = new Error(code) as Error & { code: string };
   error.code = code;
   return error;
+}
+
+class FakeProcessProbe {
+  constructor(private readonly process: { alive: boolean; startTime: string }) {}
+
+  async isAlive(_pid: number): Promise<boolean> {
+    return this.process.alive;
+  }
+
+  async startTime(_pid: number): Promise<string> {
+    return this.process.startTime;
+  }
 }

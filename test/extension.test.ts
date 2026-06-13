@@ -720,7 +720,7 @@ describe('activate', () => {
       join(process.cwd(), 'resources', 'plugins', 'tmux-resurrect', 'scripts', 'save.sh'),
     );
     expect((runtime.saveLock as { options?: { lockFilename?: string } }).options?.lockFilename).toBe(
-      'deck-socket-save.lock',
+      'deck-socket-snapshot.lock',
     );
     expect(runtime.startPeriodicSave).toHaveBeenCalledWith(5 * 60 * 1000);
     expect(context.subscriptions).toContain(runtime.periodicSave);
