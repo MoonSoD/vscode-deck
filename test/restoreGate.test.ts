@@ -93,6 +93,139 @@ describe('createRestoreCoordinator', () => {
     expect(restore).toHaveBeenCalledOnce();
   });
 
+  it('serializes restore across coordinators sharing a restore lock', async () => {
+    let restored = false;
+    let finishRestore!: () => void;
+    const restoreDone = new Promise<void>((resolve) => {
+      finishRestore = () => {
+        restored = true;
+        resolve();
+      };
+    });
+    const restore = vi.fn(async () => {
+      if (restore.mock.calls.length === 1) await restoreDone;
+      restored = true;
+    });
+    const restoreLock = new FakeRestoreLock();
+    const deps = {
+      listSessions: async () =>
+        restored ? [{ sessionName: 'wt-_work_alpha-main__term-1' }] : [],
+      restore,
+      restoreLock,
+    };
+    const first = createRestoreCoordinator(deps);
+    const second = createRestoreCoordinator(deps);
+
+    const a = first.ensureRestored();
+    const b = second.ensureRestored();
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(restore).toHaveBeenCalledOnce();
+
+    finishRestore();
+    await Promise.all([a, b]);
+
+    expect(restore).toHaveBeenCalledOnce();
+  });
+
+  it('falls back when the first coordinator fails while holding the restore lock', async () => {
+    let restored = false;
+    let failFirstRestore!: () => void;
+    const firstRestore = new Promise<void>((_resolve, reject) => {
+      failFirstRestore = () => reject(new Error('winner died'));
+    });
+    const restore = vi.fn(async () => {
+      if (restore.mock.calls.length === 1) {
+        await firstRestore;
+        return;
+      }
+      restored = true;
+    });
+    const deps = {
+      listSessions: async () =>
+        restored ? [{ sessionName: 'wt-_work_alpha-main__term-1' }] : [],
+      restore,
+      restoreLock: new FakeRestoreLock(),
+    };
+    const first = createRestoreCoordinator(deps);
+    const second = createRestoreCoordinator(deps);
+
+    const firstResult = first.ensureRestored();
+    const secondResult = second.ensureRestored();
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(restore).toHaveBeenCalledOnce();
+
+    failFirstRestore();
+
+    await expect(firstResult).rejects.toThrow('winner died');
+    await expect(secondResult).resolves.toEqual({
+      kind: 'restored',
+      sessions: new Set(['wt-_work_alpha-main__term-1']),
+    });
+    expect(restore).toHaveBeenCalledTimes(2);
+  });
+
+  it('falls back when the first coordinator restores no sessions', async () => {
+    let restored = false;
+    let finishFirstRestore!: () => void;
+    const firstRestore = new Promise<void>((resolve) => {
+      finishFirstRestore = resolve;
+    });
+    const restore = vi.fn(async () => {
+      if (restore.mock.calls.length === 1) {
+        await firstRestore;
+        return;
+      }
+      restored = true;
+    });
+    const deps = {
+      listSessions: async () =>
+        restored ? [{ sessionName: 'wt-_work_alpha-main__term-1' }] : [],
+      restore,
+      restoreLock: new FakeRestoreLock(),
+    };
+    const first = createRestoreCoordinator(deps);
+    const second = createRestoreCoordinator(deps);
+
+    const firstResult = first.ensureRestored();
+    const secondResult = second.ensureRestored();
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(restore).toHaveBeenCalledOnce();
+
+    finishFirstRestore();
+
+    await expect(Promise.all([firstResult, secondResult])).resolves.toEqual([
+      { kind: 'restored', sessions: new Set(['wt-_work_alpha-main__term-1']) },
+      { kind: 'restored', sessions: new Set(['wt-_work_alpha-main__term-1']) },
+    ]);
+    expect(restore).toHaveBeenCalledTimes(2);
+  });
+
+  it('fails open when the restore lock cannot be acquired before timeout', async () => {
+    let restored = false;
+    const restore = vi.fn(async () => {
+      restored = true;
+    });
+    const coordinator = createRestoreCoordinator({
+      listSessions: async () =>
+        restored ? [{ sessionName: 'wt-_work_alpha-main__term-1' }] : [],
+      restore,
+      restoreLock: {
+        acquireBlocking: async () => false,
+        release: vi.fn(async () => undefined),
+      },
+    });
+
+    await expect(coordinator.ensureRestored()).resolves.toEqual({
+      kind: 'restored',
+      sessions: new Set(['wt-_work_alpha-main__term-1']),
+    });
+
+    expect(restore).toHaveBeenCalledOnce();
+  });
+
   it('restores again after a later DeckSocket death', async () => {
     const restore = vi.fn(async () => undefined);
     let sessions: Array<{ sessionName: string }> = [];
@@ -110,3 +243,23 @@ describe('createRestoreCoordinator', () => {
     expect(restore).toHaveBeenCalledTimes(2);
   });
 });
+
+class FakeRestoreLock {
+  private held = false;
+  private readonly waiters: Array<() => void> = [];
+
+  async acquireBlocking(): Promise<boolean> {
+    if (this.held) {
+      await new Promise<void>((resolve) => {
+        this.waiters.push(resolve);
+      });
+    }
+    this.held = true;
+    return true;
+  }
+
+  async release(): Promise<void> {
+    this.held = false;
+    this.waiters.shift()?.();
+  }
+}

@@ -14,6 +14,10 @@ export interface RestoredDeckSocketState {
 export interface RestoreCoordinatorDeps {
   listSessions(): Promise<ReadonlyArray<{ sessionName: string }>>;
   restore(): Promise<unknown>;
+  restoreLock?: {
+    acquireBlocking(): Promise<boolean>;
+    release(): Promise<void>;
+  };
 }
 
 export interface RestoreCoordinator {
@@ -24,9 +28,7 @@ export interface RestoreCoordinator {
 export function createRestoreCoordinator(deps: RestoreCoordinatorDeps): RestoreCoordinator {
   let inFlight: Promise<void> | undefined;
 
-  const classify = async (): Promise<DeckSocketState> => {
-    if (inFlight) return { kind: 'restoring', done: inFlight };
-
+  const inspect = async (): Promise<DeckSocketState> => {
     const sessions = await deps.listSessions();
     if (sessions.length === 0) return { kind: 'down' };
 
@@ -40,6 +42,21 @@ export function createRestoreCoordinator(deps: RestoreCoordinatorDeps): RestoreC
     return { kind: 'restored', sessions: realSessions };
   };
 
+  const classify = async (): Promise<DeckSocketState> => {
+    if (inFlight) return { kind: 'restoring', done: inFlight };
+    return inspect();
+  };
+
+  const guardedRestore = async (): Promise<void> => {
+    const locked = (await deps.restoreLock?.acquireBlocking()) ?? false;
+    try {
+      if ((await inspect()).kind === 'restored') return;
+      await deps.restore();
+    } finally {
+      if (locked) await deps.restoreLock?.release();
+    }
+  };
+
   const ensureRestored = async (): Promise<DeckSocketState> => {
     const state = await classify();
     switch (state.kind) {
@@ -51,8 +68,7 @@ export function createRestoreCoordinator(deps: RestoreCoordinatorDeps): RestoreC
       case 'down':
       case 'bare':
         if (!inFlight) {
-          inFlight = deps
-            .restore()
+          inFlight = guardedRestore()
             .then(() => undefined)
             .finally(() => {
               inFlight = undefined;

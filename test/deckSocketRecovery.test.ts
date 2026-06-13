@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { deckSocketPath, isWedged, WedgeRecovery } from '../src/terminal/deckSocketRecovery';
-import { RECOVERY_LOCK_FILENAME, RecoveryLock } from '../src/terminal/recoveryLock';
+import {
+  RECOVERY_LOCK_FILENAME,
+  RESTORE_LOCK_FILENAME,
+  RecoveryLock,
+} from '../src/terminal/recoveryLock';
 
 const SOCKET_PATH = '/tmp/tmux-1000/deck';
 
@@ -49,6 +53,22 @@ describe('RecoveryLock', () => {
     await expect(lock.acquire()).resolves.toBe(true);
   });
 
+  it('can acquire the restore lock in a separate file', async () => {
+    const fs = new FakeRecoveryLockFs(() => 1_000);
+    const lock = new RecoveryLock({
+      deckDir: '/deck',
+      lockFilename: RESTORE_LOCK_FILENAME,
+      fs,
+      clock: fakeClock(1_000),
+      isHealthy: async () => true,
+    });
+
+    await expect(lock.acquire()).resolves.toBe(true);
+
+    expect(fs.files.has(`/deck/${RESTORE_LOCK_FILENAME}`)).toBe(true);
+    expect(fs.files.has(`/deck/${RECOVERY_LOCK_FILENAME}`)).toBe(false);
+  });
+
   it('does not acquire the lock while a peer holds it', async () => {
     const fs = new FakeRecoveryLockFs(() => 1_000);
     const first = new RecoveryLock({
@@ -68,6 +88,47 @@ describe('RecoveryLock', () => {
     await expect(second.acquire()).resolves.toBe(false);
   });
 
+  it('blocks until a peer releases the lock', async () => {
+    let now = 1_000;
+    let wakeSleep!: () => void;
+    const fs = new FakeRecoveryLockFs(() => now);
+    const clock = {
+      now: () => now,
+      sleep: (ms: number) =>
+        new Promise<void>((resolve) => {
+          now += ms;
+          wakeSleep = resolve;
+        }),
+    };
+    const first = new RecoveryLock({
+      deckDir: '/deck',
+      fs,
+      clock,
+      pollIntervalMs: 100,
+      timeoutMs: 1_000,
+      isHealthy: async () => true,
+    });
+    const second = new RecoveryLock({
+      deckDir: '/deck',
+      fs,
+      clock,
+      pollIntervalMs: 100,
+      timeoutMs: 1_000,
+      isHealthy: async () => true,
+    });
+
+    await expect(first.acquire()).resolves.toBe(true);
+    const waiting = second.acquireBlocking();
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(fs.files.has(`/deck/${RECOVERY_LOCK_FILENAME}`)).toBe(true);
+
+    await first.release();
+    wakeSleep();
+
+    await expect(waiting).resolves.toBe(true);
+  });
+
   it('takes over a stale lock', async () => {
     let now = 62_000;
     const fs = new FakeRecoveryLockFs(() => now);
@@ -83,6 +144,34 @@ describe('RecoveryLock', () => {
     await expect(lock.acquire()).resolves.toBe(true);
 
     expect(fs.files.get(`/deck/${RECOVERY_LOCK_FILENAME}`)?.mtimeMs).toBe(now);
+  });
+
+  it('waits long enough to steal a dead holder lock', async () => {
+    let now = 1_000;
+    const fs = new FakeRecoveryLockFs(() => now);
+    const clock = {
+      now: () => now,
+      sleep: async (ms: number) => {
+        now += ms;
+      },
+    };
+    const first = new RecoveryLock({
+      deckDir: '/deck',
+      fs,
+      clock,
+      isHealthy: async () => true,
+    });
+    const second = new RecoveryLock({
+      deckDir: '/deck',
+      fs,
+      clock,
+      isHealthy: async () => true,
+    });
+
+    await expect(first.acquire()).resolves.toBe(true);
+
+    await expect(second.acquireBlocking()).resolves.toBe(true);
+    expect(now).toBeGreaterThan(61_000);
   });
 
   it('does not release a stale lock taken over by a peer', async () => {

@@ -4,6 +4,7 @@ import { mkdir, open, readFile, rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 
 export const RECOVERY_LOCK_FILENAME = 'deck-socket-recovery.lock';
+export const RESTORE_LOCK_FILENAME = 'deck-socket-restore.lock';
 
 export interface RecoveryLockFileHandle {
   writeFile(data: string): Promise<void>;
@@ -26,6 +27,7 @@ export interface RecoveryLockClock {
 export interface RecoveryLockOptions {
   deckDir: string;
   isHealthy(): Promise<boolean>;
+  lockFilename?: string;
   fs?: RecoveryLockFs;
   clock?: RecoveryLockClock;
   ttlMs?: number;
@@ -35,7 +37,6 @@ export interface RecoveryLockOptions {
 
 const DEFAULT_TTL_MS = 60_000;
 const DEFAULT_POLL_INTERVAL_MS = 250;
-const DEFAULT_TIMEOUT_MS = 60_000;
 
 export class RecoveryLock {
   private readonly lockPath: string;
@@ -48,12 +49,12 @@ export class RecoveryLock {
   private held = false;
 
   constructor(private readonly options: RecoveryLockOptions) {
-    this.lockPath = join(options.deckDir, RECOVERY_LOCK_FILENAME);
+    this.lockPath = join(options.deckDir, options.lockFilename ?? RECOVERY_LOCK_FILENAME);
     this.fs = options.fs ?? nodeFs;
     this.clock = options.clock ?? realClock;
     this.ttlMs = options.ttlMs ?? DEFAULT_TTL_MS;
     this.pollIntervalMs = options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
-    this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+    this.timeoutMs = options.timeoutMs ?? this.ttlMs + this.pollIntervalMs;
   }
 
   async acquire(): Promise<boolean> {
@@ -72,6 +73,17 @@ export class RecoveryLock {
 
     await this.fs.rm(this.lockPath, { force: true });
     return this.tryCreate();
+  }
+
+  async acquireBlocking(): Promise<boolean> {
+    const deadline = this.clock.now() + this.timeoutMs;
+    while (this.clock.now() <= deadline) {
+      if (await this.acquire()) return true;
+      const delayMs = Math.min(this.pollIntervalMs, deadline - this.clock.now());
+      if (delayMs <= 0) break;
+      await this.clock.sleep(delayMs);
+    }
+    return false;
   }
 
   async release(): Promise<void> {
