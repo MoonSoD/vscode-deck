@@ -46,7 +46,12 @@ it must be captured while the agent runs.
 
 3. **The sweep discovers and probes from sidecars, not the window name.**
    `AgentExitSweep` iterates `AgentSidecarStore.readAll()`, probes each
-   `{pid, startTime}`, and on detected death **removes the sidecar** (and
+   `{pid, startTime}`, and on detected death removes the sidecar only if the
+   sidecar's `startTime` is in the current tmux server lifetime. The current
+   server lifetime is read as `ps -o lstart=` for tmux's `#{pid}`; both values
+   are parsed from the same `ps lstart` shape. If the sidecar started before the
+   current server, it is a prior-lifetime resume candidate and the sweep keeps
+   it. For current-lifetime deaths, the sweep **removes the sidecar** (and
    best-effort clears the status / resets the window name for the UI). The window
    name stops being a functional signal.
 
@@ -57,8 +62,10 @@ it must be captured while the agent runs.
    - Codex quit/crash and Claude hard-crash → the sweep removes it (no
      `SessionEnd` fires; for Claude the sweep is the backstop, for Codex — which
      has no `SessionEnd` at all — it is the only mechanism).
-   - DeckSocket kill / reboot → the sweep is not running, so the sidecar
-     **persists** → the pane resumes. This is the desired outcome.
+   - DeckSocket kill / reboot → the next activation may run the sweep before or
+     after restore, but the old sidecar's `startTime` is before the new tmux
+     server start time, so the sidecar **persists** → the pane resumes. This is
+     the desired outcome.
 
 5. **Liveness = alive + start-time match; drop the command-name check.**
    `AgentLivenessProbe` keeps the `kill(pid, 0)` aliveness check and the
@@ -101,6 +108,12 @@ it must be captured while the agent runs.
   exits less than ~5 s before a kill+reload may still have its sidecar and
   resume. This is non-destructive by ADR-0021 §6 — a dead `session_id` flashes
   the agent's "session not found" and returns to the restored shell.
+- **Codex resume re-registers lazily.** Empirical QA for issue #121 found
+  `codex resume` does not fire a hook on load; it rewrites the sidecar on the
+  first `UserPromptSubmit`. Claude fires `SessionStart` with `source: "resume"`
+  and re-registers within seconds. Therefore a resumed-but-untouched Codex
+  session that later exits can leave one stale sidecar until the next restart,
+  causing one harmless resume attempt.
 - **The snapshot column layout is no longer parsed for agent detection**, only
   rewritten (the §11 shell-clamp still applies). The coupling to the resurrect
   column format narrows.

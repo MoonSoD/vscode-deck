@@ -76,11 +76,20 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const agentStatuses = new AgentStatusStore(join(deckDir, 'status'), 100);
   const agentStatusWatch = await agentStatuses.start();
   let agentExitSweep: AgentExitSweep | undefined;
+  let agentExitSweepReady = false;
+  const wakeAgentExitSweep = () => {
+    if (!agentExitSweepReady) return;
+    agentExitSweep?.wake();
+  };
+  const startAgentExitSweep = () => {
+    agentExitSweepReady = true;
+    agentExitSweep?.wake();
+  };
   const activeTerminalReadWatch = agentStatuses.onDidChange(() => {
     void markActiveTerminalRead(agentStatuses);
   });
   const agentExitSweepWakeWatch = agentStatuses.onDidChange(() => {
-    agentExitSweep?.wake();
+    wakeAgentExitSweep();
   });
   void markActiveTerminalRead(agentStatuses);
   const hookInstaller = new HookInstaller({
@@ -167,16 +176,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         sidecars: agentSidecars,
         statuses: agentStatuses,
         teardown: tmux,
+        serverStart: tmux,
         onError: (error) => console.warn('Deck: agent exit sweep failed', error),
       })
     : undefined;
-  agentExitSweep?.wake();
   const externalGitWatch = new ExternalGitWatch(watchGitCommonDir, refreshTree);
   let externalGitSyncVersion = 0;
 
   function refreshTree(): void {
     tree.refresh();
-    agentExitSweep?.wake();
+    wakeAgentExitSweep();
     syncExternalGitWatches();
   }
 
@@ -296,9 +305,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   // can show the sidebar banner while the snapshot is being restored.
   const activationRestore = snapshotRuntime ? ensureSnapshotRestored() : undefined;
   if (activationRestore) {
-    void activationRestore.then(refreshTree).catch((error) => {
-      console.warn('Deck: refreshing tree after TerminalSnapshot restore failed', error);
-    });
+    void activationRestore
+      .then(refreshTree)
+      .catch((error) => {
+        console.warn('Deck: refreshing tree after TerminalSnapshot restore failed', error);
+      })
+      .finally(startAgentExitSweep);
+  } else {
+    startAgentExitSweep();
   }
   const agentStatusNotifierWatch = new AgentStatusNotifier({
     store: agentStatuses,

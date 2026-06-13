@@ -20,11 +20,16 @@ export interface AgentExitTeardown {
   restoreAutomaticRename(sessionName: string): Promise<void>;
 }
 
+export interface AgentExitServerStart {
+  startTime(): Promise<string | undefined>;
+}
+
 interface AgentExitSweepOptions {
   sidecars: AgentExitSidecarStore;
   statuses: AgentExitStatusStore;
   teardown: AgentExitTeardown;
   liveness?: AgentExitLiveness;
+  serverStart?: AgentExitServerStart;
   intervalMs?: number;
   onError?: (error: unknown) => void;
 }
@@ -57,6 +62,7 @@ export class AgentExitSweep implements Disposable {
       shouldKeepSweeping = true;
       const process = agentProcess(sidecar);
       if (await this.liveness.isAgentAlive(process)) continue;
+      if (!(await this.startedInCurrentServerLifetime(sidecar))) continue;
 
       try {
         await this.options.sidecars.remove(sessionName);
@@ -103,6 +109,19 @@ export class AgentExitSweep implements Disposable {
     } finally {
       this.running = false;
     }
+  }
+
+  private async startedInCurrentServerLifetime(sidecar: AgentSidecar): Promise<boolean> {
+    if (!this.options.serverStart) return true;
+
+    const serverStart = await this.options.serverStart.startTime();
+    if (!serverStart) return false;
+
+    const sidecarStartedAt = Date.parse(sidecar.startTime);
+    const serverStartedAt = Date.parse(serverStart);
+    if (Number.isNaN(sidecarStartedAt) || Number.isNaN(serverStartedAt)) return false;
+
+    return sidecarStartedAt >= serverStartedAt;
   }
 }
 

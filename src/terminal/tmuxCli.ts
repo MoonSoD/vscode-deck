@@ -137,6 +137,24 @@ export class TmuxCli {
     return result.stdout.trim() || undefined;
   }
 
+  async startTime(): Promise<string | undefined> {
+    const pidResult = await this.runner.run('tmux', [
+      ...this.baseArgs(),
+      'display-message',
+      '-p',
+      '#{pid}',
+    ]);
+    if (pidResult.code !== 0) return undefined;
+
+    const pid = pidResult.stdout.trim();
+    if (!/^\d+$/.test(pid)) return undefined;
+
+    const startTimeResult = await this.runner.run('ps', ['-o', 'lstart=', '-p', pid]);
+    if (startTimeResult.code !== 0) return undefined;
+
+    return startTimeResult.stdout.trim().replace(/\s+/g, ' ') || undefined;
+  }
+
   attachShellArgs(session: string): string[] {
     return [...this.baseArgs(), 'attach-session', '-t', exactTarget(session)];
   }

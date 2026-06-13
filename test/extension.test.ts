@@ -96,6 +96,7 @@ const vscodeState = vi.hoisted(() => ({
     killSession: ReturnType<typeof vi.fn>;
     listSessions: ReturnType<typeof vi.fn>;
     newAnchorSession: ReturnType<typeof vi.fn>;
+    startTime: ReturnType<typeof vi.fn>;
     setOption: ReturnType<typeof vi.fn>;
     unsetOption: ReturnType<typeof vi.fn>;
   }>,
@@ -320,6 +321,7 @@ vi.mock('../src/terminal/tmuxCli', () => ({
     newAnchorSession = vi.fn(async () => undefined);
     windowName = vi.fn(async () => 'zsh');
     isServerRunning = vi.fn(async () => vscodeState.tmuxServerRunning);
+    startTime = vi.fn(async () => 'Thu Jun 11 20:01:00 2026');
     listSessions = vi.fn(async () => {
       vscodeState.lifecycleOrder.push('pending-list');
       return [{ sessionName: 'wt-_work_alpha-main__term-1', windowName: 'zsh' }];
@@ -736,9 +738,10 @@ describe('activate', () => {
     await activate(context as never);
 
     const sweep = context.subscriptions.find((subscription) => 'runOnce' in subscription) as {
-      options?: { sidecars?: unknown; panes?: unknown };
+      options?: { sidecars?: unknown; panes?: unknown; serverStart?: unknown };
     } | undefined;
     expect(sweep?.options?.sidecars).toBe(vscodeState.agentSidecarStoreInstance);
+    expect(sweep?.options?.serverStart).toBe(vscodeState.tmuxInstances[0]);
     expect(sweep?.options?.panes).toBeUndefined();
   });
 
@@ -765,6 +768,25 @@ describe('activate', () => {
 
     expect(vscodeState.agentSidecarStorePrune).toHaveBeenCalled();
     expect(vscodeState.agentStatusStorePrune).toHaveBeenCalled();
+  });
+
+  it('wakes the agent exit sweep only after the activation restore completes', async () => {
+    let resolveRestore: (value: { restored: boolean }) => void = () => undefined;
+    vscodeState.restoreOnActivationImpl = () =>
+      new Promise((resolve) => {
+        resolveRestore = resolve;
+      });
+
+    const context = createContext();
+    const activation = activate(context as never);
+    for (let i = 0; i < 5; i += 1) await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(vscodeState.agentSidecarStoreReadAll).not.toHaveBeenCalled();
+
+    resolveRestore({ restored: true });
+    await activation;
+
+    expect(vscodeState.agentSidecarStoreReadAll).toHaveBeenCalled();
   });
 
   it('refreshes the tree after the activation TerminalSnapshot restore completes', async () => {

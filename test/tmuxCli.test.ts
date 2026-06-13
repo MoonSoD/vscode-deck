@@ -289,6 +289,36 @@ describe('TmuxCli', () => {
     await expect(tmux.windowName('gone')).resolves.toBeUndefined();
   });
 
+  it('reads the tmux server start time from the server pid', async () => {
+    const runner = new MockRunner([
+      { code: 0, stdout: '1234\n', stderr: '' },
+      { code: 0, stdout: 'Thu Jun 11 20:01:00 2026\n', stderr: '' },
+    ]);
+    const tmux = new TmuxCli('/ext/resources/deck.conf', runner);
+
+    await expect(tmux.startTime()).resolves.toBe('Thu Jun 11 20:01:00 2026');
+    expect(runner.calls).toEqual([
+      {
+        command: 'tmux',
+        args: [
+          '-L',
+          'deck',
+          '-f',
+          '/ext/resources/deck.conf',
+          'display-message',
+          '-p',
+          '#{pid}',
+        ],
+        cwd: undefined,
+      },
+      {
+        command: 'ps',
+        args: ['-o', 'lstart=', '-p', '1234'],
+        cwd: undefined,
+      },
+    ]);
+  });
+
   it('filters listed sessions by prefix and treats a missing server as empty', async () => {
     const runner = new MockRunner([
       {

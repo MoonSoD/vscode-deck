@@ -34,6 +34,59 @@ describe('AgentExitSweep', () => {
 
     expect(liveness).toHaveBeenCalledTimes(2);
   });
+
+  it('keeps dead sidecars from before the current tmux server lifetime', async () => {
+    const liveness = vi.fn(async () => false);
+    const sidecars = new SidecarStore([
+      ['term-1', sidecar('codex', 'codex-123', 111, 'Thu Jun 11 20:00:00 2026')],
+    ]);
+    const statuses = new StatusStore();
+    const teardown = {
+      restoreAutomaticRename: vi.fn(async () => undefined),
+    };
+    const serverStart = {
+      startTime: vi.fn(async () => 'Thu Jun 11 20:01:00 2026'),
+    };
+    const sweep = new AgentExitSweep({
+      sidecars,
+      statuses,
+      liveness: { isAgentAlive: liveness },
+      teardown,
+      serverStart,
+    });
+
+    await expect(sweep.runOnce()).resolves.toBe(true);
+
+    expect(serverStart.startTime).toHaveBeenCalledOnce();
+    expect(sidecars.removed).toEqual([]);
+    expect(teardown.restoreAutomaticRename).not.toHaveBeenCalled();
+    expect(statuses.removed).toEqual([]);
+  });
+
+  it('removes dead sidecars from the current tmux server lifetime', async () => {
+    const sidecars = new SidecarStore([
+      ['term-1', sidecar('claude', 'claude-123', 111, 'Thu Jun 11 20:01:00 2026')],
+    ]);
+    const statuses = new StatusStore();
+    const teardown = {
+      restoreAutomaticRename: vi.fn(async () => undefined),
+    };
+    const sweep = new AgentExitSweep({
+      sidecars,
+      statuses,
+      liveness: { isAgentAlive: vi.fn(async () => false) },
+      teardown,
+      serverStart: {
+        startTime: vi.fn(async () => 'Thu Jun 11 20:00:00 2026'),
+      },
+    });
+
+    await expect(sweep.runOnce()).resolves.toBe(true);
+
+    expect(teardown.restoreAutomaticRename).toHaveBeenCalledWith('term-1');
+    expect(sidecars.removed).toEqual(['term-1']);
+    expect(statuses.removed).toEqual(['term-1']);
+  });
 });
 
 class SidecarStore implements AgentExitSidecarStore {
