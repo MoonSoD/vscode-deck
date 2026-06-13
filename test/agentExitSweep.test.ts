@@ -87,6 +87,29 @@ describe('AgentExitSweep', () => {
     expect(sidecars.removed).toEqual(['term-1']);
     expect(statuses.removed).toEqual(['term-1']);
   });
+
+  it('reads the server start time at most once per sweep regardless of dead sidecar count', async () => {
+    const sidecars = new SidecarStore([
+      ['term-1', sidecar('claude', 'claude-1', 111, 'Thu Jun 11 20:01:00 2026')],
+      ['term-2', sidecar('codex', 'codex-2', 222, 'Thu Jun 11 20:02:00 2026')],
+      ['term-3', sidecar('claude', 'claude-3', 333, 'Thu Jun 11 20:03:00 2026')],
+    ]);
+    const serverStart = {
+      serverStartTime: vi.fn(async () => 'Thu Jun 11 20:00:00 2026'),
+    };
+    const sweep = new AgentExitSweep({
+      sidecars,
+      statuses: new StatusStore(),
+      liveness: { isAgentAlive: vi.fn(async () => false) },
+      teardown: { restoreAutomaticRename: vi.fn(async () => undefined) },
+      serverStart,
+    });
+
+    await sweep.runOnce();
+
+    expect(serverStart.serverStartTime).toHaveBeenCalledOnce();
+    expect(sidecars.removed).toEqual(['term-1', 'term-2', 'term-3']);
+  });
 });
 
 class SidecarStore implements AgentExitSidecarStore {

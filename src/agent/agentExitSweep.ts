@@ -24,6 +24,11 @@ export interface AgentExitServerStart {
   serverStartTime(): Promise<string | undefined>;
 }
 
+// Resolved once per sweep: 'no-gate' when no server-start source is wired (reap any
+// dead sidecar), 'unknown' when the server start can't be read (keep — fail safe), or
+// the parsed server start time to compare each sidecar against.
+type ServerLifetime = 'no-gate' | 'unknown' | { startedAt: number };
+
 interface AgentExitSweepOptions {
   sidecars: AgentExitSidecarStore;
   statuses: AgentExitStatusStore;
@@ -58,11 +63,14 @@ export class AgentExitSweep implements Disposable {
     if (sidecars.size === 0) return false;
 
     let shouldKeepSweeping = false;
+    let serverLifetime: ServerLifetime | undefined;
     for (const [sessionName, sidecar] of sidecars) {
       shouldKeepSweeping = true;
       const process = agentProcess(sidecar);
       if (await this.liveness.isAgentAlive(process)) continue;
-      if (!(await this.startedInCurrentServerLifetime(sidecar))) continue;
+      // Resolve the tmux server start at most once per sweep — only when a death needs gating.
+      if (serverLifetime === undefined) serverLifetime = await this.resolveServerLifetime();
+      if (!startedInServerLifetime(sidecar, serverLifetime)) continue;
 
       try {
         await this.options.sidecars.remove(sessionName);
@@ -111,18 +119,23 @@ export class AgentExitSweep implements Disposable {
     }
   }
 
-  private async startedInCurrentServerLifetime(sidecar: AgentSidecar): Promise<boolean> {
-    if (!this.options.serverStart) return true;
+  private async resolveServerLifetime(): Promise<ServerLifetime> {
+    if (!this.options.serverStart) return 'no-gate';
 
     const serverStart = await this.options.serverStart.serverStartTime();
-    if (!serverStart) return false;
+    if (!serverStart) return 'unknown';
 
-    const sidecarStartedAt = Date.parse(sidecar.startTime);
-    const serverStartedAt = Date.parse(serverStart);
-    if (Number.isNaN(sidecarStartedAt) || Number.isNaN(serverStartedAt)) return false;
-
-    return sidecarStartedAt >= serverStartedAt;
+    const startedAt = Date.parse(serverStart);
+    return Number.isNaN(startedAt) ? 'unknown' : { startedAt };
   }
+}
+
+function startedInServerLifetime(sidecar: AgentSidecar, lifetime: ServerLifetime): boolean {
+  if (lifetime === 'no-gate') return true;
+  if (lifetime === 'unknown') return false;
+  const sidecarStartedAt = Date.parse(sidecar.startTime);
+  if (Number.isNaN(sidecarStartedAt)) return false;
+  return sidecarStartedAt >= lifetime.startedAt;
 }
 
 function agentProcess(sidecar: AgentSidecar): AgentProcessIdentity {
