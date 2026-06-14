@@ -31,7 +31,7 @@ export interface RecoveryLockOptions {
   lockFilename?: string;
   fs?: RecoveryLockFs;
   clock?: RecoveryLockClock;
-  processProbe?: ProcessProbe;
+  processProbe?: Pick<ProcessProbe, 'isAlive' | 'startTime'>;
   ttlMs?: number;
   pollIntervalMs?: number;
   timeoutMs?: number;
@@ -50,7 +50,7 @@ export class RecoveryLock {
   private readonly lockPath: string;
   private readonly fs: RecoveryLockFs;
   private readonly clock: RecoveryLockClock;
-  private readonly processProbe: ProcessProbe;
+  private readonly processProbe: Pick<ProcessProbe, 'isAlive' | 'startTime'>;
   private readonly ttlMs: number;
   private readonly pollIntervalMs: number;
   private readonly timeoutMs: number;
