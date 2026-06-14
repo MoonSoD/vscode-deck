@@ -43,4 +43,15 @@ describe('AgentPaneProbe', () => {
     await expect(probe.identityForSession('term-1')).resolves.toBeUndefined();
     expect(processes.startTime).not.toHaveBeenCalled();
   });
+
+  it('returns undefined when the child start time cannot be read', async () => {
+    const processes = {
+      children: vi.fn(async () => [222]),
+      startTime: vi.fn(async () => ''),
+    };
+    const probe = new AgentPaneProbe({ panePid: vi.fn(async () => 111) }, processes);
+
+    await expect(probe.identityForSession('term-1')).resolves.toBeUndefined();
+    expect(processes.startTime).toHaveBeenCalledWith(222);
+  });
 });

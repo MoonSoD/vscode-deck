@@ -102,6 +102,47 @@ describe('AgentExitSweep', () => {
     expect(statuses.removed).toEqual([]);
   });
 
+  it('removes an adopted sidecar once its now-current-lifetime process dies', async () => {
+    const sidecars = new SidecarStore([
+      ['term-1', sidecar('codex', 'codex-123', 111, 'Thu Jun 11 20:00:00 2026')],
+    ]);
+    const statuses = new StatusStore();
+    const teardown = {
+      restoreAutomaticRename: vi.fn(async () => undefined),
+    };
+    // term-1's stored pid is always dead; the pane yields the resumed process on
+    // the first sweep, then nothing once the user quits it.
+    const liveness = vi.fn(async (process: AgentProcessIdentity) => process.pid === 333);
+    const sweep = new AgentExitSweep({
+      sidecars,
+      statuses,
+      liveness: { isAgentAlive: liveness },
+      teardown,
+      serverStart: {
+        serverStartTime: vi.fn(async () => 'Thu Jun 11 20:01:00 2026'),
+      },
+      paneProbe: {
+        identityForSession: vi.fn(async () => ({ pid: 333, startTime: 'Thu Jun 11 20:02:00 2026' })),
+      },
+    });
+
+    await sweep.runOnce();
+    expect(sidecars.written).toEqual([
+      ['term-1', sidecar('codex', 'codex-123', 333, 'Thu Jun 11 20:02:00 2026')],
+    ]);
+    expect(sidecars.removed).toEqual([]);
+
+    // Next tick: the adopted process (333) has been quit, so it is now a dead
+    // current-lifetime death and the existing removal path reaps it.
+    sidecars.records = [['term-1', sidecar('codex', 'codex-123', 333, 'Thu Jun 11 20:02:00 2026')]];
+    liveness.mockResolvedValue(false);
+
+    await sweep.runOnce();
+    expect(sidecars.removed).toEqual(['term-1']);
+    expect(teardown.restoreAutomaticRename).toHaveBeenCalledWith('term-1');
+    expect(statuses.removed).toEqual(['term-1']);
+  });
+
   it('keeps a dead prior-lifetime sidecar untouched when its pane has no live identity', async () => {
     const sidecars = new SidecarStore([
       ['term-1', sidecar('codex', 'codex-123', 111, 'Thu Jun 11 20:00:00 2026')],

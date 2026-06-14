@@ -77,6 +77,11 @@ export class AgentExitSweep implements Disposable {
       // Resolve the tmux server start at most once per sweep — only when a death needs gating.
       if (serverLifetime === undefined) serverLifetime = await this.resolveServerLifetime();
       if (!startedInServerLifetime(sidecar, serverLifetime)) {
+        // Adopt only a genuine prior-lifetime death — re-stamp it to the live
+        // process in its pane so a resumed-but-never-re-registered agent (Codex)
+        // becomes current-lifetime and the quit below can remove it. When the
+        // lifetime is unknown or the startTime is unparseable we keep without
+        // probing (fail-safe), and never remove here (that would race restore).
         if (startedBeforeServerLifetime(sidecar, serverLifetime)) {
           await this.adoptLivePaneIdentity(sessionName, sidecar);
         }
