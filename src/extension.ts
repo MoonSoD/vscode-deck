@@ -50,6 +50,8 @@ import { deckSocketPath, WedgeRecovery } from './terminal/deckSocketRecovery';
 import { SNAPSHOT_LOCK_FILENAME, RecoveryLock } from './terminal/recoveryLock';
 import { AgentSidecarStore } from './agent/agentSidecarStore';
 import { AgentExitSweep } from './agent/agentExitSweep';
+import { PsProcessProbe } from './agent/agentLivenessProbe';
+import { AgentPaneProbe } from './agent/agentPaneProbe';
 import { AgentStatusFileDecorationProvider } from './agent/agentStatusFileDecorationProvider';
 import { AgentStatusNotifier } from './agent/agentStatusNotifier';
 import { AgentStatusStore } from './agent/agentStatusStore';
@@ -192,6 +194,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         statuses: agentStatuses,
         teardown: tmux,
         serverStart: tmux,
+        paneProbe: new AgentPaneProbe(tmux, new PsProcessProbe()),
         onError: (error) => console.warn('Deck: agent exit sweep failed', error),
       })
     : undefined;

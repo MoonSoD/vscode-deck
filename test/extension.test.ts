@@ -11,6 +11,7 @@ const vscodeState = vi.hoisted(() => ({
   addRepositoryRun: vi.fn(),
   addTerminalRun: vi.fn(),
   agentDetectionArgs: undefined as unknown[] | undefined,
+  agentPaneProbeInstances: [] as Array<{ args: unknown[] }>,
   agentSetupPromptArgs: undefined as unknown[] | undefined,
   agentSetupPromptRun: vi.fn(),
   agentSetupPromptUninstall: vi.fn(),
@@ -97,6 +98,7 @@ const vscodeState = vi.hoisted(() => ({
     killSession: ReturnType<typeof vi.fn>;
     listSessions: ReturnType<typeof vi.fn>;
     newAnchorSession: ReturnType<typeof vi.fn>;
+    panePid: ReturnType<typeof vi.fn>;
     serverStartTime: ReturnType<typeof vi.fn>;
     setOption: ReturnType<typeof vi.fn>;
     unsetOption: ReturnType<typeof vi.fn>;
@@ -321,6 +323,7 @@ vi.mock('../src/terminal/tmuxCli', () => ({
     configPath: string;
     killSession = vi.fn(async () => undefined);
     newAnchorSession = vi.fn(async () => undefined);
+    panePid = vi.fn(async () => 1234);
     windowName = vi.fn(async () => 'zsh');
     isServerRunning = vi.fn(async () => vscodeState.tmuxServerRunning);
     serverStartTime = vi.fn(async () => 'Thu Jun 11 20:01:00 2026');
@@ -374,6 +377,17 @@ vi.mock('../src/agent/agentSidecarStore', () => ({
     constructor(...args: unknown[]) {
       vscodeState.agentSidecarStoreArgs = args;
       vscodeState.agentSidecarStoreInstance = this;
+    }
+  },
+}));
+
+vi.mock('../src/agent/agentPaneProbe', () => ({
+  AgentPaneProbe: class {
+    args: unknown[];
+
+    constructor(...args: unknown[]) {
+      this.args = args;
+      vscodeState.agentPaneProbeInstances.push(this);
     }
   },
 }));
@@ -479,6 +493,7 @@ describe('activate', () => {
     vscodeState.addRepositoryArgs = undefined;
     vscodeState.addTerminalArgs = undefined;
     vscodeState.agentDetectionArgs = undefined;
+    vscodeState.agentPaneProbeInstances = [];
     vscodeState.agentSetupPromptArgs = undefined;
     vscodeState.agentSidecarStoreArgs = undefined;
     vscodeState.agentSidecarStoreInstance = undefined;
@@ -747,10 +762,12 @@ describe('activate', () => {
     await activate(context as never);
 
     const sweep = context.subscriptions.find((subscription) => 'runOnce' in subscription) as {
-      options?: { sidecars?: unknown; panes?: unknown; serverStart?: unknown };
+      options?: { sidecars?: unknown; paneProbe?: unknown; panes?: unknown; serverStart?: unknown };
     } | undefined;
     expect(sweep?.options?.sidecars).toBe(vscodeState.agentSidecarStoreInstance);
     expect(sweep?.options?.serverStart).toBe(vscodeState.tmuxInstances[0]);
+    expect(sweep?.options?.paneProbe).toBe(vscodeState.agentPaneProbeInstances[0]);
+    expect(vscodeState.agentPaneProbeInstances[0]?.args[0]).toBe(vscodeState.tmuxInstances[0]);
     expect(sweep?.options?.panes).toBeUndefined();
   });
 

@@ -289,6 +289,32 @@ describe('TmuxCli', () => {
     await expect(tmux.windowName('gone')).resolves.toBeUndefined();
   });
 
+  it('reads the active pane pid for a session', async () => {
+    const runner = new MockRunner([{ code: 0, stdout: '1234\n', stderr: '' }]);
+    const tmux = new TmuxCli('/ext/resources/deck.conf', runner);
+
+    await expect(tmux.panePid('wt-_work_repo__term-1')).resolves.toBe(1234);
+    expect(runner.calls[0].args).toEqual([
+      '-L',
+      'deck',
+      '-f',
+      '/ext/resources/deck.conf',
+      'display-message',
+      '-p',
+      '-t',
+      'wt-_work_repo__term-1',
+      '#{pane_pid}',
+    ]);
+  });
+
+  it('returns undefined when the active pane pid query fails or is not numeric', async () => {
+    const failed = new TmuxCli('/ext/resources/deck.conf', new MockRunner([{ code: 1, stdout: '', stderr: '' }]));
+    const garbage = new TmuxCli('/ext/resources/deck.conf', new MockRunner([{ code: 0, stdout: 'pane\n', stderr: '' }]));
+
+    await expect(failed.panePid('gone')).resolves.toBeUndefined();
+    await expect(garbage.panePid('term-1')).resolves.toBeUndefined();
+  });
+
   it('reads the tmux server start time from the server pid', async () => {
     const runner = new MockRunner([
       { code: 0, stdout: '1234\n', stderr: '' },

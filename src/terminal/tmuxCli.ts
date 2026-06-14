@@ -137,6 +137,21 @@ export class TmuxCli {
     return result.stdout.trim() || undefined;
   }
 
+  async panePid(session: string): Promise<number | undefined> {
+    const result = await this.runner.run('tmux', [
+      ...this.baseArgs(),
+      'display-message',
+      '-p',
+      '-t',
+      session,
+      '#{pane_pid}',
+    ]);
+    if (result.code !== 0) return undefined;
+
+    const pid = Number(result.stdout.trim());
+    return Number.isInteger(pid) && pid > 0 ? pid : undefined;
+  }
+
   async serverStartTime(): Promise<string | undefined> {
     const pidResult = await this.runner.run('tmux', [
       ...this.baseArgs(),

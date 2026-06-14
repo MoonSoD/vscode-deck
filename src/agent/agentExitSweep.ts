@@ -5,6 +5,7 @@ import type { Disposable } from './agentStatusStore';
 
 export interface AgentExitSidecarStore {
   readAll(): Promise<Map<string, AgentSidecar>>;
+  write(sessionName: string, sidecar: AgentSidecar): Promise<void>;
   remove(sessionName: string): Promise<void>;
 }
 
@@ -24,6 +25,10 @@ export interface AgentExitServerStart {
   serverStartTime(): Promise<string | undefined>;
 }
 
+export interface AgentExitPaneProbe {
+  identityForSession(sessionName: string): Promise<AgentProcessIdentity | undefined>;
+}
+
 // Resolved once per sweep: 'no-gate' when no server-start source is wired (reap any
 // dead sidecar), 'unknown' when the server start can't be read (keep — fail safe), or
 // the parsed server start time to compare each sidecar against.
@@ -35,6 +40,7 @@ interface AgentExitSweepOptions {
   teardown: AgentExitTeardown;
   liveness?: AgentExitLiveness;
   serverStart?: AgentExitServerStart;
+  paneProbe?: AgentExitPaneProbe;
   intervalMs?: number;
   onError?: (error: unknown) => void;
 }
@@ -70,7 +76,12 @@ export class AgentExitSweep implements Disposable {
       if (await this.liveness.isAgentAlive(process)) continue;
       // Resolve the tmux server start at most once per sweep — only when a death needs gating.
       if (serverLifetime === undefined) serverLifetime = await this.resolveServerLifetime();
-      if (!startedInServerLifetime(sidecar, serverLifetime)) continue;
+      if (!startedInServerLifetime(sidecar, serverLifetime)) {
+        if (startedBeforeServerLifetime(sidecar, serverLifetime)) {
+          await this.adoptLivePaneIdentity(sessionName, sidecar);
+        }
+        continue;
+      }
 
       try {
         await this.options.sidecars.remove(sessionName);
@@ -90,6 +101,21 @@ export class AgentExitSweep implements Disposable {
     }
 
     return shouldKeepSweeping;
+  }
+
+  private async adoptLivePaneIdentity(sessionName: string, sidecar: AgentSidecar): Promise<void> {
+    const identity = await this.options.paneProbe?.identityForSession(sessionName);
+    if (!identity) return;
+
+    try {
+      await this.options.sidecars.write(sessionName, {
+        ...sidecar,
+        pid: identity.pid,
+        startTime: identity.startTime,
+      });
+    } catch (error) {
+      this.onError(error);
+    }
   }
 
   dispose(): void {
@@ -136,6 +162,13 @@ function startedInServerLifetime(sidecar: AgentSidecar, lifetime: ServerLifetime
   const sidecarStartedAt = Date.parse(sidecar.startTime);
   if (Number.isNaN(sidecarStartedAt)) return false;
   return sidecarStartedAt >= lifetime.startedAt;
+}
+
+function startedBeforeServerLifetime(sidecar: AgentSidecar, lifetime: ServerLifetime): boolean {
+  if (lifetime === 'no-gate' || lifetime === 'unknown') return false;
+  const sidecarStartedAt = Date.parse(sidecar.startTime);
+  if (Number.isNaN(sidecarStartedAt)) return false;
+  return sidecarStartedAt < lifetime.startedAt;
 }
 
 function agentProcess(sidecar: AgentSidecar): AgentProcessIdentity {

@@ -7,6 +7,7 @@ export interface AgentProcessIdentity {
 
 export interface ProcessProbe {
   isAlive(pid: number): Promise<boolean>;
+  children(pid: number): Promise<number[]>;
   startTime(pid: number): Promise<string>;
 }
 
@@ -31,6 +32,23 @@ export class PsProcessProbe implements ProcessProbe {
 
   async startTime(pid: number): Promise<string> {
     return this.ps(pid, 'lstart=');
+  }
+
+  async children(pid: number): Promise<number[]> {
+    return new Promise((resolve) => {
+      execFile('pgrep', ['-P', String(pid)], (error, stdout) => {
+        if (error) {
+          resolve([]);
+          return;
+        }
+
+        resolve(stdout
+          .trim()
+          .split('\n')
+          .map((line) => Number(line.trim()))
+          .filter((childPid) => Number.isInteger(childPid) && childPid > 0));
+      });
+    });
   }
 
   private async ps(pid: number, output: string): Promise<string> {

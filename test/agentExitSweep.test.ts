@@ -63,6 +63,100 @@ describe('AgentExitSweep', () => {
     expect(statuses.removed).toEqual([]);
   });
 
+  it('adopts a dead prior-lifetime sidecar from the live process in its pane', async () => {
+    const sidecars = new SidecarStore([
+      ['term-1', sidecar('codex', 'codex-123', 111, 'Thu Jun 11 20:00:00 2026')],
+    ]);
+    const statuses = new StatusStore();
+    const teardown = {
+      restoreAutomaticRename: vi.fn(async () => undefined),
+    };
+    const paneProbe = {
+      identityForSession: vi.fn(async () => ({
+        pid: 333,
+        startTime: 'Thu Jun 11 20:02:00 2026',
+      })),
+    };
+    const sweep = new AgentExitSweep({
+      sidecars,
+      statuses,
+      liveness: { isAgentAlive: vi.fn(async () => false) },
+      teardown,
+      serverStart: {
+        serverStartTime: vi.fn(async () => 'Thu Jun 11 20:01:00 2026'),
+      },
+      paneProbe,
+    });
+
+    await expect(sweep.runOnce()).resolves.toBe(true);
+
+    expect(paneProbe.identityForSession).toHaveBeenCalledWith('term-1');
+    expect(sidecars.written).toEqual([
+      [
+        'term-1',
+        sidecar('codex', 'codex-123', 333, 'Thu Jun 11 20:02:00 2026'),
+      ],
+    ]);
+    expect(sidecars.removed).toEqual([]);
+    expect(teardown.restoreAutomaticRename).not.toHaveBeenCalled();
+    expect(statuses.removed).toEqual([]);
+  });
+
+  it('keeps a dead prior-lifetime sidecar untouched when its pane has no live identity', async () => {
+    const sidecars = new SidecarStore([
+      ['term-1', sidecar('codex', 'codex-123', 111, 'Thu Jun 11 20:00:00 2026')],
+    ]);
+    const teardown = {
+      restoreAutomaticRename: vi.fn(async () => undefined),
+    };
+    const sweep = new AgentExitSweep({
+      sidecars,
+      statuses: new StatusStore(),
+      liveness: { isAgentAlive: vi.fn(async () => false) },
+      teardown,
+      serverStart: {
+        serverStartTime: vi.fn(async () => 'Thu Jun 11 20:01:00 2026'),
+      },
+      paneProbe: {
+        identityForSession: vi.fn(async () => undefined),
+      },
+    });
+
+    await expect(sweep.runOnce()).resolves.toBe(true);
+
+    expect(sidecars.written).toEqual([]);
+    expect(sidecars.removed).toEqual([]);
+    expect(teardown.restoreAutomaticRename).not.toHaveBeenCalled();
+  });
+
+  it('does not probe the pane when the stored agent process is still live', async () => {
+    const sidecars = new SidecarStore([
+      ['term-1', sidecar('claude', 'claude-123', 111, 'Thu Jun 11 20:00:00 2026')],
+    ]);
+    const paneProbe = {
+      identityForSession: vi.fn(async () => ({
+        pid: 333,
+        startTime: 'Thu Jun 11 20:02:00 2026',
+      })),
+    };
+    const sweep = new AgentExitSweep({
+      sidecars,
+      statuses: new StatusStore(),
+      liveness: { isAgentAlive: vi.fn(async () => true) },
+      teardown: { restoreAutomaticRename: vi.fn(async () => undefined) },
+      serverStart: {
+        serverStartTime: vi.fn(async () => 'Thu Jun 11 20:01:00 2026'),
+      },
+      paneProbe,
+    });
+
+    await expect(sweep.runOnce()).resolves.toBe(true);
+
+    expect(paneProbe.identityForSession).not.toHaveBeenCalled();
+    expect(sidecars.written).toEqual([]);
+    expect(sidecars.removed).toEqual([]);
+  });
+
   it('removes dead sidecars from the current tmux server lifetime', async () => {
     const sidecars = new SidecarStore([
       ['term-1', sidecar('claude', 'claude-123', 111, 'Thu Jun 11 20:01:00 2026')],
@@ -114,6 +208,7 @@ describe('AgentExitSweep', () => {
 
 class SidecarStore implements AgentExitSidecarStore {
   removed: string[] = [];
+  written: Array<[string, AgentSidecar]> = [];
 
   constructor(public records: Array<[string, AgentSidecar]>) {}
 
@@ -123,6 +218,10 @@ class SidecarStore implements AgentExitSidecarStore {
 
   async remove(sessionName: string): Promise<void> {
     this.removed.push(sessionName);
+  }
+
+  async write(sessionName: string, sidecar: AgentSidecar): Promise<void> {
+    this.written.push([sessionName, sidecar]);
   }
 }
 
