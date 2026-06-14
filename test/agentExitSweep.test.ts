@@ -13,6 +13,7 @@ describe('AgentExitSweep', () => {
     const statuses = new StatusStore();
     const teardown = {
       restoreAutomaticRename: vi.fn(async () => undefined),
+      renameAgentWindow: vi.fn(async () => undefined),
     };
     const sweep = new AgentExitSweep({
       sidecars,
@@ -43,6 +44,7 @@ describe('AgentExitSweep', () => {
     const statuses = new StatusStore();
     const teardown = {
       restoreAutomaticRename: vi.fn(async () => undefined),
+      renameAgentWindow: vi.fn(async () => undefined),
     };
     const serverStart = {
       serverStartTime: vi.fn(async () => 'Thu Jun 11 20:01:00 2026'),
@@ -70,6 +72,7 @@ describe('AgentExitSweep', () => {
     const statuses = new StatusStore();
     const teardown = {
       restoreAutomaticRename: vi.fn(async () => undefined),
+      renameAgentWindow: vi.fn(async () => undefined),
     };
     const paneProbe = {
       identityForSession: vi.fn(async () => ({
@@ -98,6 +101,7 @@ describe('AgentExitSweep', () => {
       ],
     ]);
     expect(sidecars.removed).toEqual([]);
+    expect(teardown.renameAgentWindow).toHaveBeenCalledWith('term-1', 'codex');
     expect(teardown.restoreAutomaticRename).not.toHaveBeenCalled();
     expect(statuses.removed).toEqual([]);
   });
@@ -109,6 +113,7 @@ describe('AgentExitSweep', () => {
     const statuses = new StatusStore();
     const teardown = {
       restoreAutomaticRename: vi.fn(async () => undefined),
+      renameAgentWindow: vi.fn(async () => undefined),
     };
     // term-1's stored pid is always dead; the pane yields the resumed process on
     // the first sweep, then nothing once the user quits it.
@@ -149,6 +154,7 @@ describe('AgentExitSweep', () => {
     ]);
     const teardown = {
       restoreAutomaticRename: vi.fn(async () => undefined),
+      renameAgentWindow: vi.fn(async () => undefined),
     };
     const sweep = new AgentExitSweep({
       sidecars,
@@ -184,7 +190,7 @@ describe('AgentExitSweep', () => {
       sidecars,
       statuses: new StatusStore(),
       liveness: { isAgentAlive: vi.fn(async () => true) },
-      teardown: { restoreAutomaticRename: vi.fn(async () => undefined) },
+      teardown: { restoreAutomaticRename: vi.fn(async () => undefined), renameAgentWindow: vi.fn(async () => undefined) },
       serverStart: {
         serverStartTime: vi.fn(async () => 'Thu Jun 11 20:01:00 2026'),
       },
@@ -205,6 +211,7 @@ describe('AgentExitSweep', () => {
     const statuses = new StatusStore();
     const teardown = {
       restoreAutomaticRename: vi.fn(async () => undefined),
+      renameAgentWindow: vi.fn(async () => undefined),
     };
     const sweep = new AgentExitSweep({
       sidecars,
@@ -236,7 +243,7 @@ describe('AgentExitSweep', () => {
       sidecars,
       statuses: new StatusStore(),
       liveness: { isAgentAlive: vi.fn(async () => false) },
-      teardown: { restoreAutomaticRename: vi.fn(async () => undefined) },
+      teardown: { restoreAutomaticRename: vi.fn(async () => undefined), renameAgentWindow: vi.fn(async () => undefined) },
       serverStart,
     });
 

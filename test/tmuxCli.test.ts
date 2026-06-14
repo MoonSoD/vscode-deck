@@ -239,6 +239,35 @@ describe('TmuxCli', () => {
     }]);
   });
 
+  it('renames one Deck session window to the agent name', async () => {
+    const runner = new MockRunner([{ code: 0, stdout: '', stderr: '' }]);
+    const tmux = new TmuxCli('/ext/resources/deck.conf', runner);
+
+    await tmux.renameAgentWindow('wt-_work_repo__term-1', 'codex');
+
+    expect(runner.calls).toEqual([{
+      command: 'tmux',
+      args: [
+        '-L',
+        'deck',
+        '-f',
+        '/ext/resources/deck.conf',
+        'rename-window',
+        '-t',
+        'wt-_work_repo__term-1',
+        'codex',
+      ],
+      cwd: undefined,
+    }]);
+  });
+
+  it('treats a missing session as a no-op when renaming the agent window', async () => {
+    const runner = new MockRunner([{ code: 1, stdout: '', stderr: "can't find session: gone" }]);
+    const tmux = new TmuxCli('/ext/resources/deck.conf', runner);
+
+    await expect(tmux.renameAgentWindow('gone', 'claude')).resolves.toBeUndefined();
+  });
+
   it('lists Deck sessions with window names', async () => {
     const runner = new MockRunner([
       {

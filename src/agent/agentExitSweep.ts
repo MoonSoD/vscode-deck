@@ -1,6 +1,7 @@
 import type { AgentProcessIdentity } from './agentLivenessProbe';
 import { AgentLivenessProbe } from './agentLivenessProbe';
 import type { AgentSidecar } from './agentSidecar';
+import type { AgentName } from './agentTypes';
 import type { Disposable } from './agentStatusStore';
 
 export interface AgentExitSidecarStore {
@@ -19,6 +20,7 @@ export interface AgentExitLiveness {
 
 export interface AgentExitTeardown {
   restoreAutomaticRename(sessionName: string): Promise<void>;
+  renameAgentWindow(sessionName: string, agent: AgentName): Promise<void>;
 }
 
 export interface AgentExitServerStart {
@@ -118,6 +120,16 @@ export class AgentExitSweep implements Disposable {
         pid: identity.pid,
         startTime: identity.startTime,
       });
+    } catch (error) {
+      this.onError(error);
+      return;
+    }
+
+    // The resumed agent fired no hook, so the row still carries tmux's
+    // automatic-rename (the raw binary comm). Restore the agent name the hook
+    // would have set on SessionStart.
+    try {
+      await this.options.teardown.renameAgentWindow(sessionName, sidecar.agent);
     } catch (error) {
       this.onError(error);
     }

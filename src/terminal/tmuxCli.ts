@@ -221,6 +221,21 @@ export class TmuxCli {
     throw new Error(result.stderr || result.stdout || `tmux set -gu failed: ${result.code}`);
   }
 
+  async renameAgentWindow(session: string, name: string): Promise<void> {
+    const result = await this.runner.run('tmux', [
+      ...this.baseArgs(),
+      'rename-window',
+      // Bare session (not the `=`-exact form), same as restoreAutomaticRename:
+      // tmux resolves it to the session's active window. This mirrors the hook's
+      // `rename-window <agent>` for a resumed agent whose hook never fires.
+      '-t',
+      session,
+      name,
+    ]);
+    if (result.code === 0 || isMissingSession(result)) return;
+    throw new Error(result.stderr || result.stdout || `tmux rename-window failed: ${result.code}`);
+  }
+
   async restoreAutomaticRename(session: string): Promise<void> {
     const result = await this.runner.run('tmux', [
       ...this.baseArgs(),

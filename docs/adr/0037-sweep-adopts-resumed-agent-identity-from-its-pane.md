@@ -92,6 +92,11 @@ pid is the stale thing.
 - **Codex resume-then-quit no longer recurs.** The first sweep tick that observes
   the resumed Codex alive adopts it; the quit is then cleaned by the
   current-lifetime path.
+- **Adoption also restores the agent row name.** The resumed agent fired no hook,
+  so the row still carries tmux's automatic-rename of the raw binary `comm` (e.g.
+  `codex-aarch64-a`, the truncated `codex-aarch64-apple-darwin`). On adopt the
+  sweep runs `rename-window <agent>`, the name the hook would have set on
+  `SessionStart` — within one sweep tick instead of waiting for the first prompt.
 - **Residuals (both the existing #121 class):** (a) if the user resumes and quits
   within one sweep interval (~5 s) before any tick observed it alive, the sidecar
   stays prior-lifetime and resumes once more; (b) if the user quits the agent and
