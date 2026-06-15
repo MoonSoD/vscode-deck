@@ -196,6 +196,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         teardown: tmux,
         serverStart: tmux,
         paneProbe: new AgentPaneProbe(tmux, new PsProcessProbe()),
+        paneCapture: tmux,
         onError: (error) => console.warn('Deck: agent exit sweep failed', error),
       })
     : undefined;

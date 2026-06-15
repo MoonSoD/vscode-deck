@@ -268,6 +268,34 @@ describe('TmuxCli', () => {
     await expect(tmux.renameAgentWindow('gone', 'claude')).resolves.toBeUndefined();
   });
 
+  it('captures the bottom of one Deck session pane with escapes', async () => {
+    const runner = new MockRunner([{ code: 0, stdout: '\u001b[32mworking\u001b[0m\n', stderr: '' }]);
+    const tmux = new TmuxCli('/ext/resources/deck.conf', runner);
+
+    await expect(tmux.capturePane('wt-_work_repo__term-1')).resolves.toBe('\u001b[32mworking\u001b[0m\n');
+
+    expect(runner.calls).toEqual([{
+      command: 'tmux',
+      args: [
+        '-L',
+        'deck',
+        '-f',
+        '/ext/resources/deck.conf',
+        'capture-pane',
+        '-p',
+        '-e',
+        '-q',
+        '-J',
+        '-N',
+        '-S',
+        '-20',
+        '-t',
+        'wt-_work_repo__term-1',
+      ],
+      cwd: undefined,
+    }]);
+  });
+
   it('lists Deck sessions with window names', async () => {
     const runner = new MockRunner([
       {

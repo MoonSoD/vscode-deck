@@ -255,6 +255,25 @@ export class TmuxCli {
     throw new Error(result.stderr || result.stdout || `tmux set -w failed: ${result.code}`);
   }
 
+  async capturePane(session: string): Promise<string | undefined> {
+    const result = await this.runner.run('tmux', [
+      ...this.baseArgs(),
+      'capture-pane',
+      '-p',
+      '-e',
+      '-q',
+      '-J',
+      '-N',
+      '-S',
+      '-20',
+      '-t',
+      session,
+    ]);
+    if (result.code === 0) return result.stdout;
+    if (isMissingSession(result)) return undefined;
+    throw new Error(result.stderr || result.stdout || `tmux capture-pane failed: ${result.code}`);
+  }
+
   async isServerRunning(): Promise<boolean> {
     const result = await this.runner.run('tmux', [
       ...this.baseArgs(),

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { AgentExitSweep, type AgentExitSidecarStore, type AgentExitStatusStore } from '../src/agent/agentExitSweep';
 import type { AgentProcessIdentity } from '../src/agent/agentLivenessProbe';
 import type { AgentSidecar } from '../src/agent/agentSidecar';
+import type { AgentStatus } from '../src/agent/agentStatusStore';
 
 describe('AgentExitSweep', () => {
   it('removes dead agent sidecars, keeps live ones, and no-ops when there are no sidecars', async () => {
@@ -204,6 +205,125 @@ describe('AgentExitSweep', () => {
     expect(sidecars.removed).toEqual([]);
   });
 
+  it('clears a live in-progress agent after its pane is quiescent without removing the sidecar', async () => {
+    const sidecars = new SidecarStore([
+      ['term-1', sidecar('codex', 'codex-123', 111, 'Thu Jun 11 20:00:00 2026')],
+    ]);
+    const statuses = new StatusStore([
+      ['term-1', { status: 'inProgress', statusAt: 1710000000 }],
+    ]);
+    const paneCapture = {
+      capturePane: vi.fn(async () => 'idle prompt'),
+    };
+    let now = 1710000000000;
+    const sweep = new AgentExitSweep({
+      sidecars,
+      statuses,
+      liveness: { isAgentAlive: vi.fn(async () => true) },
+      teardown: { restoreAutomaticRename: vi.fn(async () => undefined), renameAgentWindow: vi.fn(async () => undefined) },
+      paneCapture,
+      now: () => now,
+    });
+
+    await sweep.runOnce();
+    now += 5000;
+    await sweep.runOnce();
+    now += 5000;
+    await sweep.runOnce();
+
+    expect(paneCapture.capturePane).toHaveBeenCalledTimes(3);
+    expect(paneCapture.capturePane).toHaveBeenCalledWith('term-1');
+    expect(statuses.removed).toEqual(['term-1']);
+    expect(sidecars.removed).toEqual([]);
+  });
+
+  it('keeps a live in-progress agent when its pane keeps changing', async () => {
+    const sidecars = new SidecarStore([
+      ['term-1', sidecar('claude', 'claude-123', 111, 'Thu Jun 11 20:00:00 2026')],
+    ]);
+    const statuses = new StatusStore([
+      ['term-1', { status: 'inProgress', statusAt: 1710000000 }],
+    ]);
+    const captures = ['frame 1', 'frame 2', 'frame 3'];
+    let now = 1710000000000;
+    const sweep = new AgentExitSweep({
+      sidecars,
+      statuses,
+      liveness: { isAgentAlive: vi.fn(async () => true) },
+      teardown: { restoreAutomaticRename: vi.fn(async () => undefined), renameAgentWindow: vi.fn(async () => undefined) },
+      paneCapture: {
+        capturePane: vi.fn(async () => captures.shift()),
+      },
+      now: () => now,
+    });
+
+    await sweep.runOnce();
+    now += 5000;
+    await sweep.runOnce();
+    now += 5000;
+    await sweep.runOnce();
+
+    expect(statuses.removed).toEqual([]);
+    expect(sidecars.removed).toEqual([]);
+  });
+
+  it('does not count a missing pane capture as part of a quiescence window', async () => {
+    const sidecars = new SidecarStore([
+      ['term-1', sidecar('codex', 'codex-123', 111, 'Thu Jun 11 20:00:00 2026')],
+    ]);
+    const statuses = new StatusStore([
+      ['term-1', { status: 'inProgress', statusAt: 1710000000 }],
+    ]);
+    const captures = ['idle prompt', undefined, 'idle prompt'];
+    let now = 1710000000000;
+    const sweep = new AgentExitSweep({
+      sidecars,
+      statuses,
+      liveness: { isAgentAlive: vi.fn(async () => true) },
+      teardown: { restoreAutomaticRename: vi.fn(async () => undefined), renameAgentWindow: vi.fn(async () => undefined) },
+      paneCapture: {
+        capturePane: vi.fn(async () => captures.shift()),
+      },
+      now: () => now,
+    });
+
+    await sweep.runOnce();
+    now += 5000;
+    await sweep.runOnce();
+    now += 5000;
+    await sweep.runOnce();
+
+    expect(statuses.removed).toEqual([]);
+    expect(sidecars.removed).toEqual([]);
+  });
+
+  it('does not capture or clear live agents outside in-progress status', async () => {
+    const sidecars = new SidecarStore([
+      ['term-1', sidecar('codex', 'codex-123', 111, 'Thu Jun 11 20:00:00 2026')],
+      ['term-2', sidecar('claude', 'claude-123', 222, 'Thu Jun 11 20:00:01 2026')],
+    ]);
+    const statuses = new StatusStore([
+      ['term-1', { status: 'needsInput', statusAt: 1710000000 }],
+      ['term-2', { status: 'completed', statusAt: 1710000001 }],
+    ]);
+    const paneCapture = {
+      capturePane: vi.fn(async () => 'static prompt'),
+    };
+    const sweep = new AgentExitSweep({
+      sidecars,
+      statuses,
+      liveness: { isAgentAlive: vi.fn(async () => true) },
+      teardown: { restoreAutomaticRename: vi.fn(async () => undefined), renameAgentWindow: vi.fn(async () => undefined) },
+      paneCapture,
+    });
+
+    await sweep.runOnce();
+
+    expect(paneCapture.capturePane).not.toHaveBeenCalled();
+    expect(statuses.removed).toEqual([]);
+    expect(sidecars.removed).toEqual([]);
+  });
+
   it('removes dead sidecars from the current tmux server lifetime', async () => {
     const sidecars = new SidecarStore([
       ['term-1', sidecar('claude', 'claude-123', 111, 'Thu Jun 11 20:01:00 2026')],
@@ -275,6 +395,12 @@ class SidecarStore implements AgentExitSidecarStore {
 
 class StatusStore implements AgentExitStatusStore {
   removed: string[] = [];
+
+  constructor(private readonly records: Array<[string, AgentStatus]> = []) {}
+
+  get(sessionName: string): AgentStatus | undefined {
+    return new Map(this.records).get(sessionName);
+  }
 
   async remove(sessionName: string): Promise<void> {
     this.removed.push(sessionName);

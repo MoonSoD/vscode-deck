@@ -1,6 +1,8 @@
 import type { AgentProcessIdentity } from './agentLivenessProbe';
 import { AgentLivenessProbe } from './agentLivenessProbe';
+import { PaneQuiescence } from './agentPaneQuiescence';
 import type { AgentSidecar } from './agentSidecar';
+import type { AgentStatus } from './agentStatusStore';
 import type { AgentName } from './agentTypes';
 import type { Disposable } from './agentStatusStore';
 
@@ -11,6 +13,7 @@ export interface AgentExitSidecarStore {
 }
 
 export interface AgentExitStatusStore {
+  get(sessionName: string): AgentStatus | undefined;
   remove(sessionName: string): Promise<void>;
 }
 
@@ -31,6 +34,10 @@ export interface AgentExitPaneProbe {
   identityForSession(sessionName: string): Promise<AgentProcessIdentity | undefined>;
 }
 
+export interface AgentExitPaneCapture {
+  capturePane(sessionName: string): Promise<string | undefined>;
+}
+
 // Resolved once per sweep: 'no-gate' when no server-start source is wired (reap any
 // dead sidecar), 'unknown' when the server start can't be read (keep — fail safe), or
 // the parsed server start time to compare each sidecar against.
@@ -43,12 +50,16 @@ interface AgentExitSweepOptions {
   liveness?: AgentExitLiveness;
   serverStart?: AgentExitServerStart;
   paneProbe?: AgentExitPaneProbe;
+  paneCapture?: AgentExitPaneCapture;
   intervalMs?: number;
+  quiescenceWindowMs?: number;
+  now?: () => number;
   onError?: (error: unknown) => void;
 }
 
 export class AgentExitSweep implements Disposable {
   private readonly liveness: AgentExitLiveness;
+  private readonly quiescence: PaneQuiescence;
   private readonly intervalMs: number;
   private readonly onError: (error: unknown) => void;
   private timer: NodeJS.Timeout | undefined;
@@ -57,6 +68,10 @@ export class AgentExitSweep implements Disposable {
 
   constructor(private readonly options: AgentExitSweepOptions) {
     this.liveness = options.liveness ?? new AgentLivenessProbe();
+    this.quiescence = new PaneQuiescence({
+      windowMs: options.quiescenceWindowMs ?? 10000,
+      now: options.now ?? Date.now,
+    });
     this.intervalMs = options.intervalMs ?? 5000;
     this.onError = options.onError ?? (() => undefined);
   }
@@ -75,7 +90,11 @@ export class AgentExitSweep implements Disposable {
     for (const [sessionName, sidecar] of sidecars) {
       shouldKeepSweeping = true;
       const process = agentProcess(sidecar);
-      if (await this.liveness.isAgentAlive(process)) continue;
+      if (await this.liveness.isAgentAlive(process)) {
+        await this.clearQuiescentInProgress(sessionName);
+        continue;
+      }
+      this.quiescence.forget(sessionName);
       // Resolve the tmux server start at most once per sweep — only when a death needs gating.
       if (serverLifetime === undefined) serverLifetime = await this.resolveServerLifetime();
       if (!startedInServerLifetime(sidecar, serverLifetime)) {
@@ -108,6 +127,35 @@ export class AgentExitSweep implements Disposable {
     }
 
     return shouldKeepSweeping;
+  }
+
+  private async clearQuiescentInProgress(sessionName: string): Promise<void> {
+    const status = this.options.statuses.get(sessionName);
+    if (status?.status !== 'inProgress') {
+      this.quiescence.forget(sessionName);
+      return;
+    }
+
+    let capture: string | undefined;
+    try {
+      capture = await this.options.paneCapture?.capturePane(sessionName);
+    } catch (error) {
+      this.quiescence.forget(sessionName);
+      this.onError(error);
+      return;
+    }
+    if (capture === undefined) {
+      this.quiescence.forget(sessionName);
+      return;
+    }
+    if (!this.quiescence.accept(sessionName, capture)) return;
+
+    try {
+      await this.options.statuses.remove(sessionName);
+      this.quiescence.forget(sessionName);
+    } catch (error) {
+      this.onError(error);
+    }
   }
 
   private async adoptLivePaneIdentity(sessionName: string, sidecar: AgentSidecar): Promise<void> {
