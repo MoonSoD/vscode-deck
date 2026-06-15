@@ -290,7 +290,7 @@ describe('AgentStatusStore', () => {
     expect(store.get('failed')).toEqual({ status: 'failed', statusAt: 1710000003 });
   });
 
-  it('stays silent on statusAt-only churn for non-completed statuses', async () => {
+  it('notifies on statusAt-only churn so title refresh can re-read the agent title', async () => {
     const root = tempRoot();
     mkdirSync(root, { recursive: true });
     writeFileSync(join(root, 'term-1.json'), '{"status":"inProgress","statusAt":1710000000}', 'utf8');
@@ -300,11 +300,11 @@ describe('AgentStatusStore', () => {
     disposables.push(await store.start());
 
     writeFileSync(join(root, 'term-1.json'), '{"status":"inProgress","statusAt":1710000050}', 'utf8');
-    await new Promise((resolve) => setTimeout(resolve, 150));
-    expect(changes).not.toHaveBeenCalled();
+    await vi.waitFor(() => expect(changes).toHaveBeenCalledWith(['term-1']), WATCH_EVENT_WAIT);
 
+    changes.mockClear();
     writeFileSync(join(root, 'term-1.json'), '{"status":"completed","statusAt":1710000060}', 'utf8');
-    await vi.waitFor(() => expect(changes).toHaveBeenCalled(), WATCH_EVENT_WAIT);
+    await vi.waitFor(() => expect(changes).toHaveBeenCalledWith(['term-1']), WATCH_EVENT_WAIT);
   });
 
   it('removes a single session status on Deck-owned kills and notifies listeners', async () => {

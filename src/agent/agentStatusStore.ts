@@ -335,21 +335,10 @@ function parseReadMarker(text: string): number | undefined {
   return (value as { statusAt: number }).statusAt;
 }
 
-// "Same" means rendering-equivalent: statusAt only shows through the unread
-// bit on completed, so an inProgress statusAt bump (every tool call) is not a
-// change — treating it as one re-renders the whole tree once per tool call.
 function sameStatuses(left: ReadonlyMap<string, AgentStatus>, right: ReadonlyMap<string, AgentStatus>): boolean {
   if (left.size !== right.size) return false;
   for (const [sessionName, status] of left) {
-    const other = right.get(sessionName);
-    if (
-      !other ||
-      other.status !== status.status ||
-      other.message !== status.message ||
-      (status.status === 'completed' && other.statusAt !== status.statusAt)
-    ) {
-      return false;
-    }
+    if (!sameStatus(status, right.get(sessionName))) return false;
   }
   return true;
 }
@@ -386,8 +375,10 @@ function sameStatus(left: AgentStatus | undefined, right: AgentStatus | undefine
   if (left === undefined || right === undefined) return left === right;
   return (
     left.status === right.status &&
+    left.statusAt === right.statusAt &&
+    left.agent === right.agent &&
     left.message === right.message &&
-    (left.status !== 'completed' || left.statusAt === right.statusAt)
+    left.unread === right.unread
   );
 }
 
