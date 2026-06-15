@@ -99,7 +99,12 @@ class TerminalNode extends vscode.TreeItem {
     isActiveWorktree: boolean,
     status?: AgentStatus,
   ) {
-    const item = describeTerminalTreeItem(terminal.windowName, isActiveWorktree, status);
+    const item = describeTerminalTreeItem(
+      terminal.windowName,
+      isActiveWorktree,
+      status,
+      terminal.paneTitle,
+    );
     super(item.label, vscode.TreeItemCollapsibleState.None);
     this.id = `terminal::${terminal.sessionName}`;
     this.contextValue = item.contextValue;

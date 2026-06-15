@@ -14,6 +14,7 @@ export interface CommandRunner {
 export interface TmuxSession {
   sessionName: string;
   windowName: string;
+  paneTitle?: string;
 }
 
 export class ExecFileCommandRunner implements CommandRunner {
@@ -96,14 +97,13 @@ export class TmuxCli {
   }
 
   async listSessions(prefix?: string): Promise<TmuxSession[]> {
-    // Read `#{window_name}` so the sidebar row and the editor tab share tmux's
-    // canonical name. deck.conf keeps `automatic-rename on`, so it tracks the
-    // foreground command (zsh -> claude); a manual `rename-window` then sticks.
+    // Read `#{window_name}` for agent identity and `#{pane_title}` for the
+    // user-facing label. Plain terminals ignore the pane title.
     const result = await this.runner.run('tmux', [
       ...this.baseArgs(),
       'list-sessions',
       '-F',
-      '#{session_name}\t#{window_name}',
+      '#{session_name}\t#{window_name}\t#{pane_title}',
     ]);
     if (result.code !== 0 && (isMissingSession(result) || isWedged(result))) return [];
     if (result.code !== 0) {
@@ -115,8 +115,8 @@ export class TmuxCli {
       .split('\n')
       .filter(Boolean)
       .map((line) => {
-        const [sessionName, windowName = ''] = line.split('\t');
-        return { sessionName, windowName };
+        const [sessionName, windowName = '', paneTitle = ''] = line.split('\t', 3);
+        return { sessionName, windowName, paneTitle };
       })
       .filter((session) => prefix === undefined || session.sessionName.startsWith(prefix));
   }
@@ -135,6 +135,22 @@ export class TmuxCli {
     ]);
     if (result.code !== 0) return undefined;
     return result.stdout.trim() || undefined;
+  }
+
+  async terminalSession(session: string): Promise<TmuxSession | undefined> {
+    const result = await this.runner.run('tmux', [
+      ...this.baseArgs(),
+      'display-message',
+      '-p',
+      '-t',
+      session,
+      '#{window_name}\t#{pane_title}',
+    ]);
+    if (result.code !== 0) return undefined;
+
+    const [windowName = '', paneTitle = ''] = result.stdout.trim().split('\t', 2);
+    if (!windowName) return undefined;
+    return { sessionName: session, windowName, paneTitle };
   }
 
   async panePid(session: string): Promise<number | undefined> {

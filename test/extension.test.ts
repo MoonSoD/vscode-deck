@@ -325,6 +325,12 @@ vi.mock('../src/terminal/tmuxCli', () => ({
     newAnchorSession = vi.fn(async () => undefined);
     panePid = vi.fn(async () => 1234);
     windowName = vi.fn(async () => 'zsh');
+    terminalSession = vi.fn(async (sessionName: string) =>
+      vscodeState.tmuxSessions.find((session) => session.sessionName === sessionName) ?? {
+        sessionName,
+        windowName: 'zsh',
+      },
+    );
     isServerRunning = vi.fn(async () => vscodeState.tmuxServerRunning);
     serverStartTime = vi.fn(async () => 'Thu Jun 11 20:01:00 2026');
     listSessions = vi.fn(async () => {

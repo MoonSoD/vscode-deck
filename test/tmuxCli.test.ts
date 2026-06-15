@@ -296,19 +296,19 @@ describe('TmuxCli', () => {
     }]);
   });
 
-  it('lists Deck sessions with window names', async () => {
+  it('lists Deck sessions with window names and pane titles', async () => {
     const runner = new MockRunner([
       {
         code: 0,
-        stdout: 'wt-_work_repo__term-1\tzsh\nwt-_work_repo__term-2\tclaude\n',
+        stdout: 'wt-_work_repo__term-1\tzsh\t:/work/repo\nwt-_work_repo__term-2\tclaude\t✳ fix issue 129\n',
         stderr: '',
       },
     ]);
     const tmux = new TmuxCli('/ext/resources/deck.conf', runner);
 
     await expect(tmux.listSessions()).resolves.toEqual([
-      { sessionName: 'wt-_work_repo__term-1', windowName: 'zsh' },
-      { sessionName: 'wt-_work_repo__term-2', windowName: 'claude' },
+      { sessionName: 'wt-_work_repo__term-1', windowName: 'zsh', paneTitle: ':/work/repo' },
+      { sessionName: 'wt-_work_repo__term-2', windowName: 'claude', paneTitle: '✳ fix issue 129' },
     ]);
     expect(runner.calls[0].args).toEqual([
       '-L',
@@ -317,7 +317,7 @@ describe('TmuxCli', () => {
       '/ext/resources/deck.conf',
       'list-sessions',
       '-F',
-      '#{session_name}\t#{window_name}',
+      '#{session_name}\t#{window_name}\t#{pane_title}',
     ]);
   });
 
@@ -336,6 +336,28 @@ describe('TmuxCli', () => {
       '-t',
       'wt-_work_repo__term-1',
       '#{window_name}',
+    ]);
+  });
+
+  it('reads a single session window name and pane title via display-message', async () => {
+    const runner = new MockRunner([{ code: 0, stdout: 'claude\t✳ fix tab label\n', stderr: '' }]);
+    const tmux = new TmuxCli('/ext/resources/deck.conf', runner);
+
+    await expect(tmux.terminalSession('wt-_work_repo__term-1')).resolves.toEqual({
+      sessionName: 'wt-_work_repo__term-1',
+      windowName: 'claude',
+      paneTitle: '✳ fix tab label',
+    });
+    expect(runner.calls[0].args).toEqual([
+      '-L',
+      'deck',
+      '-f',
+      '/ext/resources/deck.conf',
+      'display-message',
+      '-p',
+      '-t',
+      'wt-_work_repo__term-1',
+      '#{window_name}\t#{pane_title}',
     ]);
   });
 
@@ -407,9 +429,9 @@ describe('TmuxCli', () => {
       {
         code: 0,
         stdout: [
-          'wt-_work_repo__term-2\tclaude',
-          'wt-_work_other__term-1\tzsh',
-          'wt-_work_repo__term-1\tterm-1',
+          'wt-_work_repo__term-2\tclaude\t✳ work with spaces',
+          'wt-_work_other__term-1\tzsh\t:/work/other',
+          'wt-_work_repo__term-1\tterm-1\tplain shell',
         ].join('\n'),
         stderr: '',
       },
@@ -418,8 +440,8 @@ describe('TmuxCli', () => {
     const tmux = new TmuxCli('/ext/resources/deck.conf', runner);
 
     await expect(tmux.listSessions('wt-_work_repo__term-')).resolves.toEqual([
-      { sessionName: 'wt-_work_repo__term-2', windowName: 'claude' },
-      { sessionName: 'wt-_work_repo__term-1', windowName: 'term-1' },
+      { sessionName: 'wt-_work_repo__term-2', windowName: 'claude', paneTitle: '✳ work with spaces' },
+      { sessionName: 'wt-_work_repo__term-1', windowName: 'term-1', paneTitle: 'plain shell' },
     ]);
     await expect(tmux.listSessions('wt-_work_repo__term-')).resolves.toEqual([]);
   });

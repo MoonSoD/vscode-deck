@@ -316,13 +316,14 @@ describe('AgentStatusStore', () => {
     disposables.push(store.onDidChange(changes));
     disposables.push(await store.start());
     await store.markRead('killed');
+    changes.mockClear();
 
     await store.remove('killed');
 
     expect(store.get('killed')).toBeUndefined();
     expect(existsSync(join(root, 'killed.json'))).toBe(false);
     expect(existsSync(join(`${root}-reads`, 'killed.json'))).toBe(false);
-    expect(changes).toHaveBeenCalled();
+    expect(changes).toHaveBeenCalledWith(['killed']);
 
     await expect(store.remove('killed')).resolves.toBeUndefined();
   });

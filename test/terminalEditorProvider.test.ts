@@ -149,14 +149,18 @@ describe('TerminalEditorProvider', () => {
     expect(provider.panelFor('wt-_work_beta-main__term-2')).toBeUndefined();
   });
 
-  it('titles the tab with the tmux window name and updates it on rename', async () => {
+  it('titles the tab with the resolved Terminal label and updates it on rename', async () => {
     let renameHandler: (() => void) | undefined;
     const terminalBridge = bridge();
     terminalBridge.onRename.mockImplementation((handler: () => void) => {
       renameHandler = handler;
       return { dispose: vi.fn() };
     });
-    const windowNames = vi.fn(async () => 'zsh');
+    const terminalSessions = vi.fn(async () => ({
+      sessionName: 'wt-_work_alpha-main__term-1',
+      windowName: 'zsh',
+      paneTitle: ':/work/alpha-main',
+    }));
     const terminalPanel = panel();
     const provider = new TerminalEditorProvider(
       { fsPath: '/extension' } as never,
@@ -165,7 +169,7 @@ describe('TerminalEditorProvider', () => {
       () => terminalBridge,
       undefined,
       undefined,
-      windowNames,
+      terminalSessions,
     );
     const document = provider.openCustomDocument({
       scheme: 'deck-terminal',
@@ -174,17 +178,66 @@ describe('TerminalEditorProvider', () => {
 
     provider.resolveCustomEditor(document, terminalPanel as never);
     await flush();
-    expect(windowNames).toHaveBeenCalledWith('wt-_work_alpha-main__term-1');
+    expect(terminalSessions).toHaveBeenCalledWith('wt-_work_alpha-main__term-1');
     expect(terminalPanel.title).toBe('zsh');
     expect((terminalPanel as { iconPath?: { light: { paths: string[] }; dark: { paths: string[] } } }).iconPath).toEqual({
       light: { base: { fsPath: '/extension' }, paths: ['resources', 'terminal-light.svg'] },
       dark: { base: { fsPath: '/extension' }, paths: ['resources', 'terminal-dark.svg'] },
     });
 
-    windowNames.mockResolvedValueOnce('claude');
+    terminalSessions.mockResolvedValueOnce({
+      sessionName: 'wt-_work_alpha-main__term-1',
+      windowName: 'claude',
+      paneTitle: '✳ fix tab label',
+    });
     renameHandler?.();
     await flush();
-    expect(terminalPanel.title).toBe('claude');
+    expect(terminalPanel.title).toBe('fix tab label');
+  });
+
+  it('updates an agent tab title when that Terminal status changes', async () => {
+    let statusHandler: ((changedSessionNames: readonly string[]) => void) | undefined;
+    const terminalSessions = vi.fn(async () => ({
+      sessionName: 'wt-_work_alpha-main__term-1',
+      windowName: 'claude',
+      paneTitle: '✳ first task',
+    }));
+    const provider = new TerminalEditorProvider(
+      { fsPath: '/extension' } as never,
+      '/extension/resources/deck.conf',
+      undefined,
+      () => bridge(),
+      undefined,
+      undefined,
+      terminalSessions,
+      undefined,
+      (handler) => {
+        statusHandler = handler;
+        return { dispose: vi.fn() };
+      },
+    );
+    const terminalPanel = panel();
+    const document = provider.openCustomDocument({
+      scheme: 'deck-terminal',
+      path: '/work/alpha-main/term-1',
+    } as never);
+
+    provider.resolveCustomEditor(document, terminalPanel as never);
+    await flush();
+    expect(terminalPanel.title).toBe('first task');
+
+    terminalSessions.mockResolvedValueOnce({
+      sessionName: 'wt-_work_alpha-main__term-1',
+      windowName: 'claude',
+      paneTitle: '✳ second task',
+    });
+    statusHandler?.(['wt-_work_other__term-1']);
+    await flush();
+    expect(terminalPanel.title).toBe('first task');
+
+    statusHandler?.(['wt-_work_alpha-main__term-1']);
+    await flush();
+    expect(terminalPanel.title).toBe('second task');
   });
 
   it('disposes the panel when the webview acknowledges terminal exit', () => {

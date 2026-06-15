@@ -16,11 +16,12 @@ export interface Disposable {
 }
 
 type WatchListener = (eventType: string, filename: string | Buffer | null) => void;
+type ChangeListener = (changedSessionNames: readonly string[]) => void;
 
 export class AgentStatusStore {
   private statuses = new Map<string, AgentStatus>();
   private readMarkers = new Map<string, number>();
-  private readonly listeners = new Set<() => void>();
+  private readonly listeners = new Set<ChangeListener>();
   private readonly readRoot: string;
   private readonly parentRoot: string;
   private readonly watchers = new Map<string, FSWatcher>();
@@ -50,7 +51,7 @@ export class AgentStatusStore {
     return adjusted.entries();
   }
 
-  onDidChange(listener: () => void): Disposable {
+  onDidChange(listener: ChangeListener): Disposable {
     this.listeners.add(listener);
     return {
       dispose: () => {
@@ -82,7 +83,7 @@ export class AgentStatusStore {
     const removedStatus = this.statuses.delete(sessionName);
     const removedReadMarker = this.readMarkers.delete(sessionName);
     if (removedStatus || removedReadMarker) {
-      for (const listener of this.listeners) listener();
+      this.notify([sessionName]);
     }
   }
 
@@ -94,7 +95,7 @@ export class AgentStatusStore {
     await mkdir(this.readRoot, { recursive: true });
     await writeFile(this.readMarkerPath(sessionName), `${JSON.stringify({ statusAt: status.statusAt })}\n`);
     this.readMarkers.set(sessionName, status.statusAt);
-    for (const listener of this.listeners) listener();
+    this.notify([sessionName]);
   }
 
   private scheduleReload(): void {
@@ -115,11 +116,16 @@ export class AgentStatusStore {
     await this.pruneOrphanReadMarkers(nextStatuses, nextReadMarkers);
     if (sameStatuses(this.statuses, nextStatuses) && sameReadMarkers(this.readMarkers, nextReadMarkers)) return;
 
+    const changed = changedSessionNames(this.statuses, nextStatuses, this.readMarkers, nextReadMarkers);
     this.statuses = nextStatuses;
     this.readMarkers = nextReadMarkers;
     if (fire) {
-      for (const listener of this.listeners) listener();
+      this.notify(changed);
     }
+  }
+
+  private notify(changedSessionNames: readonly string[]): void {
+    for (const listener of this.listeners) listener(changedSessionNames);
   }
 
   private async ensureRoots(): Promise<void> {
@@ -354,6 +360,35 @@ function sameReadMarkers(left: ReadonlyMap<string, number>, right: ReadonlyMap<s
     if (right.get(sessionName) !== statusAt) return false;
   }
   return true;
+}
+
+function changedSessionNames(
+  leftStatuses: ReadonlyMap<string, AgentStatus>,
+  rightStatuses: ReadonlyMap<string, AgentStatus>,
+  leftReadMarkers: ReadonlyMap<string, number>,
+  rightReadMarkers: ReadonlyMap<string, number>,
+): string[] {
+  const names = new Set([
+    ...leftStatuses.keys(),
+    ...rightStatuses.keys(),
+    ...leftReadMarkers.keys(),
+    ...rightReadMarkers.keys(),
+  ]);
+  return [...names].filter((sessionName) => {
+    const leftStatus = leftStatuses.get(sessionName);
+    const rightStatus = rightStatuses.get(sessionName);
+    if (!sameStatus(leftStatus, rightStatus)) return true;
+    return leftReadMarkers.get(sessionName) !== rightReadMarkers.get(sessionName);
+  });
+}
+
+function sameStatus(left: AgentStatus | undefined, right: AgentStatus | undefined): boolean {
+  if (left === undefined || right === undefined) return left === right;
+  return (
+    left.status === right.status &&
+    left.message === right.message &&
+    (left.status !== 'completed' || left.statusAt === right.statusAt)
+  );
 }
 
 function isNotFound(error: unknown): boolean {

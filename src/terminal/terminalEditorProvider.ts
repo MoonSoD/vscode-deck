@@ -2,6 +2,8 @@ import * as vscode from 'vscode';
 import { SessionUriCodec } from './sessionUriCodec';
 import { TERMINAL_SCROLLBACK_LINES } from './terminalScrollback';
 import { TerminalTransport } from './terminalTransport';
+import { resolveTerminalLabel } from './terminalLabelResolver';
+import type { TmuxSession } from './tmuxCli';
 
 export const terminalEditorViewType = 'deck.terminal';
 
@@ -71,6 +73,9 @@ export interface TerminalTransportLike {
 
 export type TerminalTransportFactory = () => TerminalTransportLike;
 export type TerminalEditorDisposeHandler = (sessionName: string) => Promise<void> | void;
+type AgentStatusChangeSubscription = (
+  listener: (changedSessionNames: readonly string[]) => void,
+) => vscode.Disposable;
 
 export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvider<TerminalDocument> {
   private readonly panels = new Map<string, vscode.WebviewPanel>();
@@ -85,7 +90,7 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
       new TerminalTransport(this.configPath),
     private readonly onPanelDispose: TerminalEditorDisposeHandler = () => undefined,
     private readonly onTitleChange: () => void = () => undefined,
-    private readonly resolveWindowName: (sessionName: string) => Promise<string | undefined> = async () =>
+    private readonly resolveTerminalSession: (sessionName: string) => Promise<TmuxSession | undefined> = async () =>
       undefined,
     // Awaited before a reattach issues `new-session -A`. On reopen after the
     // DeckSocket died, VS Code resolves the active editor eagerly; without this
@@ -93,6 +98,7 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
     // TerminalSnapshot restore, losing scrollback. Gating it makes the reattach
     // bind to the restored session instead.
     private readonly beforeReattach: () => Promise<void> = () => Promise.resolve(),
+    private readonly onAgentStatusChange: AgentStatusChangeSubscription = () => ({ dispose: () => undefined }),
   ) {
     this.configChangeSubscription = vscode.workspace.onDidChangeConfiguration((event) => {
       const fontKeys = [
@@ -170,10 +176,10 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
       dark: vscode.Uri.joinPath(this.extensionUri, 'resources', 'terminal-dark.svg'),
     };
 
-    // Title the tab with tmux's window name so it matches the sidebar row.
+    // Title the tab with the same resolved Terminal label as the sidebar row.
     const applyTitle = () => {
-      void this.resolveWindowName(document.sessionName).then((name) => {
-        if (name) panel.title = name;
+      void this.resolveTerminalSession(document.sessionName).then((terminal) => {
+        if (terminal) panel.title = resolveTerminalLabel(terminal.windowName, terminal.paneTitle);
       });
     };
     applyTitle();
@@ -188,6 +194,10 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
       transport.onRename(() => {
         applyTitle();
         this.onTitleChange();
+      }),
+      this.onAgentStatusChange((changedSessionNames) => {
+        if (!changedSessionNames.includes(document.sessionName)) return;
+        applyTitle();
       }),
       panel.webview.onDidReceiveMessage((message: TerminalWebviewMessage) => {
         if (message.type === 'ready') {

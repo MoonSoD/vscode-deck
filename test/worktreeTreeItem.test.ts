@@ -89,6 +89,14 @@ describe('describeWorktreeTreeItem', () => {
 });
 
 describe('describeTerminalTreeItem', () => {
+  it('renders an agent row label from the glyph-stripped AgentTitle', () => {
+    expect(describeTerminalTreeItem('claude', false, undefined, '⠂ reconcile checkout state')).toEqual({
+      label: 'reconcile checkout state',
+      iconId: 'agent',
+      contextValue: 'deck.terminal.foreign',
+    });
+  });
+
   it('renders in-progress agent status as a loading row without inline status text', () => {
     expect(describeTerminalTreeItem('claude', false, { status: 'inProgress', statusAt: 1710000000 })).toEqual({
       label: 'claude',

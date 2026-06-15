@@ -1,6 +1,7 @@
 import { Worktree } from '../git/worktrees';
 import type { AgentStatus } from '../agent/agentStatusStore';
 import { resolveAgentIcon } from '../agent/agentIconResolver';
+import { resolveTerminalLabel } from '../terminal/terminalLabelResolver';
 
 export interface RepositoryTreeItemDescription {
   label: string;
@@ -67,8 +68,10 @@ export function describeTerminalTreeItem(
   windowName: string,
   isActive: boolean,
   status?: AgentStatus,
+  paneTitle?: string,
 ): TerminalTreeItemDescription {
   const contextValue = isActive ? 'deck.terminal.active' : 'deck.terminal.foreign';
+  const label = resolveTerminalLabel(windowName, paneTitle);
   // Agent identity comes from the window name — the hook renames the tmux
   // window to the agent name on SessionStart (incl. `claude --resume`), before
   // any status file exists. Key the icon off identity so a resumed/idle agent
@@ -76,21 +79,21 @@ export function describeTerminalTreeItem(
   const resolvedIcon = resolveAgentIcon({ windowName, status, resourcesDir: '' });
   if (resolvedIcon.isAgent && resolvedIcon.state === 'working') {
     return {
-      label: windowName,
+      label,
       iconId: 'agent-working',
       contextValue,
     };
   }
   if (resolvedIcon.isAgent) {
     return {
-      label: windowName,
+      label,
       iconId: 'agent',
       contextValue,
     };
   }
 
   return {
-    label: windowName,
+    label,
     iconId: 'terminal',
     contextValue,
   };

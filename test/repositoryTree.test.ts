@@ -733,7 +733,11 @@ describe('RepositoryTreeProvider', () => {
   it('renders agent identity on Terminal rows and refreshes on status changes', async () => {
     const tmux = {
       listSessions: vi.fn(async () => [
-        { sessionName: 'wt-_work_alpha-main__term-1', windowName: 'claude' },
+        {
+          sessionName: 'wt-_work_alpha-main__term-1',
+          windowName: 'claude',
+          paneTitle: '✳ reconcile checkout state',
+        },
       ]),
     };
     let statusChange: (() => void) | undefined;
@@ -770,6 +774,7 @@ describe('RepositoryTreeProvider', () => {
 
     expect((terminalRows as Array<{ iconPath: { fsPath: string } }>)[0].iconPath.fsPath)
       .toMatch(/resources\/claude-code\.png$/);
+    expect((terminalRows as Array<{ label: string }>)[0].label).toBe('reconcile checkout state');
     expect(vscodeState.emitters[0].fire).toHaveBeenCalledWith(undefined);
   });
 
