@@ -99,8 +99,12 @@ default title never confuses which agent it is. Absent or default title falls
 back to the agent identity name.
 _Avoid_: window name / tab title (those are the surfaces it is shown on, not the observed summary), terminal name
 
+**AgentStatusNotification**:
+The toast Deck raises when a Terminal's AgentStatus changes to NeedsInput or Completed, naming the agent by the labels the user already reads in the tree — Repository, Worktree branch, AgentTitle — followed by the agent's own ask, with an Open Terminal action. Identity leads so the line stays legible when the toast collapses to one ellipsised line.
+_Avoid_: alert, popup; "agent needs input"/"agent done" alone (unactionable without identity)
+
 **Terminal**:
-A persistent shell owned by Deck — one tmux session on the DeckSocket — shown as a row under a Worktree and opened as an xterm.js editor tab addressed by `deck-terminal:/<worktree>/term-N`. Like a file, the Terminal is the durable thing and its tab is just a view onto it: closing the tab leaves the Terminal running, and any Terminal can be opened from any mounted Worktree without a Switch.
+A persistent shell owned by Deck — one tmux session on the DeckSocket — shown as a row under a Worktree and opened as an xterm.js editor tab addressed by `deck-terminal:/<worktree>/term-N`. Like a file, the Terminal is the durable thing and its tab is just a view onto it: closing the tab leaves the Terminal running, and any Terminal can be opened from any mounted Worktree without a Switch. Its Worktree is fixed when it is created and never changes — a Terminal cannot move to another Worktree or Repository.
 _Avoid_: tmux session, tmux window, pane (the backing mechanism); tab (a disposable view, not the Terminal itself)
 
 ### External changes
@@ -115,6 +119,7 @@ _Avoid_: file watcher, watcher controller (implementation); polling (it is event
 - A **Repository** has one **ExternalGitWatch** keyed by its git common dir.
 - A **Repository** has one **ActiveWorktree**; the mounted folder has one **ActiveRepository** (or none).
 - A **Worktree** hosts zero or more **Terminals**.
+- A **Terminal**'s AgentStatus change to NeedsInput/Completed raises one **AgentStatusNotification**.
 - A **Terminal** belongs to exactly one **Worktree** and lives on the one **DeckSocket**.
 - A **TerminalSnapshot** captures every **Terminal** on the **DeckSocket**.
 - A **Terminal** may be running one **AgentSession**; the **TerminalSnapshot** captures it so the agent is resumed (not just the shell) on restore.
