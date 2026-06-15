@@ -165,6 +165,7 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
     private readonly pendingWorktreeRemovals: ReadonlySet<string> = new Set(),
     private readonly agentStatuses?: AgentStatusLookup,
     private readonly terminalOrders?: Pick<TerminalOrderStore, 'get' | 'set'>,
+    private readonly ensureSnapshotRestored: () => Promise<void> = () => Promise.resolve(),
   ) {
     this.syncAgentStatusDecorations();
     this.agentStatuses?.onDidChange(() => {
@@ -405,6 +406,11 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
   }
 
   private async getTerminalChildren(element: WorktreeNode): Promise<RepositoryTreeNode[]> {
+    // Wait for the DeckSocket to finish restoring before listing — otherwise a
+    // reopen-after-kill reads an empty/partial session list, and the prune below
+    // would mistake the not-yet-restored Terminals for dead ones and wipe the
+    // stored TerminalOrder. Same hazard the tab-reattach gate guards against.
+    await this.ensureSnapshotRestored();
     const liveTerminals = toCachedTerminalSessions(
       element.worktree.path,
       await this.tmux.listSessions(terminalSessionPrefix(element.worktree.path)),

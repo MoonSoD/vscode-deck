@@ -187,6 +187,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     pendingWorktreeRemovals,
     agentStatuses,
     terminalOrders,
+    ensureSnapshotRestored,
   );
   agentExitSweep = tmuxAvailability.available
     ? new AgentExitSweep({

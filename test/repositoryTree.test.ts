@@ -677,6 +677,59 @@ describe('RepositoryTreeProvider', () => {
     expect(terminalOrders.set).not.toHaveBeenCalled();
   });
 
+  it('awaits snapshot restore before listing so a pre-restore empty list cannot wipe TerminalOrder', async () => {
+    // Models reopen-after-kill: the DeckSocket is empty until restore completes.
+    // listSessions returns the restored set only once the gate has been awaited.
+    let restored = false;
+    const ensureSnapshotRestored = vi.fn(async () => {
+      restored = true;
+    });
+    const tmux = {
+      listSessions: vi.fn(async () =>
+        restored
+          ? [
+              { sessionName: 'wt-_work_alpha-main__term-1', windowName: 'one' },
+              { sessionName: 'wt-_work_alpha-main__term-2', windowName: 'two' },
+            ]
+          : [],
+      ),
+    };
+    const terminalOrders = {
+      get: vi.fn(() => [
+        'wt-_work_alpha-main__term-2',
+        'wt-_work_alpha-main__term-1',
+      ]),
+      set: vi.fn(async () => undefined),
+    } as unknown as TerminalOrderStore;
+    const provider = new RepositoryTreeProvider(
+      registry(['/work/alpha-main']),
+      { get: vi.fn() } as unknown as ActiveWorktreeStore,
+      { get: vi.fn() } as unknown as WorktreeOrderStore,
+      { get: vi.fn(), set: vi.fn(async () => undefined) } as unknown as WorktreeListCacheStore,
+      { get: vi.fn(() => '/git/alpha'), set: vi.fn(async () => undefined) } as unknown as RepositoryCommonDirCache,
+      tmux,
+      true,
+      new Set(),
+      undefined,
+      terminalOrders,
+      ensureSnapshotRestored,
+    );
+    const repositories = provider.getChildren();
+    if (!Array.isArray(repositories)) throw new Error('expected sync repository roots');
+    const worktrees = await provider.getChildren(repositories[0]);
+    if (!Array.isArray(worktrees)) throw new Error('expected worktree children');
+
+    const terminalRows = await provider.getChildren(worktrees[0]);
+
+    expect(ensureSnapshotRestored).toHaveBeenCalled();
+    // The stored order survives — never pruned against the pre-restore empty list.
+    expect(terminalOrders.set).not.toHaveBeenCalled();
+    expect((terminalRows as Array<{ label: string }>).map((row) => row.label)).toEqual([
+      'two',
+      'one',
+    ]);
+  });
+
   it('renders agent identity on Terminal rows and refreshes on status changes', async () => {
     const tmux = {
       listSessions: vi.fn(async () => [
