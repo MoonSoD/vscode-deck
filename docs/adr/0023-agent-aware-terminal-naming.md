@@ -34,7 +34,10 @@ agent-aware tree decoration ADR-0021 §10 deferred — a separate, larger featur
 
 1. **Name agent windows with the agent identity (`claude` / `codex`), nothing
    more.** Worktree is the tree parent (redundant where it matters); status is
-   out of scope (see Context).
+   out of scope (see Context). **Amended by ADR-0039:** the window name still
+   carries the identity (driving the icon and one `%window-renamed`), but the
+   row/tab *label* the user reads is now the agent's TUI title (`#{pane_title}`,
+   glyph-stripped), so concurrent agents are distinguishable.
 
 2. **The hook issues the rename, on `SessionStart`.** The installed hook already
    runs in-context with the agent name and `DECK_SESSION`; it adds one line —

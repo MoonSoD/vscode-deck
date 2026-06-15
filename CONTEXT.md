@@ -89,6 +89,16 @@ to report. Deck observes it through agent hooks; it does not own or infer the
 agent lifecycle.
 _Avoid_: busy, done, agent state, terminal status (the Terminal itself can be healthy while the agent is blocked), process status
 
+**AgentTitle**:
+The task summary an agent's TUI publishes for its Terminal (e.g. Claude's
+"Reconcile Datadog monitors"), surfaced as the Terminal's row and tab label so
+concurrent agents are distinguishable. Deck only observes it — read from the
+running agent and cleaned of the agent's leading status glyph — and keeps the
+agent *identity* (which drives the icon) as a separate marker, so a stale or
+default title never confuses which agent it is. Absent or default title falls
+back to the agent identity name.
+_Avoid_: window name / tab title (those are the surfaces it is shown on, not the observed summary), terminal name
+
 **Terminal**:
 A persistent shell owned by Deck — one tmux session on the DeckSocket — shown as a row under a Worktree and opened as an xterm.js editor tab addressed by `deck-terminal:/<worktree>/term-N`. Like a file, the Terminal is the durable thing and its tab is just a view onto it: closing the tab leaves the Terminal running, and any Terminal can be opened from any mounted Worktree without a Switch.
 _Avoid_: tmux session, tmux window, pane (the backing mechanism); tab (a disposable view, not the Terminal itself)
