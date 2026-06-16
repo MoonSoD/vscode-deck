@@ -1166,7 +1166,7 @@ describe('activate', () => {
 
     await vi.waitFor(() => {
       expect(vscodeState.showWarningMessage).toHaveBeenCalledWith(
-        '⚠ alpha-main/feature · fix issue 130 · Allow Bash(ls)?',
+        'alpha-main/feature · fix issue 130 · Allow Bash(ls)?',
         'Open Terminal',
       );
     });

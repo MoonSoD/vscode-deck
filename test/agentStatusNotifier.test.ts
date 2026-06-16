@@ -42,7 +42,7 @@ describe('AgentStatusNotifier', () => {
       expect(notifications.showWarningMessage).toHaveBeenCalledOnce();
     });
     expect(notifications.showWarningMessage).toHaveBeenCalledWith(
-      '⚠ claude · Allow Bash(ls)?',
+      'claude · Allow Bash(ls)?',
       'Open Terminal',
     );
     await vi.waitFor(() => {
@@ -88,7 +88,7 @@ describe('AgentStatusNotifier', () => {
 
     await vi.waitFor(() => {
       expect(notifications.showWarningMessage).toHaveBeenCalledWith(
-        '⚠ vscode-deck/main · fix-dlq-requeue-uploads-deadline · Claude needs your permission to use Bash',
+        'vscode-deck/main · fix-dlq-requeue-uploads-deadline · Claude needs your permission to use Bash',
         'Open Terminal',
       );
     });
@@ -122,7 +122,7 @@ describe('AgentStatusNotifier', () => {
 
     await vi.waitFor(() => {
       expect(notifications.showInformationMessage).toHaveBeenCalledWith(
-        'ⓘ vscode-deck/main · codex · finished',
+        'vscode-deck/main · codex · finished',
         'Open Terminal',
       );
     });
@@ -224,7 +224,7 @@ describe('AgentStatusNotifier', () => {
 
     await vi.waitFor(() => {
       expect(notifications.showInformationMessage).toHaveBeenCalledWith(
-        'ⓘ claude · Claude stopped',
+        'claude · Claude stopped',
         'Open Terminal',
       );
     });

@@ -11,7 +11,7 @@ describe('composeAgentStatusNotificationLine', () => {
       location: { repo: 'vscode-deck', branch: 'main' },
     })).toEqual({
       severity: 'warning',
-      text: '⚠ vscode-deck/main · fix-dlq-requeue-uploads-deadline · Claude needs your permission to use Bash',
+      text: 'vscode-deck/main · fix-dlq-requeue-uploads-deadline · Claude needs your permission to use Bash',
     });
   });
 
@@ -22,7 +22,7 @@ describe('composeAgentStatusNotificationLine', () => {
       label: 'reconcile checkout state',
     })).toEqual({
       severity: 'information',
-      text: 'ⓘ reconcile checkout state · finished',
+      text: 'reconcile checkout state · finished',
     });
   });
 
@@ -34,7 +34,7 @@ describe('composeAgentStatusNotificationLine', () => {
       location: { repo: 'vscode-deck', branch: 'feature' },
     })).toEqual({
       severity: 'warning',
-      text: '⚠ vscode-deck/feature · claude · needs input',
+      text: 'vscode-deck/feature · claude · needs input',
     });
   });
 
@@ -46,7 +46,7 @@ describe('composeAgentStatusNotificationLine', () => {
       location: { repo: 'vscode-deck', branch: 'main' },
     })).toEqual({
       severity: 'information',
-      text: 'ⓘ vscode-deck/main · codex · finished',
+      text: 'vscode-deck/main · codex · finished',
     });
   });
 });

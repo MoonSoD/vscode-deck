@@ -20,7 +20,6 @@ export interface AgentStatusNotificationLine {
 
 interface AgentStatusNotificationFormat {
   severity: AgentStatusNotificationSeverity;
-  icon: string;
   fallbackDetail: string;
 }
 
@@ -35,17 +34,20 @@ export function composeAgentStatusNotificationLine(
     segments.unshift(`${input.location.repo}/${input.location.branch}`);
   }
 
+  // No leading severity glyph: VS Code renders its own warning/info codicon on
+  // the toast (driven by which show*Message we call), so the `severity` field
+  // is the only icon source — a literal glyph here would double it.
   return {
     severity: format.severity,
-    text: `${format.icon} ${segments.join(' · ')}`,
+    text: segments.join(' · '),
   };
 }
 
 function notificationFormat(status: AgentStatusNotificationLineInput['status']): AgentStatusNotificationFormat {
   switch (status) {
     case 'needsInput':
-      return { severity: 'warning', icon: '⚠', fallbackDetail: 'needs input' };
+      return { severity: 'warning', fallbackDetail: 'needs input' };
     case 'completed':
-      return { severity: 'information', icon: 'ⓘ', fallbackDetail: 'finished' };
+      return { severity: 'information', fallbackDetail: 'finished' };
   }
 }
