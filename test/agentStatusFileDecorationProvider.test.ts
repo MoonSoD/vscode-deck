@@ -18,11 +18,20 @@ vi.mock('vscode', () => ({
   ThemeColor: class {
     constructor(readonly id: string) {}
   },
+  Uri: {
+    from: vi.fn((parts: { scheme: string; authority?: string; path?: string; query?: string }) => ({
+      scheme: parts.scheme,
+      authority: parts.authority ?? '',
+      path: parts.path ?? '',
+      query: parts.query ?? '',
+    })),
+  },
 }));
 
 import { AgentStatusDecorationRollups, agentStatusDecorationUri } from '../src/agent/agentStatusDecorations';
 import { AgentStatusFileDecorationProvider } from '../src/agent/agentStatusFileDecorationProvider';
 import type { AgentStatus } from '../src/agent/agentStatusStore';
+import { SessionUriCodec } from '../src/terminal/sessionUriCodec';
 import { terminalSessionName } from '../src/terminal/tmuxSafe';
 
 describe('AgentStatusFileDecorationProvider', () => {
@@ -144,16 +153,8 @@ function createProvider(
   }, rollups);
 }
 
-function terminalUri(worktreePath: string, term: number): {
-  scheme: string;
-  authority: string;
-  path: string;
-  query: string;
-} {
-  return {
-    scheme: 'deck-terminal',
-    authority: '',
-    path: `${worktreePath}/term-${term}`,
-    query: '',
-  };
+const terminalUriCodec = new SessionUriCodec();
+
+function terminalUri(worktreePath: string, term: number): ReturnType<SessionUriCodec['encode']> {
+  return terminalUriCodec.encode({ worktreePath, term });
 }
