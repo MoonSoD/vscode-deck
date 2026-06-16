@@ -352,22 +352,9 @@ function sameReadMarkers(left: ReadonlyMap<string, number>, right: ReadonlyMap<s
 
 function sameStatus(left: AgentStatus | undefined, right: AgentStatus | undefined): boolean {
   if (left === undefined || right === undefined) return left === right;
-  if (
-    left.status === 'inProgress' &&
-    right.status === 'inProgress' &&
-    left.agent === right.agent &&
-    left.message === right.message &&
-    left.unread === right.unread
-  ) {
-    return true;
-  }
-  return (
-    left.status === right.status &&
-    left.statusAt === right.statusAt &&
-    left.agent === right.agent &&
-    left.message === right.message &&
-    left.unread === right.unread
-  );
+  if (left.status !== right.status) return false;
+  if (left.message !== right.message) return false;
+  return left.status !== 'completed' || left.statusAt === right.statusAt;
 }
 
 function isNotFound(error: unknown): boolean {

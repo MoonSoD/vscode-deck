@@ -291,7 +291,7 @@ describe('AgentStatusStore', () => {
     expect(store.get('failed')).toEqual({ status: 'failed', statusAt: 1710000003 });
   });
 
-  it('ignores in-progress statusAt churn but notifies on status transitions', async () => {
+  it('ignores non-completed statusAt churn but notifies on status transitions', async () => {
     const root = tempRoot();
     mkdirSync(root, { recursive: true });
     writeFileSync(join(root, 'term-1.json'), '{"status":"inProgress","statusAt":1710000000}', 'utf8');
@@ -301,6 +301,14 @@ describe('AgentStatusStore', () => {
     disposables.push(await store.start());
 
     writeFileSync(join(root, 'term-1.json'), '{"status":"inProgress","statusAt":1710000050}', 'utf8');
+    await wait(100);
+    expect(changes).not.toHaveBeenCalled();
+
+    writeFileSync(join(root, 'term-1.json'), '{"status":"needsInput","statusAt":1710000060,"message":"Allow Bash?"}', 'utf8');
+    await vi.waitFor(() => expect(changes).toHaveBeenCalledOnce(), WATCH_EVENT_WAIT);
+    changes.mockClear();
+
+    writeFileSync(join(root, 'term-1.json'), '{"status":"needsInput","statusAt":1710000070,"message":"Allow Bash?"}', 'utf8');
     await wait(100);
     expect(changes).not.toHaveBeenCalled();
 
