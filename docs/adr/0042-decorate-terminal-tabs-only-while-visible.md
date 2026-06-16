@@ -33,16 +33,27 @@ microsoft/vscode#76863).
 
 ## Decision
 
-**Decorate a Terminal tab only while its panel is visible.** `applyTabDecoration`
-no-ops when `panel.visible` is false; an `onDidChangeViewState` subscription
-re-applies the current label/icon the moment the tab becomes visible. The
-**sidebar row** remains the live `AgentStatus` / `AgentTitle` surface for hidden
-Terminals (ADR-0025, ADR-0040, ADR-0041), and `AgentStatusNotification` still
-fires — so the "which background agent needs me" signal is preserved; only the
-redundant *tab* glyph lags.
+**Write a Terminal tab's panel decoration (`title` / `iconPath`) only while its
+panel is visible.** `applyTabDecoration` no-ops when `panel.visible` is false
+(marking the session stale without even resolving it); an `onDidChangeViewState`
+subscription re-applies the current label/icon when the tab becomes visible *and*
+went stale while hidden.
 
-This **amends ADR-0023/0039**: agent identity/status is shown on a tab only while
-that tab is visible, not live on background tabs.
+This gate is **scoped to the panel writes** — the agent identity **icon glyph**
+(`iconPath`) and the **AgentTitle label** (`title`). The **AgentStatus attention
+dot + tab color** reach the tab through a *different* path: the
+`AgentStatusFileDecorationProvider` (a `FileDecorationProvider` keyed on the
+`deck-terminal:` URI), which VS Code applies to the tab without touching the
+`WebviewPanel` — so it is **not** subject to this gate and **stays live on hidden
+tabs**, never stealing activation. The sidebar row (ADR-0025/0040/0041) and
+`AgentStatusNotification` also carry status.
+
+So on a hidden Terminal tab: the **status dot/color stay live**; only the
+**identity glyph and title text lag** until the tab is shown.
+
+This **amends ADR-0023/0039**: a tab's agent *identity glyph and title* are shown
+only while the tab is visible, not live on background tabs (the status dot/color
+remain live regardless).
 
 ## Considered Options
 
@@ -55,15 +66,17 @@ that tab is visible, not live on background tabs.
 
 ## Consequences
 
-- A hidden Terminal's tab icon/label is **stale until the tab is shown**; it
-  refreshes on `onDidChangeViewState`. Accepted because the sidebar row carries
-  live status.
+- A hidden Terminal's identity **glyph and title text** are **stale until the tab
+  is shown** (refreshed on `onDidChangeViewState`). Its **AgentStatus dot/color
+  stay live** via the FileDecorationProvider, and the sidebar row + notifications
+  carry status too — so the "which background agent needs me" signal is never
+  lost; only the per-tab identity glyph/label lags.
+- The re-apply is **gated on staleness**: a plain tab switch where nothing changed
+  while hidden does no decoration work (no session resolve, no write), so
+  switching tabs stays cheap.
 - **Bonus:** window restore no longer thrashes tabs — VS Code eagerly resolves
   restored background custom editors, and decorating them previously activated
   each in turn; deferring to visible removes that.
-- Reaffirms the boundary that **the sidebar row, not the background editor tab,
-  is Deck's live agent-status surface** — consistent with VS Code's own model
-  (tree/explorer decorations signal background state, editor tabs do not).
 
 ## Status
 
