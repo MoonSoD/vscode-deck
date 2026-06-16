@@ -241,6 +241,8 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
   }
 
   private resolveTabIcon(windowName: string, status?: AgentStatus): TerminalTabIconPath {
+    // A WebviewPanel's iconPath rejects ThemeIcon, so unlike the sidebar row's
+    // codicon fallback the non-agent tab ships the same glyph as light/dark SVGs.
     return resolveAgentIcon({ windowName, status, resourcesDir: 'resources' }, {
       uriFile: (path) => vscode.Uri.joinPath(this.extensionUri, ...path.split(/[\\/]/)),
       themeIcon: () => ({
