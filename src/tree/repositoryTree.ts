@@ -259,10 +259,34 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
     return this.findTerminalNode(sessionName);
   }
 
+  async describeSession(sessionName: string): Promise<{ repo: string; branch: string } | undefined> {
+    const worktree = await this.findWorktreeNodeForSession(sessionName);
+    if (worktree === undefined) return undefined;
+    return {
+      repo: path.basename(worktree.repositoryPath),
+      branch: worktree.worktree.branch ?? worktree.worktree.path,
+    };
+  }
+
   private async findTerminalNode(
     sessionName: string,
     worktreeMatches: (worktree: WorktreeNode) => boolean = () => true,
   ): Promise<TerminalNode | undefined> {
+    const worktree = await this.findWorktreeNodeForSession(sessionName, worktreeMatches);
+    if (worktree === undefined) return undefined;
+    const terminals = await this.resolveChildren(worktree);
+    for (const terminal of terminals) {
+      if (terminal instanceof TerminalNode && terminal.terminal.sessionName === sessionName) {
+        return terminal;
+      }
+    }
+    return undefined;
+  }
+
+  private async findWorktreeNodeForSession(
+    sessionName: string,
+    worktreeMatches: (worktree: WorktreeNode) => boolean = () => true,
+  ): Promise<WorktreeNode | undefined> {
     const repositories = await this.resolveChildren();
     for (const repository of repositories) {
       if (!(repository instanceof RepositoryNode)) continue;
@@ -273,12 +297,7 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
         // per-worktree tmux query.
         if (!sessionName.startsWith(terminalSessionPrefix(worktree.worktree.path))) continue;
         if (!worktreeMatches(worktree)) continue;
-        const terminals = await this.resolveChildren(worktree);
-        for (const terminal of terminals) {
-          if (terminal instanceof TerminalNode && terminal.terminal.sessionName === sessionName) {
-            return terminal;
-          }
-        }
+        return worktree;
       }
     }
     return undefined;

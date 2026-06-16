@@ -350,6 +350,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       showInformationMessage: (message, ...items) => vscode.window.showInformationMessage(message, ...items),
     },
     openTerminal: (sessionName) => openAgentStatusTerminal(tree, treeView, openTerminal, sessionName),
+    resolveTerminalSession: (sessionName) => tmux.terminalSession(sessionName),
+    describeSession: (sessionName) => tree.describeSession(sessionName),
   }).start();
   const addRepository = new AddRepositoryCommand(
     new VsCodeRepositoryFolderPicker(),

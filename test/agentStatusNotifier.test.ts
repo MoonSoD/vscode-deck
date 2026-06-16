@@ -33,17 +33,21 @@ describe('AgentStatusNotifier', () => {
     statuses.set('wt-_work_repo__term-1', {
       status: 'needsInput',
       statusAt: 1710000000,
+      agent: 'claude',
       message: 'Allow Bash(ls)?',
     });
     store.fire();
-    await Promise.resolve();
 
-    expect(notifications.showWarningMessage).toHaveBeenCalledOnce();
+    await vi.waitFor(() => {
+      expect(notifications.showWarningMessage).toHaveBeenCalledOnce();
+    });
     expect(notifications.showWarningMessage).toHaveBeenCalledWith(
-      'Allow Bash(ls)?',
+      '⚠ claude · Allow Bash(ls)?',
       'Open Terminal',
     );
-    expect(openTerminal).toHaveBeenCalledWith('wt-_work_repo__term-1');
+    await vi.waitFor(() => {
+      expect(openTerminal).toHaveBeenCalledWith('wt-_work_repo__term-1');
+    });
 
     statuses.set('wt-_work_repo__term-1', {
       status: 'needsInput',
@@ -51,9 +55,77 @@ describe('AgentStatusNotifier', () => {
       message: 'Allow Bash(ls)?',
     });
     store.fire();
-    await Promise.resolve();
 
     expect(notifications.showWarningMessage).toHaveBeenCalledOnce();
+    disposable.dispose();
+  });
+
+  it('identifies a needs-input agent by its tree labels', async () => {
+    const statuses = new Map<string, AgentStatus>();
+    const store = new FakeStatusStore(statuses);
+    const notifications = fakeNotifications('Open Terminal');
+    const openTerminal = vi.fn(async () => undefined);
+    const notifier = createNotifier({
+      store,
+      notifications,
+      openTerminal,
+      resolveTerminalSession: async () => ({
+        sessionName: 'wt-_work_alpha-main__term-1',
+        windowName: 'claude',
+        paneTitle: '✳ fix-dlq-requeue-uploads-deadline',
+      }),
+      describeSession: async () => ({ repo: 'vscode-deck', branch: 'main' }),
+    });
+    const disposable = notifier.start();
+
+    statuses.set('wt-_work_alpha-main__term-1', {
+      status: 'needsInput',
+      statusAt: 1710000000,
+      agent: 'claude',
+      message: 'Claude needs your permission to use Bash',
+    });
+    store.fire();
+
+    await vi.waitFor(() => {
+      expect(notifications.showWarningMessage).toHaveBeenCalledWith(
+        '⚠ vscode-deck/main · fix-dlq-requeue-uploads-deadline · Claude needs your permission to use Bash',
+        'Open Terminal',
+      );
+    });
+    await vi.waitFor(() => {
+      expect(openTerminal).toHaveBeenCalledWith('wt-_work_alpha-main__term-1');
+    });
+    disposable.dispose();
+  });
+
+  it('falls back to the status agent when the AgentTitle is not available yet', async () => {
+    const statuses = new Map<string, AgentStatus>();
+    const store = new FakeStatusStore(statuses);
+    const notifications = fakeNotifications();
+    const notifier = createNotifier({
+      store,
+      notifications,
+      resolveTerminalSession: async () => ({
+        sessionName: 'wt-_work_alpha-main__term-1',
+        windowName: 'zsh',
+      }),
+      describeSession: async () => ({ repo: 'vscode-deck', branch: 'main' }),
+    });
+    const disposable = notifier.start();
+
+    statuses.set('wt-_work_alpha-main__term-1', {
+      status: 'completed',
+      statusAt: 1710000000,
+      agent: 'codex',
+    });
+    store.fire();
+
+    await vi.waitFor(() => {
+      expect(notifications.showInformationMessage).toHaveBeenCalledWith(
+        'ⓘ vscode-deck/main · codex · finished',
+        'Open Terminal',
+      );
+    });
     disposable.dispose();
   });
 
@@ -80,7 +152,7 @@ describe('AgentStatusNotifier', () => {
     disposable.dispose();
   });
 
-  it('notifies for the active Terminal tab when the window is unfocused (you are away)', () => {
+  it('notifies for the active Terminal tab when the window is unfocused (you are away)', async () => {
     const statuses = new Map<string, AgentStatus>();
     const store = new FakeStatusStore(statuses);
     const notifications = fakeNotifications();
@@ -99,7 +171,9 @@ describe('AgentStatusNotifier', () => {
     });
     store.fire();
 
-    expect(notifications.showWarningMessage).toHaveBeenCalledOnce();
+    await vi.waitFor(() => {
+      expect(notifications.showWarningMessage).toHaveBeenCalledOnce();
+    });
     disposable.dispose();
   });
 
@@ -108,7 +182,7 @@ describe('AgentStatusNotifier', () => {
     [false, false],
   ] as const)(
     'applies notifyOnNeedsInput=%s',
-    (enabled, expectedToast) => {
+    async (enabled, expectedToast) => {
       const statuses = new Map<string, AgentStatus>();
       const store = new FakeStatusStore(statuses);
       const notifications = fakeNotifications();
@@ -122,12 +196,18 @@ describe('AgentStatusNotifier', () => {
       statuses.set('wt-_work_repo__term-1', { status: 'needsInput', statusAt: 1710000000 });
       store.fire();
 
-      expect(notifications.showWarningMessage).toHaveBeenCalledTimes(expectedToast ? 1 : 0);
+      if (expectedToast) {
+        await vi.waitFor(() => {
+          expect(notifications.showWarningMessage).toHaveBeenCalledOnce();
+        });
+      } else {
+        expect(notifications.showWarningMessage).not.toHaveBeenCalled();
+      }
       disposable.dispose();
     },
   );
 
-  it('sends completed info toasts by default and suppresses them when disabled', () => {
+  it('sends completed info toasts by default and suppresses them when disabled', async () => {
     const statuses = new Map<string, AgentStatus>();
     const store = new FakeStatusStore(statuses);
     const notifications = fakeNotifications();
@@ -137,14 +217,17 @@ describe('AgentStatusNotifier', () => {
     statuses.set('wt-_work_repo__term-1', {
       status: 'completed',
       statusAt: 1710000000,
+      agent: 'claude',
       message: 'Claude stopped',
     });
     store.fire();
 
-    expect(notifications.showInformationMessage).toHaveBeenCalledWith(
-      'Claude stopped',
-      'Open Terminal',
-    );
+    await vi.waitFor(() => {
+      expect(notifications.showInformationMessage).toHaveBeenCalledWith(
+        'ⓘ claude · Claude stopped',
+        'Open Terminal',
+      );
+    });
     disposable.dispose();
 
     const offNotifications = fakeNotifications();
@@ -166,7 +249,7 @@ describe('AgentStatusNotifier', () => {
     [false, false],
   ] as const)(
     'applies notifyOnCompleted=%s',
-    (enabled, expectedToast) => {
+    async (enabled, expectedToast) => {
       const statuses = new Map<string, AgentStatus>();
       const store = new FakeStatusStore(statuses);
       const notifications = fakeNotifications();
@@ -180,7 +263,13 @@ describe('AgentStatusNotifier', () => {
       statuses.set('wt-_work_repo__term-1', { status: 'completed', statusAt: 1710000000 });
       store.fire();
 
-      expect(notifications.showInformationMessage).toHaveBeenCalledTimes(expectedToast ? 1 : 0);
+      if (expectedToast) {
+        await vi.waitFor(() => {
+          expect(notifications.showInformationMessage).toHaveBeenCalledOnce();
+        });
+      } else {
+        expect(notifications.showInformationMessage).not.toHaveBeenCalled();
+      }
       disposable.dispose();
     },
   );
@@ -203,12 +292,16 @@ describe('AgentStatusNotifier', () => {
 
     statuses.set('wt-_work_repo__term-1', { status: 'needsInput', statusAt: 1710000000 });
     store.fire();
+    await vi.waitFor(() => {
+      expect(notifications.showWarningMessage).toHaveBeenCalledOnce();
+    });
     statuses.set('wt-_work_repo__term-1', { status: 'inProgress', statusAt: 1710000001 });
     store.fire();
     selectAction?.('Open Terminal');
-    await Promise.resolve();
 
-    expect(openTerminal).toHaveBeenCalledWith('wt-_work_repo__term-1');
+    await vi.waitFor(() => {
+      expect(openTerminal).toHaveBeenCalledWith('wt-_work_repo__term-1');
+    });
     disposable.dispose();
   });
 });
@@ -217,6 +310,12 @@ function createNotifier(options: {
   store: FakeStatusStore;
   notifications?: ReturnType<typeof fakeNotifications>;
   openTerminal?: (sessionName: string) => void | PromiseLike<void>;
+  resolveTerminalSession?: (sessionName: string) => Promise<{
+    sessionName: string;
+    windowName: string;
+    paneTitle?: string;
+  } | undefined>;
+  describeSession?: (sessionName: string) => Promise<{ repo: string; branch: string } | undefined>;
   notifyOnNeedsInput?: () => boolean;
   notifyOnCompleted?: () => boolean;
   isFocused?: () => boolean;
@@ -234,6 +333,8 @@ function createNotifier(options: {
     },
     notifications: options.notifications ?? fakeNotifications(),
     openTerminal: options.openTerminal ?? (async () => undefined),
+    resolveTerminalSession: options.resolveTerminalSession ?? (async () => undefined),
+    describeSession: options.describeSession ?? (async () => undefined),
   });
 }
 

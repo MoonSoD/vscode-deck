@@ -1,4 +1,10 @@
 import type { AgentStatus, Disposable } from './agentStatusStore';
+import {
+  composeAgentStatusNotificationLine,
+  type AgentStatusNotificationLocation,
+} from './agentStatusNotificationLine';
+import { resolveTerminalLabel } from '../terminal/terminalLabelResolver';
+import type { TmuxSession } from '../terminal/tmuxCli';
 
 const OPEN_TERMINAL = 'Open Terminal';
 
@@ -28,6 +34,8 @@ interface AgentStatusNotifierOptions {
   windowState: AgentStatusWindowState;
   notifications: AgentStatusNotifications;
   openTerminal(sessionName: string): void | PromiseLike<void>;
+  resolveTerminalSession?(sessionName: string): Promise<TmuxSession | undefined>;
+  describeSession?(sessionName: string): Promise<AgentStatusNotificationLocation | undefined>;
 }
 
 export class AgentStatusNotifier {
@@ -58,18 +66,54 @@ export class AgentStatusNotifier {
 
   private notifyNeedsInput(sessionName: string, status: AgentStatus): void {
     if (!this.shouldNotify(sessionName, this.options.settings.notifyOnNeedsInput())) return;
-    this.show(
-      this.options.notifications.showWarningMessage(status.message ?? 'Agent needs input', OPEN_TERMINAL),
-      sessionName,
-    );
+    void this.notify(sessionName, status, 'needsInput');
   }
 
   private notifyCompleted(sessionName: string, status: AgentStatus): void {
     if (!this.shouldNotify(sessionName, this.options.settings.notifyOnCompleted())) return;
-    this.show(
-      this.options.notifications.showInformationMessage(status.message ?? 'Agent completed', OPEN_TERMINAL),
-      sessionName,
-    );
+    void this.notify(sessionName, status, 'completed');
+  }
+
+  private async notify(
+    sessionName: string,
+    status: AgentStatus,
+    notificationStatus: 'needsInput' | 'completed',
+  ): Promise<void> {
+    const [terminal, location] = await Promise.all([
+      this.resolveTerminalSession(sessionName),
+      this.describeSession(sessionName),
+    ]);
+    const agentName = status.agent ?? terminal?.windowName ?? 'Agent';
+    const label = terminal === undefined
+      ? agentName
+      : resolveTerminalLabel(agentName, terminal.paneTitle);
+    const line = composeAgentStatusNotificationLine({
+      status: notificationStatus,
+      agentName,
+      label,
+      message: status.message,
+      location,
+    });
+    const choice = line.severity === 'warning'
+      ? this.options.notifications.showWarningMessage(line.text, OPEN_TERMINAL)
+      : this.options.notifications.showInformationMessage(line.text, OPEN_TERMINAL);
+    this.show(choice, sessionName);
+  }
+
+  private async resolveTerminalSession(sessionName: string): Promise<TmuxSession | undefined> {
+    try {
+      return await this.options.resolveTerminalSession?.(sessionName);
+    } catch {
+      return undefined;
+    }
+  }
+
+  private async describeSession(sessionName: string): Promise<AgentStatusNotificationLocation | undefined> {
+    try {
+      return await this.options.describeSession?.(sessionName);
+    } catch {
+      return undefined;
+    }
   }
 
   private shouldNotify(sessionName: string, enabled: boolean): boolean {

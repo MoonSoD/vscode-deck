@@ -28,6 +28,7 @@ const vscodeState = vi.hoisted(() => ({
     {
       status: 'inProgress' | 'needsInput' | 'completed' | 'failed';
       statusAt: number;
+      agent?: 'claude' | 'codex';
       message?: string;
     },
   ]>,
@@ -74,6 +75,7 @@ const vscodeState = vi.hoisted(() => ({
   repositoryTreeInstances: [] as Array<{
     findTerminal: ReturnType<typeof vi.fn>;
     findTerminalBySessionName: ReturnType<typeof vi.fn>;
+    describeSession: ReturnType<typeof vi.fn>;
     refresh: ReturnType<typeof vi.fn>;
     getChildren: ReturnType<typeof vi.fn>;
   }>,
@@ -91,7 +93,7 @@ const vscodeState = vi.hoisted(() => ({
     automaticRenameFormat?: string;
   },
   tmuxServerRunning: false,
-  tmuxSessions: [{ sessionName: 'wt-_work_alpha-main__term-1', windowName: 'zsh' }],
+  tmuxSessions: [{ sessionName: 'wt-_work_alpha-main__term-1', windowName: 'zsh', paneTitle: undefined as string | undefined }],
   tmuxInstances: [] as Array<{
     configPath: string;
     isServerRunning: ReturnType<typeof vi.fn>;
@@ -299,6 +301,7 @@ vi.mock('../src/tree/repositoryTree', () => ({
     };
     findTerminal = vi.fn();
     findTerminalBySessionName = vi.fn();
+    describeSession = vi.fn();
     refresh = vi.fn();
     setCollapsed = vi.fn();
     getChildren = vi.fn(() => [{ repositoryPath: '/settings/repo' }]);
@@ -1098,20 +1101,31 @@ describe('activate', () => {
 
     await activate(context as never);
     vscodeState.repositoryTreeInstances[0].findTerminalBySessionName.mockResolvedValue(terminalNode);
+    vscodeState.repositoryTreeInstances[0].describeSession.mockResolvedValue({
+      repo: 'alpha-main',
+      branch: 'feature',
+    });
+    vscodeState.tmuxSessions = [{
+      sessionName: 'wt-_work_alpha-feature__term-1',
+      windowName: 'claude',
+      paneTitle: '✳ fix issue 130',
+    }];
     vscodeState.agentStatusStoreEntries = [
       ['wt-_work_alpha-feature__term-1', {
         status: 'needsInput',
         statusAt: 1710000000,
+        agent: 'claude',
         message: 'Allow Bash(ls)?',
       }],
     ];
     vscodeState.agentStatusStoreChangeListeners.at(-1)?.();
-    await Promise.resolve();
 
-    expect(vscodeState.showWarningMessage).toHaveBeenCalledWith(
-      'Allow Bash(ls)?',
-      'Open Terminal',
-    );
+    await vi.waitFor(() => {
+      expect(vscodeState.showWarningMessage).toHaveBeenCalledWith(
+        '⚠ alpha-main/feature · fix issue 130 · Allow Bash(ls)?',
+        'Open Terminal',
+      );
+    });
     expect(vscodeState.repositoryTreeInstances[0].findTerminalBySessionName).toHaveBeenCalledWith(
       'wt-_work_alpha-feature__term-1',
     );

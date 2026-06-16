@@ -990,6 +990,50 @@ describe('RepositoryTreeProvider', () => {
     expect(tmux.listSessions).toHaveBeenCalledWith('wt-_work_alpha-feature__term-');
   });
 
+  it('describes a session from its matched Worktree without waiting for terminal restore', async () => {
+    const tmux = {
+      listSessions: vi.fn(async () => {
+        throw new Error('should not list terminals');
+      }),
+    };
+    const ensureSnapshotRestored = vi.fn(async () => {
+      throw new Error('should not wait for restore');
+    });
+    const provider = new RepositoryTreeProvider(
+      registry(['/work/alpha-main']),
+      { get: vi.fn() } as unknown as ActiveWorktreeStore,
+      { get: vi.fn() } as unknown as WorktreeOrderStore,
+      { get: vi.fn(), set: vi.fn(async () => undefined) } as unknown as WorktreeListCacheStore,
+      { get: vi.fn(() => '/git/alpha'), set: vi.fn(async () => undefined) } as unknown as RepositoryCommonDirCache,
+      tmux,
+      true,
+      new Set(),
+      undefined,
+      undefined,
+      ensureSnapshotRestored,
+    );
+
+    const description = await provider.describeSession('wt-_work_alpha-feature__term-1');
+
+    expect(description).toEqual({ repo: 'alpha-main', branch: 'feature' });
+    expect(tmux.listSessions).not.toHaveBeenCalled();
+    expect(ensureSnapshotRestored).not.toHaveBeenCalled();
+  });
+
+  it('returns no session description when no Worktree owns the session prefix', async () => {
+    const provider = new RepositoryTreeProvider(
+      registry(['/work/alpha-main']),
+      { get: vi.fn() } as unknown as ActiveWorktreeStore,
+      { get: vi.fn() } as unknown as WorktreeOrderStore,
+      { get: vi.fn(), set: vi.fn(async () => undefined) } as unknown as WorktreeListCacheStore,
+      { get: vi.fn(() => '/git/alpha'), set: vi.fn(async () => undefined) } as unknown as RepositoryCommonDirCache,
+      { listSessions: vi.fn(async () => []) },
+      true,
+    );
+
+    await expect(provider.describeSession('wt-_elsewhere_repo__term-1')).resolves.toBeUndefined();
+  });
+
   it('marks terminals in the current workspace folder as active', async () => {
     const tmux = {
       listSessions: vi.fn(async () => [
