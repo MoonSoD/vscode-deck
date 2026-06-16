@@ -18,17 +18,34 @@ export interface AgentStatusNotificationLine {
   text: string;
 }
 
+interface AgentStatusNotificationFormat {
+  severity: AgentStatusNotificationSeverity;
+  icon: string;
+  fallbackDetail: string;
+}
+
 export function composeAgentStatusNotificationLine(
   input: AgentStatusNotificationLineInput,
 ): AgentStatusNotificationLine {
-  const detail = input.message ?? (input.status === 'needsInput' ? 'needs input' : 'finished');
+  const format = notificationFormat(input.status);
+  const detail = input.message ?? format.fallbackDetail;
   const label = input.label.trim() || input.agentName;
-  const identity = input.location === undefined
-    ? label
-    : `${input.location.repo}/${input.location.branch} · ${label}`;
+  const segments = [label, detail];
+  if (input.location !== undefined) {
+    segments.unshift(`${input.location.repo}/${input.location.branch}`);
+  }
 
   return {
-    severity: input.status === 'needsInput' ? 'warning' : 'information',
-    text: `${input.status === 'needsInput' ? '⚠' : 'ⓘ'} ${identity} · ${detail}`,
+    severity: format.severity,
+    text: `${format.icon} ${segments.join(' · ')}`,
   };
+}
+
+function notificationFormat(status: AgentStatusNotificationLineInput['status']): AgentStatusNotificationFormat {
+  switch (status) {
+    case 'needsInput':
+      return { severity: 'warning', icon: '⚠', fallbackDetail: 'needs input' };
+    case 'completed':
+      return { severity: 'information', icon: 'ⓘ', fallbackDetail: 'finished' };
+  }
 }
