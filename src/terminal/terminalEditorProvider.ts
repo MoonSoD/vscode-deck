@@ -147,7 +147,7 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
   refreshTitles(changedSessionNames: readonly string[]): void {
     for (const sessionName of changedSessionNames) {
       const panel = this.panels.get(sessionName);
-      if (panel) this.applyTitle(sessionName, panel);
+      if (panel) this.applyTabDecoration(sessionName, panel);
     }
   }
 
@@ -230,10 +230,6 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
       transport.dispose();
       for (const disposable of transportDisposables.splice(0)) disposable.dispose();
     });
-  }
-
-  private applyTitle(sessionName: string, panel: vscode.WebviewPanel): void {
-    this.applyTabDecoration(sessionName, panel);
   }
 
   private applyTabDecoration(sessionName: string, panel: vscode.WebviewPanel): void {
