@@ -73,9 +73,6 @@ export interface TerminalTransportLike {
 
 export type TerminalTransportFactory = () => TerminalTransportLike;
 export type TerminalEditorDisposeHandler = (sessionName: string) => Promise<void> | void;
-type AgentStatusChangeSubscription = (
-  listener: (changedSessionNames: readonly string[]) => void,
-) => vscode.Disposable;
 
 export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvider<TerminalDocument> {
   private readonly panels = new Map<string, vscode.WebviewPanel>();
@@ -98,7 +95,6 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
     // TerminalSnapshot restore, losing scrollback. Gating it makes the reattach
     // bind to the restored session instead.
     private readonly beforeReattach: () => Promise<void> = () => Promise.resolve(),
-    private readonly onAgentStatusChange: AgentStatusChangeSubscription = () => ({ dispose: () => undefined }),
   ) {
     this.configChangeSubscription = vscode.workspace.onDidChangeConfiguration((event) => {
       const fontKeys = [
@@ -143,6 +139,13 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
     return this.panels.get(sessionName);
   }
 
+  refreshTitles(changedSessionNames: readonly string[]): void {
+    for (const sessionName of changedSessionNames) {
+      const panel = this.panels.get(sessionName);
+      if (panel) this.applyTitle(sessionName, panel);
+    }
+  }
+
   showFind(): void {
     const panel = this.activePanel ?? this.panels.values().next().value;
     if (panel) void panel.webview.postMessage({ type: 'find' });
@@ -178,9 +181,7 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
 
     // Title the tab with the same resolved Terminal label as the sidebar row.
     const applyTitle = () => {
-      void this.resolveTerminalSession(document.sessionName).then((terminal) => {
-        if (terminal) panel.title = resolveTerminalLabel(terminal.windowName, terminal.paneTitle);
-      });
+      this.applyTitle(document.sessionName, panel);
     };
     applyTitle();
 
@@ -194,10 +195,6 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
       transport.onRename(() => {
         applyTitle();
         this.onTitleChange();
-      }),
-      this.onAgentStatusChange((changedSessionNames) => {
-        if (!changedSessionNames.includes(document.sessionName)) return;
-        applyTitle();
       }),
       panel.webview.onDidReceiveMessage((message: TerminalWebviewMessage) => {
         if (message.type === 'ready') {
@@ -227,6 +224,12 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
       void this.onPanelDispose(document.sessionName);
       transport.dispose();
       for (const disposable of transportDisposables.splice(0)) disposable.dispose();
+    });
+  }
+
+  private applyTitle(sessionName: string, panel: vscode.WebviewPanel): void {
+    void this.resolveTerminalSession(sessionName).then((terminal) => {
+      if (terminal) panel.title = resolveTerminalLabel(terminal.windowName, terminal.paneTitle);
     });
   }
 

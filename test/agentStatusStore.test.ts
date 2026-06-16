@@ -9,6 +9,7 @@ const disposables: Array<{ dispose(): void }> = [];
 // fs.watch event delivery can exceed vi.waitFor's 1s default when the full
 // suite runs in parallel; these tests pass in isolation but flake under load.
 const WATCH_EVENT_WAIT = { timeout: 5000 };
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 describe('AgentStatusStore', () => {
   afterEach(() => {
@@ -290,7 +291,7 @@ describe('AgentStatusStore', () => {
     expect(store.get('failed')).toEqual({ status: 'failed', statusAt: 1710000003 });
   });
 
-  it('notifies on statusAt-only churn so title refresh can re-read the agent title', async () => {
+  it('ignores in-progress statusAt churn but notifies on status transitions', async () => {
     const root = tempRoot();
     mkdirSync(root, { recursive: true });
     writeFileSync(join(root, 'term-1.json'), '{"status":"inProgress","statusAt":1710000000}', 'utf8');
@@ -300,11 +301,11 @@ describe('AgentStatusStore', () => {
     disposables.push(await store.start());
 
     writeFileSync(join(root, 'term-1.json'), '{"status":"inProgress","statusAt":1710000050}', 'utf8');
-    await vi.waitFor(() => expect(changes).toHaveBeenCalledWith(['term-1']), WATCH_EVENT_WAIT);
+    await wait(100);
+    expect(changes).not.toHaveBeenCalled();
 
-    changes.mockClear();
     writeFileSync(join(root, 'term-1.json'), '{"status":"completed","statusAt":1710000060}', 'utf8');
-    await vi.waitFor(() => expect(changes).toHaveBeenCalledWith(['term-1']), WATCH_EVENT_WAIT);
+    await vi.waitFor(() => expect(changes).toHaveBeenCalledOnce(), WATCH_EVENT_WAIT);
   });
 
   it('removes a single session status on Deck-owned kills and notifies listeners', async () => {
@@ -323,7 +324,7 @@ describe('AgentStatusStore', () => {
     expect(store.get('killed')).toBeUndefined();
     expect(existsSync(join(root, 'killed.json'))).toBe(false);
     expect(existsSync(join(`${root}-reads`, 'killed.json'))).toBe(false);
-    expect(changes).toHaveBeenCalledWith(['killed']);
+    expect(changes).toHaveBeenCalledOnce();
 
     await expect(store.remove('killed')).resolves.toBeUndefined();
   });

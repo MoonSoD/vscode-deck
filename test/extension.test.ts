@@ -33,6 +33,13 @@ const vscodeState = vi.hoisted(() => ({
     },
   ]>,
   agentStatusStorePrune: vi.fn(async () => undefined),
+  agentTitlePollArgs: undefined as unknown[] | undefined,
+  agentTitlePollInstances: [] as Array<{
+    start: ReturnType<typeof vi.fn>;
+    dispose: ReturnType<typeof vi.fn>;
+    onChange: ReturnType<typeof vi.fn>;
+    listener?: (changedSessionNames: readonly string[]) => void;
+  }>,
   restoreOnActivationImpl: (async () => undefined) as () => Promise<unknown>,
   agentStatusStoreStart: vi.fn(async () => ({ dispose: vi.fn() })),
   agentStatusStoreChangeListeners: [] as Array<() => void>,
@@ -424,6 +431,23 @@ vi.mock('../src/agent/agentStatusStore', () => ({
   },
 }));
 
+vi.mock('../src/agent/agentTitlePoll', () => ({
+  AgentTitlePoll: class {
+    listener?: (changedSessionNames: readonly string[]) => void;
+    start = vi.fn();
+    dispose = vi.fn();
+    onChange = vi.fn((listener: (changedSessionNames: readonly string[]) => void) => {
+      this.listener = listener;
+      return { dispose: vi.fn() };
+    });
+
+    constructor(...args: unknown[]) {
+      vscodeState.agentTitlePollArgs = args;
+      vscodeState.agentTitlePollInstances.push(this);
+    }
+  },
+}));
+
 vi.mock('../src/agent/hookInstaller', () => ({
   HookInstaller: class {
     constructor(...args: unknown[]) {
@@ -518,6 +542,8 @@ describe('activate', () => {
     vscodeState.agentStatusStoreChangeListeners = [];
     vscodeState.agentStatusStoreEntries = [];
     vscodeState.agentStatusStorePrune.mockResolvedValue(undefined);
+    vscodeState.agentTitlePollArgs = undefined;
+    vscodeState.agentTitlePollInstances = [];
     vscodeState.restoreOnActivationImpl = async () => undefined;
     vscodeState.agentStatusStoreStart.mockResolvedValue({ dispose: vi.fn() });
     vscodeState.hookInstallerArgs = undefined;
@@ -945,6 +971,24 @@ describe('activate', () => {
     await vi.waitFor(() => expect(vscodeState.watchGitCommonDir).toHaveBeenCalledTimes(2));
     expect(vscodeState.watchGitCommonDir).toHaveBeenLastCalledWith('/git/beta', expect.any(Function));
     expect(vscodeState.externalWatchDisposables[0].dispose).not.toHaveBeenCalled();
+  });
+
+  it('wires AgentTitlePoll changes to row and tab title refresh', async () => {
+    const context = createContext();
+    await activate(context as never);
+    const tree = vscodeState.repositoryTreeInstances[0];
+    const poll = vscodeState.agentTitlePollInstances[0];
+    const provider = vscodeState.registerCustomEditorProvider.mock.calls[0]?.[1] as {
+      refreshTitles(changedSessionNames: readonly string[]): void;
+    };
+    const refreshTitles = vi.spyOn(provider, 'refreshTitles');
+    tree.refresh.mockClear();
+
+    poll.listener?.(['wt-_work_alpha-main__term-1']);
+
+    expect(tree.refresh).toHaveBeenCalledOnce();
+    expect(refreshTitles).toHaveBeenCalledWith(['wt-_work_alpha-main__term-1']);
+    expect(poll.start).toHaveBeenCalled();
   });
 
   it('shares pending WorktreeRemoval state between the command and tree', async () => {

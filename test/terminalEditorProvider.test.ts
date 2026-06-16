@@ -195,8 +195,7 @@ describe('TerminalEditorProvider', () => {
     expect(terminalPanel.title).toBe('fix tab label');
   });
 
-  it('updates an agent tab title when that Terminal status changes', async () => {
-    let statusHandler: ((changedSessionNames: readonly string[]) => void) | undefined;
+  it('updates matching agent tab titles on title refresh', async () => {
     const terminalSessions = vi.fn(async () => ({
       sessionName: 'wt-_work_alpha-main__term-1',
       windowName: 'claude',
@@ -211,10 +210,6 @@ describe('TerminalEditorProvider', () => {
       undefined,
       terminalSessions,
       undefined,
-      (handler) => {
-        statusHandler = handler;
-        return { dispose: vi.fn() };
-      },
     );
     const terminalPanel = panel();
     const document = provider.openCustomDocument({
@@ -231,11 +226,11 @@ describe('TerminalEditorProvider', () => {
       windowName: 'claude',
       paneTitle: '✳ second task',
     });
-    statusHandler?.(['wt-_work_other__term-1']);
+    provider.refreshTitles(['wt-_work_other__term-1']);
     await flush();
     expect(terminalPanel.title).toBe('first task');
 
-    statusHandler?.(['wt-_work_alpha-main__term-1']);
+    provider.refreshTitles(['wt-_work_alpha-main__term-1']);
     await flush();
     expect(terminalPanel.title).toBe('second task');
   });

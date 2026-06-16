@@ -55,6 +55,7 @@ import { AgentPaneProbe } from './agent/agentPaneProbe';
 import { AgentStatusFileDecorationProvider } from './agent/agentStatusFileDecorationProvider';
 import { AgentStatusNotifier } from './agent/agentStatusNotifier';
 import { AgentStatusStore } from './agent/agentStatusStore';
+import { AgentTitlePoll } from './agent/agentTitlePoll';
 import { AgentDetection } from './agent/agentDetection';
 import { AgentSetupPrompt, type AgentConfigChange } from './agent/agentSetupPrompt';
 import { HookInstaller, type HookReconcileResult } from './agent/hookInstaller';
@@ -78,6 +79,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const agentStatuses = new AgentStatusStore(join(deckDir, 'status'), 100);
   const agentStatusWatch = await agentStatuses.start();
   let agentExitSweep: AgentExitSweep | undefined;
+  let agentTitlePoll: AgentTitlePoll | undefined;
   let agentExitSweepReady = false;
   const wakeAgentExitSweep = () => {
     if (!agentExitSweepReady) return;
@@ -205,6 +207,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   function refreshTree(): void {
     tree.refresh();
+    agentTitlePoll?.start();
     wakeAgentExitSweep();
     syncExternalGitWatches();
   }
@@ -236,8 +239,21 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     refreshTree,
     (sessionName) => tmux.terminalSession(sessionName),
     ensureSnapshotRestored,
-    (listener) => agentStatuses.onDidChange(listener),
   );
+  agentTitlePoll = tmuxAvailability.available
+    ? new AgentTitlePoll({
+        listSessions: () => tmux.listSessions(),
+        isFocused: () => vscode.window.state.focused,
+        onDidChangeFocus: (listener) =>
+          vscode.window.onDidChangeWindowState((state) => listener(state.focused)),
+        onError: (error) => console.warn('Deck: agent title poll failed', error),
+      })
+    : undefined;
+  const agentTitlePollWatch = agentTitlePoll?.onChange((changedSessionNames) => {
+    refreshTree();
+    terminalEditorProvider.refreshTitles(changedSessionNames);
+  });
+  agentTitlePoll?.start();
   const openTerminal = new OpenTerminalCommand({
     terminalPanels: terminalEditorProvider,
   });
@@ -370,6 +386,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     activeTerminalReadWatch,
     agentExitSweepWakeWatch,
     ...(agentExitSweep ? [agentExitSweep] : []),
+    ...(agentTitlePoll ? [agentTitlePoll] : []),
+    ...(agentTitlePollWatch ? [agentTitlePollWatch] : []),
     agentStatusDecorationProvider,
     agentStatusDecorationWatch,
     agentStatusCollapseWatch,
