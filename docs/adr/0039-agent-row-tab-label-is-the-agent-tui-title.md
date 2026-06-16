@@ -66,6 +66,12 @@ row and tab label, while the **window name stays the agent identity**.
    polling. The tab's `applyTitle()` gains the same `agentStatuses.onDidChange`
    trigger (session-filtered) alongside the existing `onRename`.
 
+   **Corrected by ADR-0041:** this proved false for **idle** title changes
+   (`/rename` with no status write) and was only approximated for active work by
+   a churny `sameStatus` hack. Label freshness moves to a dedicated read-only
+   label poll (`AgentTitlePoll`); the status watcher reverts to driving
+   icon/notifications/decorations on real transitions.
+
 ## Considered Options
 
 - **Build X — rename the window to the title** (so it changes each turn →
