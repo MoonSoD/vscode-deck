@@ -201,6 +201,11 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
         applyTabDecoration();
         this.onTitleChange();
       }),
+      // Decoration deferred while hidden lands here: a Terminal tab carries its
+      // current label/icon the moment it's shown.
+      panel.onDidChangeViewState(() => {
+        if (panel.visible) applyTabDecoration();
+      }),
       panel.webview.onDidReceiveMessage((message: TerminalWebviewMessage) => {
         if (message.type === 'ready') {
           const { cols = 80, rows = 24 } = message;
@@ -235,6 +240,12 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
   private applyTabDecoration(sessionName: string, panel: vscode.WebviewPanel): void {
     void this.resolveTerminalSession(sessionName).then((terminal) => {
       if (!terminal) return;
+      // Writing title/iconPath to a *hidden* WebviewPanel makes VS Code activate
+      // that tab, so a background Terminal's agent status/title change would
+      // steal the active tab. Decorate only the visible tab; onDidChangeViewState
+      // re-applies the rest when shown. The sidebar row carries live status for
+      // hidden Terminals meanwhile. See ADR-0042.
+      if (!panel.visible) return;
       panel.title = resolveTerminalLabel(terminal.windowName, terminal.paneTitle);
       panel.iconPath = this.resolveTabIcon(terminal.windowName, this.resolveAgentStatus(sessionName));
     });
