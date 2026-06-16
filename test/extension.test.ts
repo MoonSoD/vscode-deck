@@ -519,6 +519,7 @@ import * as vscode from 'vscode';
 import { activate, deactivate, openPendingTerminalForCurrentWorktree } from '../src/extension';
 import { resolveCommonDirSafe } from '../src/repository/repositoryCommonDirCache';
 import { PendingTerminalOpenStore } from '../src/terminal/pendingTerminalOpenStore';
+import { SessionUriCodec } from '../src/terminal/sessionUriCodec';
 
 describe('activate', () => {
   beforeEach(() => {
@@ -625,6 +626,17 @@ describe('activate', () => {
       extensionUri: { fsPath: process.cwd() },
       globalStorageUri: { fsPath: globalStoragePath },
       values,
+    };
+  }
+
+  const terminalUriCodec = new SessionUriCodec();
+
+  function terminalEditorTab(worktreePath: string, term: number) {
+    return {
+      input: {
+        viewType: 'deck.terminal',
+        uri: terminalUriCodec.encode({ worktreePath, term }),
+      },
     };
   }
 
@@ -1223,15 +1235,7 @@ describe('activate', () => {
       terminal: { sessionName: 'wt-_work_alpha-main__term-1', windowName: 'zsh' },
       worktreePath: '/work/alpha-main',
     };
-    const activeTab = {
-      input: {
-        viewType: 'deck.terminal',
-        uri: {
-          scheme: 'deck-terminal',
-          path: '/work/alpha-main/term-1',
-        },
-      },
-    };
+    const activeTab = terminalEditorTab('/work/alpha-main', 1);
 
     await activate(context as never);
     vscodeState.repositoryTreeInstances[0].findTerminal.mockResolvedValue(terminalNode);
@@ -1256,15 +1260,7 @@ describe('activate', () => {
       terminal: { sessionName: 'wt-_work_alpha-main__term-1', windowName: 'zsh' },
       worktreePath: '/work/alpha-main',
     };
-    const activeTab = {
-      input: {
-        viewType: 'deck.terminal',
-        uri: {
-          scheme: 'deck-terminal',
-          path: '/work/alpha-main/term-1',
-        },
-      },
-    };
+    const activeTab = terminalEditorTab('/work/alpha-main', 1);
 
     await activate(context as never);
     vscodeState.repositoryTreeInstances[0].findTerminal.mockResolvedValue(terminalNode);
@@ -1288,18 +1284,8 @@ describe('activate', () => {
       terminal: { sessionName: 'wt-_work_alpha-main__term-2', windowName: 'zsh' },
       worktreePath: '/work/alpha-main',
     };
-    const firstTab = {
-      input: {
-        viewType: 'deck.terminal',
-        uri: { scheme: 'deck-terminal', path: '/work/alpha-main/term-1' },
-      },
-    };
-    const secondTab = {
-      input: {
-        viewType: 'deck.terminal',
-        uri: { scheme: 'deck-terminal', path: '/work/alpha-main/term-2' },
-      },
-    };
+    const firstTab = terminalEditorTab('/work/alpha-main', 1);
+    const secondTab = terminalEditorTab('/work/alpha-main', 2);
 
     await activate(context as never);
     vscodeState.repositoryTreeInstances[0].findTerminal.mockImplementation(async (sessionName: string) =>
@@ -1324,12 +1310,7 @@ describe('activate', () => {
       terminal: { sessionName: 'wt-_work_alpha-main__term-1', windowName: 'zsh' },
       worktreePath: '/work/alpha-main',
     };
-    const terminalTab = {
-      input: {
-        viewType: 'deck.terminal',
-        uri: { scheme: 'deck-terminal', path: '/work/alpha-main/term-1' },
-      },
-    };
+    const terminalTab = terminalEditorTab('/work/alpha-main', 1);
     const fileTab = {
       input: {
         viewType: 'default',
@@ -1354,15 +1335,7 @@ describe('activate', () => {
 
   it('marks the active Deck Terminal read when its tab is focused or status changes', async () => {
     const context = createContext();
-    const activeTab = {
-      input: {
-        viewType: 'deck.terminal',
-        uri: {
-          scheme: 'deck-terminal',
-          path: '/work/alpha-main/term-1',
-        },
-      },
-    };
+    const activeTab = terminalEditorTab('/work/alpha-main', 1);
 
     await activate(context as never);
     vscodeState.activeTab = activeTab;
@@ -1381,9 +1354,7 @@ describe('activate', () => {
 
   it('does not mark the active Terminal read while the window is unfocused, then does on refocus', async () => {
     const context = createContext();
-    vscodeState.activeTab = {
-      input: { viewType: 'deck.terminal', uri: { scheme: 'deck-terminal', path: '/work/alpha-main/term-1' } },
-    };
+    vscodeState.activeTab = terminalEditorTab('/work/alpha-main', 1);
     vscodeState.windowFocused = false;
 
     await activate(context as never);
