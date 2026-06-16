@@ -21,6 +21,7 @@ const vscodeState = vi.hoisted(() => ({
   agentSidecarStoreReadAll: vi.fn(async () => new Map()),
   agentSidecarStoreRemove: vi.fn(async () => undefined),
   agentStatusStoreArgs: undefined as unknown[] | undefined,
+  agentStatusStoreGet: vi.fn(),
   agentStatusStoreMarkRead: vi.fn(async () => undefined),
   agentStatusStoreChange: undefined as (() => void) | undefined,
   agentStatusStoreEntries: [] as Array<[
@@ -410,7 +411,7 @@ vi.mock('../src/agent/agentPaneProbe', () => ({
 
 vi.mock('../src/agent/agentStatusStore', () => ({
   AgentStatusStore: class {
-    get = vi.fn();
+    get = vscodeState.agentStatusStoreGet;
     markRead = vscodeState.agentStatusStoreMarkRead;
     entries = vi.fn(() => vscodeState.agentStatusStoreEntries.values());
     onDidChange = vi.fn((listener: () => void) => {
@@ -534,6 +535,7 @@ describe('activate', () => {
     vscodeState.agentSidecarStoreReadAll.mockResolvedValue(new Map());
     vscodeState.agentSidecarStoreRemove.mockResolvedValue(undefined);
     vscodeState.agentStatusStoreChangeListener = undefined;
+    vscodeState.agentStatusStoreGet.mockReset();
     vscodeState.agentStatusStoreMarkRead.mockResolvedValue(undefined);
     vscodeState.agentSetupPromptRun.mockResolvedValue(undefined);
     vscodeState.agentSetupPromptUninstall.mockResolvedValue(undefined);
@@ -989,6 +991,33 @@ describe('activate', () => {
     expect(tree.refresh).toHaveBeenCalledOnce();
     expect(refreshTitles).toHaveBeenCalledWith(['wt-_work_alpha-main__term-1']);
     expect(poll.start).toHaveBeenCalled();
+  });
+
+  it('wires AgentStatus changes to tab icon refresh', async () => {
+    const context = createContext();
+    vscodeState.agentStatusStoreGet.mockReturnValue({
+      status: 'inProgress',
+      statusAt: 1,
+      agent: 'codex',
+    });
+
+    await activate(context as never);
+
+    const provider = vscodeState.registerCustomEditorProvider.mock.calls[0]?.[1] as {
+      refreshIcons(): void;
+      resolveAgentStatus(sessionName: string): unknown;
+    };
+    const refreshIcons = vi.spyOn(provider, 'refreshIcons');
+
+    for (const listener of vscodeState.agentStatusStoreChangeListeners) listener();
+
+    expect(refreshIcons).toHaveBeenCalledOnce();
+    expect(provider.resolveAgentStatus('wt-_work_alpha-main__term-1')).toEqual({
+      status: 'inProgress',
+      statusAt: 1,
+      agent: 'codex',
+    });
+    expect(vscodeState.agentStatusStoreGet).toHaveBeenCalledWith('wt-_work_alpha-main__term-1');
   });
 
   it('shares pending WorktreeRemoval state between the command and tree', async () => {

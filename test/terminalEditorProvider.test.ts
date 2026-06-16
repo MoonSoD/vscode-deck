@@ -193,6 +193,82 @@ describe('TerminalEditorProvider', () => {
     renameHandler?.();
     await flush();
     expect(terminalPanel.title).toBe('fix tab label');
+    expect((terminalPanel as { iconPath?: { base: { fsPath: string }; paths: string[] } }).iconPath).toEqual({
+      base: { fsPath: '/extension' },
+      paths: ['resources', 'claude-code.png'],
+    });
+  });
+
+  it('sets an agent tab icon from the resolved Terminal identity', async () => {
+    const terminalSessions = vi.fn(async () => ({
+      sessionName: 'wt-_work_alpha-main__term-1',
+      windowName: 'claude',
+      paneTitle: '✳ fix tab icon',
+    }));
+    const provider = new TerminalEditorProvider(
+      { fsPath: '/extension' } as never,
+      '/extension/resources/deck.conf',
+      undefined,
+      () => bridge(),
+      undefined,
+      undefined,
+      terminalSessions,
+    );
+    const terminalPanel = panel();
+    const document = provider.openCustomDocument({
+      scheme: 'deck-terminal',
+      path: '/work/alpha-main/term-1',
+    } as never);
+
+    provider.resolveCustomEditor(document, terminalPanel as never);
+    await flush();
+
+    expect(terminalPanel.title).toBe('fix tab icon');
+    expect((terminalPanel as { iconPath?: { base: { fsPath: string }; paths: string[] } }).iconPath).toEqual({
+      base: { fsPath: '/extension' },
+      paths: ['resources', 'claude-code.png'],
+    });
+  });
+
+  it('refreshes open agent tab icons from AgentStatus changes', async () => {
+    let status: { status: 'inProgress'; statusAt: number; agent: 'codex' } | undefined;
+    const terminalSessions = vi.fn(async () => ({
+      sessionName: 'wt-_work_alpha-main__term-1',
+      windowName: 'codex',
+      paneTitle: '✳ implement tab icons',
+    }));
+    const provider = new TerminalEditorProvider(
+      { fsPath: '/extension' } as never,
+      '/extension/resources/deck.conf',
+      undefined,
+      () => bridge(),
+      undefined,
+      undefined,
+      terminalSessions,
+      undefined,
+      () => status,
+    );
+    const terminalPanel = panel();
+    const document = provider.openCustomDocument({
+      scheme: 'deck-terminal',
+      path: '/work/alpha-main/term-1',
+    } as never);
+
+    provider.resolveCustomEditor(document, terminalPanel as never);
+    await flush();
+    expect((terminalPanel as { iconPath?: { base: { fsPath: string }; paths: string[] } }).iconPath).toEqual({
+      base: { fsPath: '/extension' },
+      paths: ['resources', 'codex-code.png'],
+    });
+
+    status = { status: 'inProgress', statusAt: 1, agent: 'codex' };
+    provider.refreshIcons();
+    await flush();
+
+    expect((terminalPanel as { iconPath?: { base: { fsPath: string }; paths: string[] } }).iconPath).toEqual({
+      base: { fsPath: '/extension' },
+      paths: ['resources', 'codex-working.gif'],
+    });
   });
 
   it('updates matching agent tab titles on title refresh', async () => {

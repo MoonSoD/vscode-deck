@@ -1,4 +1,6 @@
 import * as vscode from 'vscode';
+import type { AgentStatus } from '../agent/agentStatusStore';
+import { resolveAgentIcon } from '../agent/agentIconResolver';
 import { SessionUriCodec } from './sessionUriCodec';
 import { TERMINAL_SCROLLBACK_LINES } from './terminalScrollback';
 import { TerminalTransport } from './terminalTransport';
@@ -60,6 +62,8 @@ type TerminalWebviewMessage =
   | FocusedMessage
   | ClearHistoryMessage;
 
+type TerminalTabIconPath = vscode.Uri | { light: vscode.Uri; dark: vscode.Uri };
+
 export interface TerminalTransportLike {
   start(sessionName: string, cwd: string, cols: number, rows: number): void;
   write(data: string): void;
@@ -95,6 +99,7 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
     // TerminalSnapshot restore, losing scrollback. Gating it makes the reattach
     // bind to the restored session instead.
     private readonly beforeReattach: () => Promise<void> = () => Promise.resolve(),
+    private readonly resolveAgentStatus: (sessionName: string) => AgentStatus | undefined = () => undefined,
   ) {
     this.configChangeSubscription = vscode.workspace.onDidChangeConfiguration((event) => {
       const fontKeys = [
@@ -146,6 +151,12 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
     }
   }
 
+  refreshIcons(): void {
+    for (const [sessionName, panel] of this.panels) {
+      this.applyTabDecoration(sessionName, panel);
+    }
+  }
+
   showFind(): void {
     const panel = this.activePanel ?? this.panels.values().next().value;
     if (panel) void panel.webview.postMessage({ type: 'find' });
@@ -172,18 +183,12 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
     panel.webview.html = this.html(panel.webview, initialConfig);
     void panel.webview.postMessage({ type: 'config', payload: initialConfig });
 
-    // Match the sidebar's terminal codicon — tab icons take an image Uri, not
-    // a ThemeIcon, so we ship the codicon glyph as light/dark SVGs.
-    panel.iconPath = {
-      light: vscode.Uri.joinPath(this.extensionUri, 'resources', 'terminal-light.svg'),
-      dark: vscode.Uri.joinPath(this.extensionUri, 'resources', 'terminal-dark.svg'),
+    // Apply the same Terminal label and agent/working/fallback icon as the
+    // sidebar row from one resolved session snapshot.
+    const applyTabDecoration = () => {
+      this.applyTabDecoration(document.sessionName, panel);
     };
-
-    // Title the tab with the same resolved Terminal label as the sidebar row.
-    const applyTitle = () => {
-      this.applyTitle(document.sessionName, panel);
-    };
-    applyTitle();
+    applyTabDecoration();
 
     transportDisposables.push(
       transport.onData((data) => {
@@ -193,7 +198,7 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
         void panel.webview.postMessage({ type: 'exit', code });
       }),
       transport.onRename(() => {
-        applyTitle();
+        applyTabDecoration();
         this.onTitleChange();
       }),
       panel.webview.onDidReceiveMessage((message: TerminalWebviewMessage) => {
@@ -228,9 +233,25 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
   }
 
   private applyTitle(sessionName: string, panel: vscode.WebviewPanel): void {
+    this.applyTabDecoration(sessionName, panel);
+  }
+
+  private applyTabDecoration(sessionName: string, panel: vscode.WebviewPanel): void {
     void this.resolveTerminalSession(sessionName).then((terminal) => {
-      if (terminal) panel.title = resolveTerminalLabel(terminal.windowName, terminal.paneTitle);
+      if (!terminal) return;
+      panel.title = resolveTerminalLabel(terminal.windowName, terminal.paneTitle);
+      panel.iconPath = this.resolveTabIcon(terminal.windowName, this.resolveAgentStatus(sessionName));
     });
+  }
+
+  private resolveTabIcon(windowName: string, status?: AgentStatus): TerminalTabIconPath {
+    return resolveAgentIcon({ windowName, status, resourcesDir: 'resources' }, {
+      uriFile: (path) => vscode.Uri.joinPath(this.extensionUri, ...path.split(/[\\/]/)),
+      themeIcon: () => ({
+        light: vscode.Uri.joinPath(this.extensionUri, 'resources', 'terminal-light.svg'),
+        dark: vscode.Uri.joinPath(this.extensionUri, 'resources', 'terminal-dark.svg'),
+      }),
+    }).iconPath;
   }
 
   private broadcastConfig(): void {
