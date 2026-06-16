@@ -65,6 +65,11 @@ issues #91-#95 and the rendering amendment from issue #105.
    Completed-read, and absent status have no right-side decoration. Decoration
    tooltips carry the status and captured message. Inline status descriptions
    such as "Working...", "Input needed.", and "Failed" are superseded.
+   The same `FileDecorationProvider` also answers for a Terminal's
+   `deck-terminal:` editor-tab URI, so an open tab carries the identical
+   attention dot and label tint — read from its own session's status directly
+   (no rollup; a tab is always one Terminal). Because decorations are
+   URI-keyed by the workbench, the dot shows even on inactive/unresolved tabs.
 
 7. **Roll attention to the closest collapsed ancestor only.** VS Code's native
    decoration propagation is not used for AgentStatus (`propagate: false`).
