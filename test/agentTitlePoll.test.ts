@@ -67,6 +67,36 @@ describe('AgentTitlePoll', () => {
     expect(scheduler.hasTick()).toBe(true);
   });
 
+  it('does not fire when only a non-agent terminal changes its pane title', async () => {
+    const scheduler = new ManualScheduler();
+    let sessions: TmuxSession[] = [
+      { sessionName: 'term-1', windowName: 'claude', paneTitle: '✳ steady task' },
+      { sessionName: 'term-2', windowName: 'zsh', paneTitle: ':/work/alpha' },
+    ];
+    const poll = new AgentTitlePoll({
+      listSessions: vi.fn(async () => sessions),
+      isFocused: () => true,
+      onDidChangeFocus: () => ({ dispose: vi.fn() }),
+      scheduler,
+    });
+    const changes = vi.fn();
+    poll.onChange(changes);
+
+    poll.start();
+    await flush();
+
+    // Only the shell's pane title churns (e.g. a `cd`); the agent's title is
+    // unchanged. A non-agent label is its window name, so this must not fire —
+    // the agent keeps the poll scheduling.
+    sessions = [
+      { sessionName: 'term-1', windowName: 'claude', paneTitle: '✳ steady task' },
+      { sessionName: 'term-2', windowName: 'zsh', paneTitle: ':/work/beta' },
+    ];
+    await scheduler.runNext();
+
+    expect(changes).not.toHaveBeenCalled();
+  });
+
   it('stops after a zero-agent tick and resumes on a later start', async () => {
     const scheduler = new ManualScheduler();
     let sessions: TmuxSession[] = [

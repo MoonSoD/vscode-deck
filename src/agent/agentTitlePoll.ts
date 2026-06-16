@@ -61,6 +61,11 @@ export class AgentTitlePoll implements Disposable {
       });
     }
     if (!this.options.isFocused()) return;
+    // start() is also the re-arm path: refreshTree() calls it on every tree
+    // refresh (so a newly-appeared agent resumes a suspended poll), and a
+    // listener may call refreshTree() mid-tick. This guard makes both cheap
+    // no-ops while a tick is in flight or scheduled — no double-scheduling, no
+    // re-entrancy.
     if (this.running || this.timer !== undefined) return;
     this.runAndSchedule();
   }
