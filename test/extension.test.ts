@@ -1250,6 +1250,108 @@ describe('activate', () => {
     );
   });
 
+  it('does not re-reveal when the active Deck Terminal tab only changes decorations', async () => {
+    const context = createContext();
+    const terminalNode = {
+      terminal: { sessionName: 'wt-_work_alpha-main__term-1', windowName: 'zsh' },
+      worktreePath: '/work/alpha-main',
+    };
+    const activeTab = {
+      input: {
+        viewType: 'deck.terminal',
+        uri: {
+          scheme: 'deck-terminal',
+          path: '/work/alpha-main/term-1',
+        },
+      },
+    };
+
+    await activate(context as never);
+    vscodeState.repositoryTreeInstances[0].findTerminal.mockResolvedValue(terminalNode);
+    vscodeState.activeTab = activeTab;
+    const tabChangeHandler = vscodeState.onDidChangeTabs.mock.calls[0]?.[0];
+    if (!tabChangeHandler) throw new Error('missing tab change listener');
+
+    await tabChangeHandler({ opened: [], closed: [], changed: [activeTab] });
+    await tabChangeHandler({ opened: [], closed: [], changed: [activeTab] });
+
+    expect(vscodeState.createTreeView.mock.results[0].value.reveal).toHaveBeenCalledOnce();
+  });
+
+  it('reveals again when navigation changes the active Deck Terminal', async () => {
+    const context = createContext();
+    const firstTerminalNode = {
+      terminal: { sessionName: 'wt-_work_alpha-main__term-1', windowName: 'zsh' },
+      worktreePath: '/work/alpha-main',
+    };
+    const secondTerminalNode = {
+      terminal: { sessionName: 'wt-_work_alpha-main__term-2', windowName: 'zsh' },
+      worktreePath: '/work/alpha-main',
+    };
+    const firstTab = {
+      input: {
+        viewType: 'deck.terminal',
+        uri: { scheme: 'deck-terminal', path: '/work/alpha-main/term-1' },
+      },
+    };
+    const secondTab = {
+      input: {
+        viewType: 'deck.terminal',
+        uri: { scheme: 'deck-terminal', path: '/work/alpha-main/term-2' },
+      },
+    };
+
+    await activate(context as never);
+    vscodeState.repositoryTreeInstances[0].findTerminal.mockImplementation(async (sessionName: string) =>
+      sessionName === 'wt-_work_alpha-main__term-1' ? firstTerminalNode : secondTerminalNode,
+    );
+    const tabChangeHandler = vscodeState.onDidChangeTabs.mock.calls[0]?.[0];
+    if (!tabChangeHandler) throw new Error('missing tab change listener');
+
+    vscodeState.activeTab = firstTab;
+    await tabChangeHandler({ opened: [], closed: [], changed: [firstTab] });
+    vscodeState.activeTab = secondTab;
+    await tabChangeHandler({ opened: [], closed: [], changed: [secondTab] });
+
+    const reveal = vscodeState.createTreeView.mock.results[0].value.reveal;
+    expect(reveal).toHaveBeenNthCalledWith(1, firstTerminalNode, { select: true, focus: false });
+    expect(reveal).toHaveBeenNthCalledWith(2, secondTerminalNode, { select: true, focus: false });
+  });
+
+  it('re-reveals when navigation returns from a non-Terminal tab to the same Deck Terminal', async () => {
+    const context = createContext();
+    const terminalNode = {
+      terminal: { sessionName: 'wt-_work_alpha-main__term-1', windowName: 'zsh' },
+      worktreePath: '/work/alpha-main',
+    };
+    const terminalTab = {
+      input: {
+        viewType: 'deck.terminal',
+        uri: { scheme: 'deck-terminal', path: '/work/alpha-main/term-1' },
+      },
+    };
+    const fileTab = {
+      input: {
+        viewType: 'default',
+        uri: { scheme: 'file', path: '/work/alpha-main/src/index.ts' },
+      },
+    };
+
+    await activate(context as never);
+    vscodeState.repositoryTreeInstances[0].findTerminal.mockResolvedValue(terminalNode);
+    const tabChangeHandler = vscodeState.onDidChangeTabs.mock.calls[0]?.[0];
+    if (!tabChangeHandler) throw new Error('missing tab change listener');
+
+    vscodeState.activeTab = terminalTab;
+    await tabChangeHandler({ opened: [], closed: [], changed: [terminalTab] });
+    vscodeState.activeTab = fileTab;
+    await tabChangeHandler({ opened: [], closed: [], changed: [fileTab] });
+    vscodeState.activeTab = terminalTab;
+    await tabChangeHandler({ opened: [], closed: [], changed: [terminalTab] });
+
+    expect(vscodeState.createTreeView.mock.results[0].value.reveal).toHaveBeenCalledTimes(2);
+  });
+
   it('marks the active Deck Terminal read when its tab is focused or status changes', async () => {
     const context = createContext();
     const activeTab = {

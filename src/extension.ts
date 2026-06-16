@@ -384,6 +384,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     repositoryCommonDirCache,
   );
 
+  let lastRevealedActiveTerminalSessionName: string | undefined;
+  const revealActiveTerminalAfterNavigation = async () => {
+    const activeTerminalSessionName = activeDeckTerminal()?.sessionName;
+    // VS Code also emits tab changes for Deck's agent icon/title churn, not
+    // just navigation. Only reselect the tree row when the active Terminal
+    // identity changes, so status/title updates don't steal manual selection.
+    if (activeTerminalSessionName === lastRevealedActiveTerminalSessionName) return;
+    lastRevealedActiveTerminalSessionName = activeTerminalSessionName;
+    await revealActiveTerminalInTree(tree, treeView);
+  };
+
   context.subscriptions.push(
     treeView,
     agentStatusWatch,
@@ -446,11 +457,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }),
     vscode.window.tabGroups.onDidChangeTabs(async () => {
       await markActiveTerminalRead(agentStatuses);
-      await revealActiveTerminalInTree(tree, treeView);
+      await revealActiveTerminalAfterNavigation();
     }),
     vscode.window.tabGroups.onDidChangeTabGroups(async () => {
       await markActiveTerminalRead(agentStatuses);
-      await revealActiveTerminalInTree(tree, treeView);
+      await revealActiveTerminalAfterNavigation();
     }),
     // Focusing back with the agent's tab active is when you actually read it —
     // markActiveTerminalRead no-ops while unfocused, so re-run it on refocus.
