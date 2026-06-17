@@ -4,17 +4,9 @@ import type { AgentName } from './agentTypes';
 
 export type AgentIconState = 'identity' | 'working';
 
-type AgentIconFiles = Record<AgentIconState, string>;
-
-const AGENT_ICONS: Record<AgentName, AgentIconFiles> = {
-  claude: {
-    identity: 'claude-code.png',
-    working: 'claude-working.gif',
-  },
-  codex: {
-    identity: 'codex-code.png',
-    working: 'codex-working.gif',
-  },
+const AGENT_IDENTITY_ICONS: Record<AgentName, string> = {
+  claude: 'claude-code.png',
+  codex: 'codex-code.png',
 };
 
 export interface AgentIconFactory<TUri, TThemeIcon> {
@@ -33,7 +25,13 @@ export type ResolvedAgentIcon<TUri = { fsPath: string }, TThemeIcon = { id: stri
     iconPath: TUri;
     isAgent: true;
     agent: AgentName;
-    state: AgentIconState;
+    state: 'identity';
+  }
+  | {
+    iconPath: TThemeIcon;
+    isAgent: true;
+    agent: AgentName;
+    state: 'working';
   }
   | {
     iconPath: TThemeIcon;
@@ -58,8 +56,17 @@ export function resolveAgentIcon<TUri = { fsPath: string }, TThemeIcon = { id: s
   }
 
   const state = iconStateFromStatus(input.status);
+  if (state === 'working') {
+    return {
+      iconPath: factory.themeIcon('loading~spin'),
+      isAgent: true,
+      agent,
+      state,
+    };
+  }
+
   return {
-    iconPath: factory.uriFile(join(input.resourcesDir, AGENT_ICONS[agent][state])),
+    iconPath: factory.uriFile(join(input.resourcesDir, AGENT_IDENTITY_ICONS[agent])),
     isAgent: true,
     agent,
     state,
