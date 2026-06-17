@@ -94,7 +94,7 @@
         "deck.repositoryLaunchers": {
           "type": "array",
           "default": [],
-          "markdownDescription": "TerminalLaunchers for a single Repository, kept in your user settings instead of committed to the repo (`.deck/launchers.json`). `repository` is any path inside the repo — a leading `~` is expanded, and it is matched by git common dir, so it applies to every Worktree.\n\nExample:\n```json\n[{ \"repository\": \"~/code/superset\", \"launchers\": [\n  { \"label\": \"Bootstrap\", \"command\": \"mise install && pnpm bootstrap\", \"runOnWorktreeCreate\": true },\n  { \"label\": \"Claude\", \"command\": \"claude\" }\n] }]\n```",
+          "markdownDescription": "TerminalLaunchers for a single Repository, kept in your user settings instead of committed to the repo (`.deck/launchers.json`). `repository` is any path inside the repo — a leading `~` is expanded, and it is matched by git common dir, so it applies to every Worktree.\n\nExample:\n```json\n[{ \"repository\": \"~/code/myapp\", \"launchers\": [\n  { \"label\": \"Bootstrap\", \"command\": \"mise install && pnpm bootstrap\", \"runOnWorktreeCreate\": true },\n  { \"label\": \"Claude\", \"command\": \"claude\" }\n] }]\n```",
           "items": {
             "type": "object",
             "properties": {

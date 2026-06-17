@@ -13,20 +13,17 @@ describe('resolveAgentIcon', () => {
     });
   });
 
-  it('resolves a codex InProgress status to the loading spinner codicon', () => {
+  it('resolves a codex InProgress status to the Codex working icon', () => {
     expect(resolveAgentIcon({
       windowName: 'codex',
       resourcesDir,
       status: { status: 'inProgress', statusAt: 1710000000 },
-    })).toEqual({
-      iconPath: { id: 'loading~spin' },
-      isAgent: true,
-      agent: 'codex',
-      state: 'working',
+    }).iconPath).toEqual({
+      fsPath: '/extension/resources/codex-working.gif',
     });
   });
 
-  it('preserves Claude identity and uses the shared working spinner', () => {
+  it('preserves Claude identity and working icons', () => {
     expect(resolveAgentIcon({ windowName: 'claude', resourcesDir }).iconPath).toEqual({
       fsPath: '/extension/resources/claude-code.png',
     });
@@ -34,11 +31,8 @@ describe('resolveAgentIcon', () => {
       windowName: 'claude',
       resourcesDir,
       status: { status: 'inProgress', statusAt: 1710000000 },
-    })).toEqual({
-      iconPath: { id: 'loading~spin' },
-      isAgent: true,
-      agent: 'claude',
-      state: 'working',
+    }).iconPath).toEqual({
+      fsPath: '/extension/resources/claude-working.gif',
     });
   });
 
@@ -47,11 +41,8 @@ describe('resolveAgentIcon', () => {
       windowName: 'zsh',
       resourcesDir,
       status: { status: 'inProgress', statusAt: 1710000000 },
-    })).toEqual({
-      iconPath: { id: 'loading~spin' },
-      isAgent: true,
-      agent: 'claude',
-      state: 'working',
+    }).iconPath).toEqual({
+      fsPath: '/extension/resources/claude-working.gif',
     });
   });
 
@@ -61,7 +52,7 @@ describe('resolveAgentIcon', () => {
       resourcesDir,
       status: { status: 'inProgress', statusAt: 1710000000, agent: 'codex' },
     })).toEqual({
-      iconPath: { id: 'loading~spin' },
+      iconPath: { fsPath: '/extension/resources/codex-working.gif' },
       isAgent: true,
       agent: 'codex',
       state: 'working',
@@ -75,16 +66,17 @@ describe('resolveAgentIcon', () => {
     });
   });
 
-  it('keeps a stopped Codex terminal on the Codex identity icon', () => {
-    expect(resolveAgentIcon({
-      windowName: 'codex',
-      resourcesDir,
-      status: { status: 'completed', statusAt: 1710000000, agent: 'codex' },
-    })).toEqual({
-      iconPath: { fsPath: '/extension/resources/codex-code.png' },
-      isAgent: true,
-      agent: 'codex',
-      state: 'identity',
-    });
+  it('never resolves a Codex terminal to a Claude asset', () => {
+    const icons = [
+      resolveAgentIcon({ windowName: 'codex', resourcesDir }).iconPath,
+      resolveAgentIcon({
+        windowName: 'codex',
+        resourcesDir,
+        status: { status: 'inProgress', statusAt: 1710000000 },
+      }).iconPath,
+    ];
+
+    expect(icons).not.toContainEqual({ fsPath: '/extension/resources/claude-code.png' });
+    expect(icons).not.toContainEqual({ fsPath: '/extension/resources/claude-working.gif' });
   });
 });

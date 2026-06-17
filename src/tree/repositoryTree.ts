@@ -35,8 +35,10 @@ export type RepositoryTreeNode = RepositoryNode | WorktreeNode | TerminalNode | 
 
 const resourcesDir = path.join(__dirname, '..', '..', 'resources');
 
-// The working icon is VS Code's loading codicon so reduce-motion users get a
-// frozen working glyph instead of a raster GIF animation. See ADR-0025 §6.
+// The terminal row's left icon carries agent identity, not status (status is
+// the right-side decoration). The Claude marks ship as raster assets because
+// VS Code currently renders custom tree SVGs black (microsoft/vscode#311339)
+// and animated GIFs are the only sanctioned way to animate a custom tree icon.
 function terminalIconPath(windowName: string, status?: AgentStatus): vscode.Uri | vscode.ThemeIcon {
   return resolveAgentIcon({ windowName, status, resourcesDir }, {
     uriFile: vscode.Uri.file,

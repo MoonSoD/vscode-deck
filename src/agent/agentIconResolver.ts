@@ -4,9 +4,17 @@ import type { AgentName } from './agentTypes';
 
 export type AgentIconState = 'identity' | 'working';
 
-const AGENT_IDENTITY_ICONS: Record<AgentName, string> = {
-  claude: 'claude-code.png',
-  codex: 'codex-code.png',
+type AgentIconFiles = Record<AgentIconState, string>;
+
+const AGENT_ICONS: Record<AgentName, AgentIconFiles> = {
+  claude: {
+    identity: 'claude-code.png',
+    working: 'claude-working.gif',
+  },
+  codex: {
+    identity: 'codex-code.png',
+    working: 'codex-working.gif',
+  },
 };
 
 export interface AgentIconFactory<TUri, TThemeIcon> {
@@ -25,13 +33,7 @@ export type ResolvedAgentIcon<TUri = { fsPath: string }, TThemeIcon = { id: stri
     iconPath: TUri;
     isAgent: true;
     agent: AgentName;
-    state: 'identity';
-  }
-  | {
-    iconPath: TThemeIcon;
-    isAgent: true;
-    agent: AgentName;
-    state: 'working';
+    state: AgentIconState;
   }
   | {
     iconPath: TThemeIcon;
@@ -56,17 +58,8 @@ export function resolveAgentIcon<TUri = { fsPath: string }, TThemeIcon = { id: s
   }
 
   const state = iconStateFromStatus(input.status);
-  if (state === 'working') {
-    return {
-      iconPath: factory.themeIcon('loading~spin'),
-      isAgent: true,
-      agent,
-      state,
-    };
-  }
-
   return {
-    iconPath: factory.uriFile(join(input.resourcesDir, AGENT_IDENTITY_ICONS[agent])),
+    iconPath: factory.uriFile(join(input.resourcesDir, AGENT_ICONS[agent][state])),
     isAgent: true,
     agent,
     state,
@@ -80,8 +73,8 @@ function agentFromWindowName(windowName: string): AgentName | undefined {
 
 function agentFromStatus(status?: AgentStatus): AgentName | undefined {
   if (status === undefined) return undefined;
-  // Legacy status records predate AgentStatus.agent and are Claude by default.
-  // New records use the writer's agent when the window name is not agent-shaped.
+  // The status record carries the agent that wrote it; trust it over a stale
+  // window name so a Codex row never falls back to the Claude mark.
   return status.agent ?? 'claude';
 }
 
