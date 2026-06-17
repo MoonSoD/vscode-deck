@@ -39,6 +39,10 @@ const resourcesDir = path.join(__dirname, '..', '..', 'resources');
 // the right-side decoration). The Claude marks ship as raster assets because
 // VS Code currently renders custom tree SVGs black (microsoft/vscode#311339)
 // and animated GIFs are the only sanctioned way to animate a custom tree icon.
+// Do NOT swap the working GIF for a `loading~spin` codicon to chase reduce-motion:
+// the codicon spin keyframe has no prefers-reduced-motion guard and ignores
+// `workbench.reduceMotion` too, so it buys no a11y and loses the brand. No
+// extension-side option makes an animated tree icon reduce-motion-aware. See ADR-0025 §6.
 function terminalIconPath(windowName: string, status?: AgentStatus): vscode.Uri | vscode.ThemeIcon {
   return resolveAgentIcon({ windowName, status, resourcesDir }, {
     uriFile: vscode.Uri.file,

@@ -55,18 +55,28 @@ issues #91-#95 and the rendering amendment from issue #105.
    wrong thing if the dialog changes or focus moves.
 
 6. **Render status with left identity icons and right-side file decorations.**
-   The Terminal row's left icon is identity/liveness only: the `loading~spin`
-   codicon while InProgress, the branded agent identity icon (claude / codex)
-   for NeedsInput, Completed, Failed, and idle agent rows, and the plain terminal
-   icon when no agent occupies the Terminal. The working icon is the
-   `loading~spin` **codicon**, not a branded animated GIF, so it respects
-   `workbench.reduceMotion` — VS Code freezes it to a static "working" glyph for
-   motion-sensitive users. A branded working GIF was used instead (the only way
-   to animate a *custom* tree icon — microsoft/vscode#311339) but reverted: a GIF
-   animates regardless of reduce-motion and freezes on a broken-looking frame.
-   Brand-while-working is sacrificed deliberately (the row label disambiguates
-   concurrent agents, and brand returns the instant the agent stops). Attention
-   states use a `FileDecorationProvider` on custom
+   The Terminal row's left icon is identity/liveness: a branded **animated GIF**
+   (claude / codex) while InProgress, the branded static agent identity icon for
+   NeedsInput, Completed, Failed, and idle agent rows, and the plain terminal
+   icon when no agent occupies the Terminal. The working icon is a GIF because
+   VS Code renders custom tree SVGs black (microsoft/vscode#311339) and an
+   animated GIF is the only way to animate a *branded* tree icon.
+
+   **Reduce-motion is not achievable for this icon, and that is accepted.**
+   A `loading~spin` codicon was tried (to honor `workbench.reduceMotion`) and
+   reverted: the codicon spin keyframe in VS Code's base CSS has **no**
+   `@media (prefers-reduced-motion)` guard and **no** `.monaco-reduce-motion`
+   rule (only individual components, e.g. voice chat, freeze it via their own
+   scoped CSS), so a `loading~spin` ThemeIcon in a tree spins regardless of both
+   the OS preference and the `workbench.reduceMotion` setting — verified from
+   source and at runtime. An extension cannot make an animated tree icon
+   reduce-motion-aware: it cannot inject workbench CSS, there is no API for the
+   effective reduced-motion state, and the tree is not a webview (so `matchMedia`
+   is unavailable). The only reduce-motion-correct option is *no* animation,
+   which is declined here in favor of the branded liveness cue. This **supersedes
+   the earlier amendment** that claimed the codicon respected reduce-motion.
+
+   Attention states use a `FileDecorationProvider` on custom
    `deck-status:` resource URIs so VS Code draws a right-side dot and label
    tint: NeedsInput uses `list.warningForeground`, Completed-unread uses
    `textLink.foreground`, and Failed uses `errorForeground`. InProgress,
