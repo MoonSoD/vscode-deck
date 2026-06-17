@@ -55,10 +55,18 @@ issues #91-#95 and the rendering amendment from issue #105.
    wrong thing if the dialog changes or focus moves.
 
 6. **Render status with left identity icons and right-side file decorations.**
-   The Terminal row's left icon is identity/liveness only: `loading~spin` while
-   InProgress, a generic agent identity glyph for NeedsInput, Completed, Failed,
-   and idle agent rows, and the plain terminal icon when no agent occupies the
-   Terminal. Attention states use a `FileDecorationProvider` on custom
+   The Terminal row's left icon is identity/liveness only: the `loading~spin`
+   codicon while InProgress, the branded agent identity icon (claude / codex)
+   for NeedsInput, Completed, Failed, and idle agent rows, and the plain terminal
+   icon when no agent occupies the Terminal. The working icon is the
+   `loading~spin` **codicon**, not a branded animated GIF, so it respects
+   `workbench.reduceMotion` — VS Code freezes it to a static "working" glyph for
+   motion-sensitive users. A branded working GIF was used instead (the only way
+   to animate a *custom* tree icon — microsoft/vscode#311339) but reverted: a GIF
+   animates regardless of reduce-motion and freezes on a broken-looking frame.
+   Brand-while-working is sacrificed deliberately (the row label disambiguates
+   concurrent agents, and brand returns the instant the agent stops). Attention
+   states use a `FileDecorationProvider` on custom
    `deck-status:` resource URIs so VS Code draws a right-side dot and label
    tint: NeedsInput uses `list.warningForeground`, Completed-unread uses
    `textLink.foreground`, and Failed uses `errorForeground`. InProgress,
