@@ -1,3 +1,5 @@
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 import { parseTerminalLaunchers, type TerminalLauncher } from './terminalLaunchers';
 
 export interface RepositoryLaunchers {
@@ -14,10 +16,20 @@ export function parseRepositoryLaunchers(raw: unknown): RepositoryLaunchers[] {
     if (!Array.isArray(entry.launchers)) return [];
 
     return [{
-      repository: entry.repository.trim(),
+      repository: expandTilde(entry.repository.trim()),
       launchers: parseTerminalLaunchers(entry.launchers),
     }];
   });
+}
+
+// The repository path is hand-typed in user settings, where a leading `~` is
+// natural — but it reaches git as a `cwd`, which is never shell-expanded, so an
+// unexpanded `~` would silently never match. Expand it so the stored path is
+// absolute.
+function expandTilde(repositoryPath: string): string {
+  if (repositoryPath === '~') return homedir();
+  if (repositoryPath.startsWith('~/')) return join(homedir(), repositoryPath.slice(2));
+  return repositoryPath;
 }
 
 export async function selectRepositoryLaunchersFor(

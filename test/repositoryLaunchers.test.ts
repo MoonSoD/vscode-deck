@@ -1,3 +1,5 @@
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   parseRepositoryLaunchers,
@@ -30,6 +32,18 @@ describe('parseRepositoryLaunchers', () => {
           { label: 'npm test', command: 'npm test' },
         ],
       },
+    ]);
+  });
+
+  it('expands a leading ~ in the repository path to the home directory', () => {
+    expect(parseRepositoryLaunchers([
+      { repository: '~/code/vscode-deck', launchers: [{ command: 'claude' }] },
+      { repository: '~', launchers: [{ command: 'echo home' }] },
+      { repository: '/absolute/repo', launchers: [{ command: 'echo abs' }] },
+    ])).toEqual([
+      { repository: join(homedir(), 'code/vscode-deck'), launchers: [{ label: 'claude', command: 'claude' }] },
+      { repository: homedir(), launchers: [{ label: 'echo home', command: 'echo home' }] },
+      { repository: '/absolute/repo', launchers: [{ label: 'echo abs', command: 'echo abs' }] },
     ]);
   });
 });
