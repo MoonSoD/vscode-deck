@@ -72,9 +72,9 @@ describe('RunLauncherCommand', () => {
     );
     expect(vscodeState.showQuickPick).toHaveBeenCalledWith(
       [
-        { kind: -1, label: 'This repository' },
+        { kind: -1, label: 'This repository (shared)' },
         expect.objectContaining({ label: 'Repo Dev', description: 'npm run dev' }),
-        { kind: -1, label: 'This repository (local)' },
+        { kind: -1, label: 'This repository (personal)' },
         expect.objectContaining({ label: 'Local Bootstrap', description: 'pnpm bootstrap' }),
         { kind: -1, label: 'User' },
         expect.objectContaining({ label: 'User Watch', description: 'npm test -- --watch' }),

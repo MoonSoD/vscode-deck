@@ -85,8 +85,8 @@ function toQuickPickItems(groups: LauncherGroups): LauncherQuickPickItem[] {
   }
 
   return [
-    ...groupItems('This repository', groups.repo),
-    ...groupItems('This repository (local)', groups.repositoryLocal),
+    ...groupItems('This repository (shared)', groups.repo),
+    ...groupItems('This repository (personal)', groups.repositoryLocal),
     ...groupItems('User', groups.user),
   ];
 }
