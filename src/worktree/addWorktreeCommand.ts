@@ -112,7 +112,11 @@ export class AddWorktreeCommand {
       branch: request.branch,
     });
     this.refresh();
-    await this.worktreeCreateLaunchers.run({ worktree: { path: request.path } });
+    try {
+      await this.worktreeCreateLaunchers.run({ worktree: { path: request.path } });
+    } catch (error) {
+      console.warn('Deck: running run-on-worktree-create launchers failed', error);
+    }
 
     const postCreateAction = await vscode.window.showInformationMessage(
       `Created worktree ${request.branch}.`,

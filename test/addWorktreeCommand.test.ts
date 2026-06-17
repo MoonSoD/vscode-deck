@@ -242,6 +242,26 @@ describe('AddWorktreeCommand', () => {
     expect(worktreeCreateLaunchers.run).toHaveBeenCalledOnce();
   });
 
+  it('still offers the post-create toast when firing launchers fails', async () => {
+    const worktreeCreateLaunchers = {
+      run: vi.fn(async () => {
+        throw new Error('DeckSocket wedged');
+      }),
+    };
+    const { command, switcher } = createCommand('/custom/worktrees', worktreeCreateLaunchers);
+    const input = createAcceptingInputBox();
+
+    pickExistingBranch();
+    vi.mocked(vscode.window.createInputBox).mockReturnValue(input as vscode.InputBox);
+    vi.mocked(vscode.window.showInformationMessage).mockResolvedValue('Switch');
+
+    await command.run({ repositoryPath: '/work/myrepo' });
+
+    expect(worktreeCreateLaunchers.run).toHaveBeenCalledOnce();
+    expect(vscode.window.showInformationMessage).toHaveBeenCalledOnce();
+    expect(switcher.switchTo).toHaveBeenCalledWith('/custom/worktrees/feature-foo');
+  });
+
   it('creates an existing-branch worktree from the remembered root and learns the chosen root', async () => {
     const { command, switcher, worktreeRoots } = createCommand('/custom/worktrees');
     const input = createAcceptingInputBox();
