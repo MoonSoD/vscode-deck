@@ -104,8 +104,12 @@ The toast Deck raises when a Terminal's AgentStatus changes to NeedsInput or Com
 _Avoid_: alert, popup; "agent needs input"/"agent done" alone (unactionable without identity)
 
 **TerminalLauncher**:
-A user-defined command that opens a new Terminal and runs in it. Sourced from two places merged in a Quick Pick behind a Worktree row's launch button: global user settings (`deck.terminalLaunchers`) and a per-repo committed file (`<worktree>/.deck/launchers.json`), repo entries shown first. Deck types the command into a fresh Terminal exactly as the user would, so a launcher that runs an agent is observed and resumed by the existing AgentSession machinery — Deck still does not own the agent lifecycle.
+A user-defined command that opens a new Terminal and runs in it. Sourced from two places merged in a Quick Pick behind a Worktree row's launch button: global user settings (`deck.terminalLaunchers`) and a per-repo committed file (`<worktree>/.deck/launchers.json`), repo entries shown first. Deck types the command into a fresh Terminal exactly as the user would, so a launcher that runs an agent is observed and resumed by the existing AgentSession machinery — Deck still does not own the agent lifecycle. A launcher carries a single command; sequence steps with `&&` (which also fails fast); run several in parallel by defining several launchers.
 _Avoid_: agent preset (no prompt templates/transports — it is just a command), task (VS Code tasks are a separate system), button (the surface is one row button opening a Quick Pick, not a button per launcher — VS Code cannot render per-row dynamic menu buttons)
+
+**RunOnWorktreeCreate**:
+A TerminalLauncher flag (`runOnWorktreeCreate: true`) that makes Deck fire that launcher automatically — headless, no editor tab — when a Worktree is created through Deck's Add command, turning launchers into per-worktree bootstrap (e.g. `mise install && pnpm bootstrap` in one, `claude` in another). Honored in both launcher sources; only Deck-created Worktrees trigger it — worktrees created on the CLI and merely discovered by ExternalGitWatch, including every worktree seen when a Repository is registered, do not.
+_Avoid_: post-create hook (it is launcher data, not a script Deck owns), provisioning script, autorun (ambiguous about which event)
 
 **Terminal**:
 A persistent shell owned by Deck — one tmux session on the DeckSocket — shown as a row under a Worktree and opened as an xterm.js editor tab addressed by `deck-terminal:/<worktree>/term-N`. Like a file, the Terminal is the durable thing and its tab is just a view onto it: closing the tab leaves the Terminal running, and any Terminal can be opened from any mounted Worktree without a Switch. Its Worktree is fixed when it is created and never changes — a Terminal cannot move to another Worktree or Repository.
@@ -126,6 +130,7 @@ _Avoid_: file watcher, watcher controller (implementation); polling (it is event
 - A **Terminal**'s AgentStatus change to NeedsInput/Completed raises one **AgentStatusNotification**.
 - A **Terminal** belongs to exactly one **Worktree** and lives on the one **DeckSocket**.
 - A **Worktree** row offers its Repository's **TerminalLaunchers** (from the worktree's `.deck/launchers.json`) merged with the user's global ones.
+- Creating a **Worktree** through Deck's Add command fires every **RunOnWorktreeCreate** TerminalLauncher, each into its own headless **Terminal**.
 - A **TerminalSnapshot** captures every **Terminal** on the **DeckSocket**.
 - A **Terminal** may be running one **AgentSession**; the **TerminalSnapshot** captures it so the agent is resumed (not just the shell) on restore.
 - A **Switch** changes which **Worktree** is mounted; a **DetachedOpen** does not.
