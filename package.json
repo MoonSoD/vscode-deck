@@ -78,6 +78,9 @@
               },
               "command": {
                 "type": "string"
+              },
+              "runOnWorktreeCreate": {
+                "type": "boolean"
               }
             },
             "required": [

@@ -74,7 +74,7 @@ function createAcceptingInputBox(onShow?: (box: InputBoxMock) => Promise<void> |
   return box;
 }
 
-function createCommand(rootPath?: string) {
+function createCommand(rootPath?: string, worktreeCreateLaunchers = { run: vi.fn(async () => undefined) }) {
   const switcher = { switchTo: vi.fn(async () => undefined) };
   const detachedOpener = { open: vi.fn(async () => undefined) };
   const refresh = vi.fn();
@@ -92,11 +92,14 @@ function createCommand(rootPath?: string) {
       refresh,
       worktreeRoots,
       worktreeListCache,
+      undefined,
+      worktreeCreateLaunchers,
     ),
     detachedOpener,
     refresh,
     switcher,
     worktreeListCache,
+    worktreeCreateLaunchers,
     worktreeRoots,
   };
 }
@@ -199,9 +202,9 @@ describe('AddWorktreeCommand', () => {
   });
 
   it.each([['Switch'], ['Open in New Window'], [undefined]])(
-    'refreshes after successful creation when post-create action is %s',
+    'refreshes and fires launchers after successful creation when post-create action is %s',
     async (postCreateAction) => {
-      const { command, refresh } = createCommand('/custom/worktrees');
+      const { command, refresh, worktreeCreateLaunchers } = createCommand('/custom/worktrees');
       const input = createAcceptingInputBox();
 
       pickExistingBranch();
@@ -214,8 +217,30 @@ describe('AddWorktreeCommand', () => {
       await command.run({ repositoryPath: '/work/myrepo' });
 
       expect(refresh).toHaveBeenCalledOnce();
+      expect(worktreeCreateLaunchers.run).toHaveBeenCalledWith({
+        worktree: { path: '/custom/worktrees/feature-foo' },
+      });
     },
   );
+
+  it('fires run-on-worktree-create launchers after refreshing the new worktree', async () => {
+    const { command, refresh, worktreeCreateLaunchers } = createCommand('/custom/worktrees');
+    const input = createAcceptingInputBox();
+
+    pickExistingBranch();
+    vi.mocked(vscode.window.createInputBox).mockReturnValue(input as vscode.InputBox);
+    vi.mocked(vscode.window.showInformationMessage).mockImplementation(async () => {
+      expect(refresh).toHaveBeenCalledOnce();
+      expect(worktreeCreateLaunchers.run).toHaveBeenCalledWith({
+        worktree: { path: '/custom/worktrees/feature-foo' },
+      });
+      return undefined;
+    });
+
+    await command.run({ repositoryPath: '/work/myrepo' });
+
+    expect(worktreeCreateLaunchers.run).toHaveBeenCalledOnce();
+  });
 
   it('creates an existing-branch worktree from the remembered root and learns the chosen root', async () => {
     const { command, switcher, worktreeRoots } = createCommand('/custom/worktrees');
@@ -386,7 +411,7 @@ describe('AddWorktreeCommand', () => {
   });
 
   it('surfaces git failures and does not switch', async () => {
-    const { command, refresh, switcher, worktreeRoots } = createCommand();
+    const { command, refresh, switcher, worktreeCreateLaunchers, worktreeRoots } = createCommand();
     const input = createAcceptingInputBox();
 
     pickExistingBranch();
@@ -399,6 +424,7 @@ describe('AddWorktreeCommand', () => {
       'Cannot create worktree: path already exists',
     );
     expect(worktreeRoots.set).not.toHaveBeenCalled();
+    expect(worktreeCreateLaunchers.run).not.toHaveBeenCalled();
     expect(refresh).not.toHaveBeenCalled();
     expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
     expect(switcher.switchTo).not.toHaveBeenCalled();

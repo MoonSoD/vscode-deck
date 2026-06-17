@@ -38,6 +38,10 @@ interface WorktreeListCacheLike {
   add(commonDir: string, worktree: Worktree): Promise<void>;
 }
 
+interface WorktreeCreateLaunchersLike {
+  run(node: { worktree: { path: string } }): Promise<void>;
+}
+
 interface WorktreeRequest {
   path: string;
   branch: string;
@@ -68,6 +72,9 @@ export class AddWorktreeCommand {
       add: async () => undefined,
     },
     private readonly repositoryCommonDirCache: CommonDirCacheLike = PASS_THROUGH_COMMON_DIR_CACHE,
+    private readonly worktreeCreateLaunchers: WorktreeCreateLaunchersLike = {
+      run: async () => undefined,
+    },
   ) {}
 
   async run(node: RepositoryNodeLike | undefined): Promise<void> {
@@ -105,6 +112,7 @@ export class AddWorktreeCommand {
       branch: request.branch,
     });
     this.refresh();
+    await this.worktreeCreateLaunchers.run({ worktree: { path: request.path } });
 
     const postCreateAction = await vscode.window.showInformationMessage(
       `Created worktree ${request.branch}.`,

@@ -23,19 +23,28 @@ export async function createAndOpenTerminal(
   node: WorktreeNodeLike,
   sessionUriCodec: SessionUriCodec,
 ): Promise<string> {
-  const prefix = terminalSessionPrefix(node.worktree.path);
-  const existing = await tmux.listSessions(prefix);
-  const termN = allocateTermN(node.worktree.path, existing.map((session) => session.sessionName));
-  const session = terminalSessionName(node.worktree.path, termN);
-  await tmux.ensureSession(session, node.worktree.path);
+  const { session, term } = await createHeadlessTerminal(tmux, node);
 
   await vscode.commands.executeCommand(
     'vscode.openWith',
-    sessionUriCodec.encode({ worktreePath: node.worktree.path, term: termN }),
+    sessionUriCodec.encode({ worktreePath: node.worktree.path, term }),
     'deck.terminal',
     { viewColumn: vscode.ViewColumn.Active },
   );
   return session;
+}
+
+export async function createHeadlessTerminal(
+  tmux: AddTerminalTmuxCli,
+  node: WorktreeNodeLike,
+): Promise<{ session: string; term: number }> {
+  const prefix = terminalSessionPrefix(node.worktree.path);
+  const existing = await tmux.listSessions(prefix);
+  const term = allocateTermN(node.worktree.path, existing.map((session) => session.sessionName));
+  const session = terminalSessionName(node.worktree.path, term);
+  await tmux.ensureSession(session, node.worktree.path);
+
+  return { session, term };
 }
 
 export class AddTerminalCommand {

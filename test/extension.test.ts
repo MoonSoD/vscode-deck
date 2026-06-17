@@ -8,10 +8,15 @@ const tempRoots: string[] = [];
 const vscodeState = vi.hoisted(() => ({
   addRepositoryArgs: undefined as unknown[] | undefined,
   addTerminalArgs: undefined as unknown[] | undefined,
+  addWorktreeArgs: undefined as unknown[] | undefined,
+  addWorktreeRun: vi.fn(),
   addRepositoryRun: vi.fn(),
   addTerminalRun: vi.fn(),
   runLauncherArgs: undefined as unknown[] | undefined,
   runLauncherRun: vi.fn(),
+  worktreeCreateLauncherRunnerArgs: undefined as unknown[] | undefined,
+  worktreeCreateLauncherRunnerInstance: undefined as unknown,
+  worktreeCreateLauncherRunnerRun: vi.fn(),
   agentDetectionArgs: undefined as unknown[] | undefined,
   agentPaneProbeInstances: [] as Array<{ args: unknown[] }>,
   agentSetupPromptArgs: undefined as unknown[] | undefined,
@@ -287,7 +292,13 @@ vi.mock('../src/switch/worktreeSwitcher', () => ({
 
 
 vi.mock('../src/worktree/addWorktreeCommand', () => ({
-  AddWorktreeCommand: class {},
+  AddWorktreeCommand: class {
+    constructor(...args: unknown[]) {
+      vscodeState.addWorktreeArgs = args;
+    }
+
+    run = vscodeState.addWorktreeRun;
+  },
 }));
 
 vi.mock('../src/worktree/worktreeRemovalCommand', () => ({
@@ -504,6 +515,17 @@ vi.mock('../src/terminal/runLauncherCommand', () => ({
   },
 }));
 
+vi.mock('../src/terminal/worktreeCreateLauncherRunner', () => ({
+  WorktreeCreateLauncherRunner: class {
+    constructor(...args: unknown[]) {
+      vscodeState.worktreeCreateLauncherRunnerArgs = args;
+      vscodeState.worktreeCreateLauncherRunnerInstance = this;
+    }
+
+    run = vscodeState.worktreeCreateLauncherRunnerRun;
+  },
+}));
+
 vi.mock('../src/terminal/openTerminalCommand', () => ({
   OpenTerminalCommand: class {
     constructor(...args: unknown[]) {
@@ -541,7 +563,10 @@ describe('activate', () => {
     vi.clearAllMocks();
     vscodeState.addRepositoryArgs = undefined;
     vscodeState.addTerminalArgs = undefined;
+    vscodeState.addWorktreeArgs = undefined;
     vscodeState.runLauncherArgs = undefined;
+    vscodeState.worktreeCreateLauncherRunnerArgs = undefined;
+    vscodeState.worktreeCreateLauncherRunnerInstance = undefined;
     vscodeState.agentDetectionArgs = undefined;
     vscodeState.agentPaneProbeInstances = [];
     vscodeState.agentSetupPromptArgs = undefined;
@@ -1081,6 +1106,17 @@ describe('activate', () => {
 
     expect(vscodeState.runLauncherArgs?.[0]).toBe(vscodeState.tmuxInstances[0]);
     expect(vscodeState.runLauncherRun).toHaveBeenCalledWith({ worktree: { path: '/work/repo' } });
+  });
+
+  it('injects run-on-worktree-create launchers into AddWorktreeCommand', async () => {
+    const context = createContext();
+
+    await activate(context as never);
+
+    expect(vscodeState.worktreeCreateLauncherRunnerArgs?.[0]).toBe(vscodeState.tmuxInstances[0]);
+    expect(vscodeState.addWorktreeArgs?.at(-1)).toBe(
+      vscodeState.worktreeCreateLauncherRunnerInstance,
+    );
   });
 
   it('registers deck.installAgentHooks through the setup prompt', async () => {

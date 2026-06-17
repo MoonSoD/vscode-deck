@@ -20,3 +20,10 @@ export async function resolveLaunchers(
 export function hasLaunchers(groups: LauncherGroups): boolean {
   return groups.repo.length > 0 || groups.user.length > 0;
 }
+
+export function selectRunOnWorktreeCreateLaunchers(groups: LauncherGroups): TerminalLauncher[] {
+  return [
+    ...groups.repo,
+    ...groups.user,
+  ].filter((launcher) => launcher.runOnWorktreeCreate === true);
+}

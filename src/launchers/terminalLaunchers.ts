@@ -1,6 +1,7 @@
 export interface TerminalLauncher {
   label: string;
   command: string;
+  runOnWorktreeCreate?: boolean;
 }
 
 export function parseTerminalLaunchers(raw: unknown): TerminalLauncher[] {
@@ -14,7 +15,11 @@ export function parseTerminalLaunchers(raw: unknown): TerminalLauncher[] {
       ? entry.label.trim()
       : entry.command;
 
-    return [{ label, command: entry.command }];
+    return [{
+      label,
+      command: entry.command,
+      ...(entry.runOnWorktreeCreate === true ? { runOnWorktreeCreate: true } : {}),
+    }];
   });
 }
 

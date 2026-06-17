@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import { resolveLaunchers } from '../src/launchers/resolveLaunchers';
+import {
+  resolveLaunchers,
+  selectRunOnWorktreeCreateLaunchers,
+} from '../src/launchers/resolveLaunchers';
 
 describe('resolveLaunchers', () => {
   it('returns repository launchers before user launchers without overriding either group', async () => {
@@ -29,5 +32,21 @@ describe('resolveLaunchers', () => {
       repo: [],
       user: [],
     });
+  });
+
+  it('selects run-on-worktree-create launchers repo-first', () => {
+    expect(selectRunOnWorktreeCreateLaunchers({
+      repo: [
+        { label: 'Repo Dev', command: 'npm run dev' },
+        { label: 'Bootstrap', command: 'pnpm bootstrap', runOnWorktreeCreate: true },
+      ],
+      user: [
+        { label: 'Claude', command: 'claude', runOnWorktreeCreate: true },
+        { label: 'Watch', command: 'npm test -- --watch' },
+      ],
+    })).toEqual([
+      { label: 'Bootstrap', command: 'pnpm bootstrap', runOnWorktreeCreate: true },
+      { label: 'Claude', command: 'claude', runOnWorktreeCreate: true },
+    ]);
   });
 });

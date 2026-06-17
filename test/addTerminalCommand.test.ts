@@ -26,7 +26,10 @@ vi.mock('vscode', () => ({
   },
 }));
 
-import { AddTerminalCommand } from '../src/terminal/addTerminalCommand';
+import {
+  AddTerminalCommand,
+  createHeadlessTerminal,
+} from '../src/terminal/addTerminalCommand';
 
 describe('AddTerminalCommand', () => {
   beforeEach(() => {
@@ -119,5 +122,24 @@ describe('AddTerminalCommand', () => {
     expect(vscodeState.executeCommand).toHaveBeenCalledOnce();
     expect(vscodeState.createTerminal).not.toHaveBeenCalled();
     expect(refresh).toHaveBeenCalledOnce();
+  });
+
+  it('creates a headless terminal without opening a custom editor', async () => {
+    const tmux = {
+      listSessions: vi.fn().mockResolvedValueOnce([
+        { sessionName: 'wt-_work_repo__term-1', windowName: 'zsh' },
+      ]),
+      ensureSession: vi.fn(async () => undefined),
+    };
+
+    await expect(createHeadlessTerminal(tmux, {
+      worktree: { path: '/work/repo' },
+    })).resolves.toEqual({
+      session: 'wt-_work_repo__term-2',
+      term: 2,
+    });
+
+    expect(tmux.ensureSession).toHaveBeenCalledWith('wt-_work_repo__term-2', '/work/repo');
+    expect(vscodeState.executeCommand).not.toHaveBeenCalled();
   });
 });

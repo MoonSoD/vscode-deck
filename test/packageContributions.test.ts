@@ -118,6 +118,7 @@ describe('package contributions', () => {
         properties: {
           label: { type: 'string' },
           command: { type: 'string' },
+          runOnWorktreeCreate: { type: 'boolean' },
         },
         required: ['command'],
       },

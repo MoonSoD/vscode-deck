@@ -19,4 +19,16 @@ describe('parseTerminalLaunchers', () => {
       { label: 'npm run dev', command: 'npm run dev' },
     ]);
   });
+
+  it('keeps only an explicit run-on-worktree-create flag', () => {
+    expect(parseTerminalLaunchers([
+      { label: 'Bootstrap', command: 'pnpm bootstrap', runOnWorktreeCreate: true },
+      { label: 'Manual', command: 'npm run dev', runOnWorktreeCreate: false },
+      { label: 'Garbage', command: 'claude', runOnWorktreeCreate: 'true' },
+    ])).toEqual([
+      { label: 'Bootstrap', command: 'pnpm bootstrap', runOnWorktreeCreate: true },
+      { label: 'Manual', command: 'npm run dev' },
+      { label: 'Garbage', command: 'claude' },
+    ]);
+  });
 });
