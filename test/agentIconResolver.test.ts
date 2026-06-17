@@ -75,11 +75,16 @@ describe('resolveAgentIcon', () => {
     });
   });
 
-  it('never resolves a Codex terminal to a Claude asset', () => {
-    const icons = [
-      resolveAgentIcon({ windowName: 'codex', resourcesDir }).iconPath,
-    ];
-
-    expect(icons).not.toContainEqual({ fsPath: '/extension/resources/claude-code.png' });
+  it('keeps a stopped Codex terminal on the Codex identity icon', () => {
+    expect(resolveAgentIcon({
+      windowName: 'codex',
+      resourcesDir,
+      status: { status: 'completed', statusAt: 1710000000, agent: 'codex' },
+    })).toEqual({
+      iconPath: { fsPath: '/extension/resources/codex-code.png' },
+      isAgent: true,
+      agent: 'codex',
+      state: 'identity',
+    });
   });
 });
