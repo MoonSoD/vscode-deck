@@ -4,6 +4,7 @@ const vscodeState = vi.hoisted(() => ({
   executeCommand: vi.fn(async () => undefined),
   showQuickPick: vi.fn(),
   userLaunchers: [] as unknown[],
+  repositoryLaunchers: [] as unknown[],
 }));
 
 vi.mock('vscode', () => ({
@@ -22,7 +23,11 @@ vi.mock('vscode', () => ({
   },
   workspace: {
     getConfiguration: () => ({
-      get: (_key: string, defaultValue: unknown) => vscodeState.userLaunchers ?? defaultValue,
+      get: (key: string, defaultValue: unknown) => {
+        if (key === 'terminalLaunchers') return vscodeState.userLaunchers ?? defaultValue;
+        if (key === 'repositoryLaunchers') return vscodeState.repositoryLaunchers ?? defaultValue;
+        return defaultValue;
+      },
     }),
   },
 }));
@@ -33,9 +38,10 @@ describe('RunLauncherCommand', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vscodeState.userLaunchers = [];
+    vscodeState.repositoryLaunchers = [];
   });
 
-  it('shows repository launchers before user launchers and runs the picked command in a new Terminal', async () => {
+  it('shows launcher groups in source order and runs the picked command in a new Terminal', async () => {
     const tmux = {
       listSessions: vi.fn(async () => []),
       ensureSession: vi.fn(async () => undefined),
@@ -44,9 +50,13 @@ describe('RunLauncherCommand', () => {
     const refresh = vi.fn();
     const resolveLaunchers = vi.fn(async () => ({
       repo: [{ label: 'Repo Dev', command: 'npm run dev' }],
+      repositoryLocal: [{ label: 'Local Bootstrap', command: 'pnpm bootstrap' }],
       user: [{ label: 'User Watch', command: 'npm test -- --watch' }],
     }));
     vscodeState.userLaunchers = [{ label: 'User Watch', command: 'npm test -- --watch' }];
+    vscodeState.repositoryLaunchers = [
+      { repository: '/work/repo', launchers: [{ label: 'Local Bootstrap', command: 'pnpm bootstrap' }] },
+    ];
     vscodeState.showQuickPick.mockImplementation(async (items: Array<{ label: string }>) =>
       items.find((item) => item.label === 'User Watch'),
     );
@@ -55,11 +65,17 @@ describe('RunLauncherCommand', () => {
       worktree: { path: '/work/repo' },
     });
 
-    expect(resolveLaunchers).toHaveBeenCalledWith('/work/repo', vscodeState.userLaunchers);
+    expect(resolveLaunchers).toHaveBeenCalledWith(
+      '/work/repo',
+      vscodeState.userLaunchers,
+      vscodeState.repositoryLaunchers,
+    );
     expect(vscodeState.showQuickPick).toHaveBeenCalledWith(
       [
         { kind: -1, label: 'This repository' },
         expect.objectContaining({ label: 'Repo Dev', description: 'npm run dev' }),
+        { kind: -1, label: 'This repository (local)' },
+        expect.objectContaining({ label: 'Local Bootstrap', description: 'pnpm bootstrap' }),
         { kind: -1, label: 'User' },
         expect.objectContaining({ label: 'User Watch', description: 'npm test -- --watch' }),
       ],
@@ -88,7 +104,7 @@ describe('RunLauncherCommand', () => {
       ensureSession: vi.fn(async () => undefined),
       sendCommandLine: vi.fn(async () => undefined),
     };
-    const resolveLaunchers = vi.fn(async () => ({ repo: [], user: [] }));
+    const resolveLaunchers = vi.fn(async () => ({ repo: [], repositoryLocal: [], user: [] }));
     vscodeState.showQuickPick.mockImplementation(async (items: Array<{ label: string }>) => items[0]);
 
     await new RunLauncherCommand(tmux, { refresh: vi.fn(), resolveLaunchers }).run({
@@ -101,7 +117,7 @@ describe('RunLauncherCommand', () => {
     );
     expect(vscodeState.executeCommand).toHaveBeenCalledWith(
       'workbench.action.openSettings',
-      'deck.terminalLaunchers',
+      'deck.repositoryLaunchers',
     );
     expect(tmux.ensureSession).not.toHaveBeenCalled();
     expect(tmux.sendCommandLine).not.toHaveBeenCalled();

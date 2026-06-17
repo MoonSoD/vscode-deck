@@ -87,6 +87,44 @@
               "command"
             ]
           }
+        },
+        "deck.repositoryLaunchers": {
+          "type": "array",
+          "default": [],
+          "description": "TerminalLaunchers available only for one Repository.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "repository": {
+                "type": "string",
+                "description": "Path to a Worktree in the Repository these launchers belong to."
+              },
+              "launchers": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "label": {
+                      "type": "string"
+                    },
+                    "command": {
+                      "type": "string"
+                    },
+                    "runOnWorktreeCreate": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "command"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "repository",
+              "launchers"
+            ]
+          }
         }
       }
     },

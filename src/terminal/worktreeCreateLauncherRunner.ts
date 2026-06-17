@@ -19,7 +19,9 @@ interface WorktreeCreateLauncherRunnerOptions {
   resolveLaunchers?: (
     worktreePath: string,
     userLauncherConfig: unknown,
+    repositoryLauncherConfig: unknown,
   ) => Promise<LauncherGroups>;
+  resolveCommonDir?: (repositoryPath: string) => Promise<string | null>;
   beforeCreate?: () => Promise<void>;
 }
 
@@ -28,6 +30,7 @@ export class WorktreeCreateLauncherRunner {
   private readonly resolveLaunchers: (
     worktreePath: string,
     userLauncherConfig: unknown,
+    repositoryLauncherConfig: unknown,
   ) => Promise<LauncherGroups>;
   private readonly beforeCreate: () => Promise<void>;
 
@@ -36,7 +39,10 @@ export class WorktreeCreateLauncherRunner {
     options: WorktreeCreateLauncherRunnerOptions = {},
   ) {
     this.refresh = options.refresh ?? (() => undefined);
-    this.resolveLaunchers = options.resolveLaunchers ?? resolveLauncherGroups;
+    this.resolveLaunchers = options.resolveLaunchers ?? ((worktreePath, userLaunchers, repositoryLaunchers) =>
+      resolveLauncherGroups(worktreePath, userLaunchers, repositoryLaunchers, {
+        resolveCommonDir: options.resolveCommonDir,
+      }));
     this.beforeCreate = options.beforeCreate ?? (() => Promise.resolve());
   }
 
@@ -44,7 +50,8 @@ export class WorktreeCreateLauncherRunner {
     if (!node) return;
 
     const userLaunchers = vscode.workspace.getConfiguration('deck').get('terminalLaunchers', []);
-    const groups = await this.resolveLaunchers(node.worktree.path, userLaunchers);
+    const repositoryLaunchers = vscode.workspace.getConfiguration('deck').get('repositoryLaunchers', []);
+    const groups = await this.resolveLaunchers(node.worktree.path, userLaunchers, repositoryLaunchers);
     const launchers = selectRunOnWorktreeCreateLaunchers(groups);
     if (launchers.length === 0) return;
 

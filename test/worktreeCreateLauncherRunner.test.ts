@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const vscodeState = vi.hoisted(() => ({
   executeCommand: vi.fn(async () => undefined),
   userLaunchers: [] as unknown[],
+  repositoryLaunchers: [] as unknown[],
 }));
 
 vi.mock('vscode', () => ({
@@ -11,7 +12,11 @@ vi.mock('vscode', () => ({
   },
   workspace: {
     getConfiguration: () => ({
-      get: (_key: string, defaultValue: unknown) => vscodeState.userLaunchers ?? defaultValue,
+      get: (key: string, defaultValue: unknown) => {
+        if (key === 'terminalLaunchers') return vscodeState.userLaunchers ?? defaultValue;
+        if (key === 'repositoryLaunchers') return vscodeState.repositoryLaunchers ?? defaultValue;
+        return defaultValue;
+      },
     }),
   },
 }));
@@ -22,9 +27,10 @@ describe('WorktreeCreateLauncherRunner', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vscodeState.userLaunchers = [];
+    vscodeState.repositoryLaunchers = [];
   });
 
-  it('runs flagged launchers repo-first in distinct headless terminals', async () => {
+  it('runs flagged launchers in source order in distinct headless terminals', async () => {
     const sessions: Array<{ sessionName: string; windowName: string }> = [];
     const tmux = {
       listSessions: vi.fn(async (prefix?: string) =>
@@ -41,25 +47,43 @@ describe('WorktreeCreateLauncherRunner', () => {
         { label: 'Dev', command: 'npm run dev' },
         { label: 'Bootstrap', command: 'pnpm bootstrap', runOnWorktreeCreate: true },
       ],
+      repositoryLocal: [
+        { label: 'Local Claude', command: 'claude', runOnWorktreeCreate: true },
+      ],
       user: [
-        { label: 'Claude', command: 'claude', runOnWorktreeCreate: true },
+        { label: 'User Watch', command: 'npm test -- --watch', runOnWorktreeCreate: true },
       ],
     }));
-    vscodeState.userLaunchers = [{ label: 'Claude', command: 'claude', runOnWorktreeCreate: true }];
+    vscodeState.repositoryLaunchers = [
+      { repository: '/work/repo', launchers: [{ label: 'Local Claude', command: 'claude' }] },
+    ];
+    vscodeState.userLaunchers = [
+      { label: 'User Watch', command: 'npm test -- --watch', runOnWorktreeCreate: true },
+    ];
 
     await new WorktreeCreateLauncherRunner(tmux, { refresh, resolveLaunchers }).run({
       worktree: { path: '/work/repo' },
     });
 
-    expect(resolveLaunchers).toHaveBeenCalledWith('/work/repo', vscodeState.userLaunchers);
+    expect(resolveLaunchers).toHaveBeenCalledWith(
+      '/work/repo',
+      vscodeState.userLaunchers,
+      vscodeState.repositoryLaunchers,
+    );
     expect(tmux.ensureSession).toHaveBeenNthCalledWith(1, 'wt-_work_repo__term-1', '/work/repo');
     expect(tmux.ensureSession).toHaveBeenNthCalledWith(2, 'wt-_work_repo__term-2', '/work/repo');
+    expect(tmux.ensureSession).toHaveBeenNthCalledWith(3, 'wt-_work_repo__term-3', '/work/repo');
     expect(tmux.sendCommandLine).toHaveBeenNthCalledWith(
       1,
       'wt-_work_repo__term-1',
       'pnpm bootstrap',
     );
     expect(tmux.sendCommandLine).toHaveBeenNthCalledWith(2, 'wt-_work_repo__term-2', 'claude');
+    expect(tmux.sendCommandLine).toHaveBeenNthCalledWith(
+      3,
+      'wt-_work_repo__term-3',
+      'npm test -- --watch',
+    );
     expect(vscodeState.executeCommand).not.toHaveBeenCalled();
     expect(refresh).toHaveBeenCalledOnce();
   });
@@ -74,6 +98,7 @@ describe('WorktreeCreateLauncherRunner', () => {
     const beforeCreate = vi.fn(async () => undefined);
     const resolveLaunchers = vi.fn(async () => ({
       repo: [{ label: 'Dev', command: 'npm run dev' }],
+      repositoryLocal: [],
       user: [{ label: 'Watch', command: 'npm test -- --watch' }],
     }));
 

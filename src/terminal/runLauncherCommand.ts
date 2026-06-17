@@ -27,7 +27,9 @@ interface RunLauncherCommandOptions {
   resolveLaunchers?: (
     worktreePath: string,
     userLauncherConfig: unknown,
+    repositoryLauncherConfig: unknown,
   ) => Promise<LauncherGroups>;
+  resolveCommonDir?: (repositoryPath: string) => Promise<string | null>;
   beforeCreate?: () => Promise<void>;
 }
 
@@ -37,6 +39,7 @@ export class RunLauncherCommand {
   private readonly resolveLaunchers: (
     worktreePath: string,
     userLauncherConfig: unknown,
+    repositoryLauncherConfig: unknown,
   ) => Promise<LauncherGroups>;
   private readonly beforeCreate: () => Promise<void>;
 
@@ -46,7 +49,10 @@ export class RunLauncherCommand {
   ) {
     this.refresh = options.refresh ?? (() => undefined);
     this.sessionUriCodec = options.sessionUriCodec ?? new SessionUriCodec();
-    this.resolveLaunchers = options.resolveLaunchers ?? resolveLauncherGroups;
+    this.resolveLaunchers = options.resolveLaunchers ?? ((worktreePath, userLaunchers, repositoryLaunchers) =>
+      resolveLauncherGroups(worktreePath, userLaunchers, repositoryLaunchers, {
+        resolveCommonDir: options.resolveCommonDir,
+      }));
     this.beforeCreate = options.beforeCreate ?? (() => Promise.resolve());
   }
 
@@ -54,13 +60,14 @@ export class RunLauncherCommand {
     if (!node) return;
 
     const userLaunchers = vscode.workspace.getConfiguration('deck').get('terminalLaunchers', []);
-    const groups = await this.resolveLaunchers(node.worktree.path, userLaunchers);
+    const repositoryLaunchers = vscode.workspace.getConfiguration('deck').get('repositoryLaunchers', []);
+    const groups = await this.resolveLaunchers(node.worktree.path, userLaunchers, repositoryLaunchers);
     const picked = await vscode.window.showQuickPick(toQuickPickItems(groups), {
       placeHolder: 'Run Terminal Launcher',
     });
     if (!picked) return;
     if (picked.configure) {
-      await vscode.commands.executeCommand('workbench.action.openSettings', 'deck.terminalLaunchers');
+      await vscode.commands.executeCommand('workbench.action.openSettings', 'deck.repositoryLaunchers');
       return;
     }
     if (!picked.launcher) return;
@@ -79,6 +86,7 @@ function toQuickPickItems(groups: LauncherGroups): LauncherQuickPickItem[] {
 
   return [
     ...groupItems('This repository', groups.repo),
+    ...groupItems('This repository (local)', groups.repositoryLocal),
     ...groupItems('User', groups.user),
   ];
 }

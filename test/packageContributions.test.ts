@@ -110,17 +110,34 @@ describe('package contributions', () => {
   });
 
   it('contributes TerminalLauncher settings', () => {
+    const launcherItemSchema = {
+      type: 'object',
+      properties: {
+        label: { type: 'string' },
+        command: { type: 'string' },
+        runOnWorktreeCreate: { type: 'boolean' },
+      },
+      required: ['command'],
+    };
+
     expect(pkg.contributes.configuration?.properties?.['deck.terminalLaunchers']).toMatchObject({
+      type: 'array',
+      default: [],
+      items: launcherItemSchema,
+    });
+    expect(pkg.contributes.configuration?.properties?.['deck.repositoryLaunchers']).toMatchObject({
       type: 'array',
       default: [],
       items: {
         type: 'object',
         properties: {
-          label: { type: 'string' },
-          command: { type: 'string' },
-          runOnWorktreeCreate: { type: 'boolean' },
+          repository: { type: 'string' },
+          launchers: {
+            type: 'array',
+            items: launcherItemSchema,
+          },
         },
-        required: ['command'],
+        required: ['repository', 'launchers'],
       },
     });
   });

@@ -234,10 +234,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const runLauncher = new RunLauncherCommand(tmux, {
     refresh: refreshTree,
     beforeCreate: ensureSnapshotRestored,
+    resolveCommonDir: (repositoryPath) =>
+      resolveCommonDirSafe(repositoryCommonDirCache, repositoryPath),
   });
   const worktreeCreateLaunchers = new WorktreeCreateLauncherRunner(tmux, {
     refresh: refreshTree,
     beforeCreate: ensureSnapshotRestored,
+    resolveCommonDir: (repositoryPath) =>
+      resolveCommonDirSafe(repositoryCommonDirCache, repositoryPath),
   });
   const terminalEditorProvider = new TerminalEditorProvider(
     context.extensionUri,
