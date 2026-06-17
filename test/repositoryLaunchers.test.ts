@@ -20,7 +20,7 @@ describe('parseRepositoryLaunchers', () => {
         ],
       },
       { repository: '', launchers: [{ command: 'ignored' }] },
-      { repository: '/work/empty', launchers: 'ignored' },
+      { repository: '/work/invalid', launchers: 'ignored' },
       null,
     ])).toEqual([
       {
@@ -29,10 +29,6 @@ describe('parseRepositoryLaunchers', () => {
           { label: 'Bootstrap', command: 'pnpm bootstrap', runOnWorktreeCreate: true },
           { label: 'npm test', command: 'npm test' },
         ],
-      },
-      {
-        repository: '/work/empty',
-        launchers: [],
       },
     ]);
   });

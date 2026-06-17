@@ -11,6 +11,7 @@ export function parseRepositoryLaunchers(raw: unknown): RepositoryLaunchers[] {
   return raw.flatMap((entry) => {
     if (!isRecord(entry)) return [];
     if (typeof entry.repository !== 'string' || entry.repository.trim() === '') return [];
+    if (!Array.isArray(entry.launchers)) return [];
 
     return [{
       repository: entry.repository.trim(),
