@@ -104,11 +104,15 @@ The toast Deck raises when a Terminal's AgentStatus changes to NeedsInput or Com
 _Avoid_: alert, popup; "agent needs input"/"agent done" alone (unactionable without identity)
 
 **TerminalLauncher**:
-A user-defined command that opens a new Terminal and runs in it. Sourced from two places merged in a Quick Pick behind a Worktree row's launch button: global user settings (`deck.terminalLaunchers`) and a per-repo committed file (`<worktree>/.deck/launchers.json`), repo entries shown first. Deck types the command into a fresh Terminal exactly as the user would, so a launcher that runs an agent is observed and resumed by the existing AgentSession machinery — Deck still does not own the agent lifecycle. A launcher carries a single command; sequence steps with `&&` (which also fails fast); run several in parallel by defining several launchers.
+A user-defined command that opens a new Terminal and runs in it. Sourced from three places merged in a Quick Pick behind a Worktree row's launch button: a per-repo committed file (`<worktree>/.deck/launchers.json`), the user-local RepositoryLaunchers for that Repository, and global user settings (`deck.terminalLaunchers`) — committed-repo entries shown first, then repository-local, then global. Deck types the command into a fresh Terminal exactly as the user would, so a launcher that runs an agent is observed and resumed by the existing AgentSession machinery — Deck still does not own the agent lifecycle. A launcher carries a single command; sequence steps with `&&` (which also fails fast); run several in parallel by defining several launchers.
 _Avoid_: agent preset (no prompt templates/transports — it is just a command), task (VS Code tasks are a separate system), button (the surface is one row button opening a Quick Pick, not a button per launcher — VS Code cannot render per-row dynamic menu buttons)
 
+**RepositoryLaunchers**:
+The user-local TerminalLaunchers for one Repository, authored in user settings (`deck.repositoryLaunchers`, an array of `{ repository, launchers }` entries keyed by the registered Repository path) rather than committed to the repo — for launchers that are personal to one Repository but should not live in its `.deck/launchers.json` (e.g. `claude`, a personal bootstrap). They are config keyed by Repository identity, **not** a registration: an entry whose path matches no registered Repository is inert, and editing it never adds, removes, or reorders a Repository in the RepositoryRegistry. Resolved by common dir, so it applies to every Worktree of the Repository.
+_Avoid_: project launchers (it is per-Repository — "project" is a Worktree to a VS Code user), workspace launchers (not VS Code workspace settings — those are per-Worktree and committable), local .deck (it is settings, not a repo file)
+
 **RunOnWorktreeCreate**:
-A TerminalLauncher flag (`runOnWorktreeCreate: true`) that makes Deck fire that launcher automatically — headless, no editor tab — when a Worktree is created through Deck's Add command, turning launchers into per-worktree bootstrap (e.g. `mise install && pnpm bootstrap` in one, `claude` in another). Honored in both launcher sources; only Deck-created Worktrees trigger it — worktrees created on the CLI and merely discovered by ExternalGitWatch, including every worktree seen when a Repository is registered, do not.
+A TerminalLauncher flag (`runOnWorktreeCreate: true`) that makes Deck fire that launcher automatically — headless, no editor tab — when a Worktree is created through Deck's Add command, turning launchers into per-worktree bootstrap (e.g. `mise install && pnpm bootstrap` in one, `claude` in another). Honored in all three launcher sources; only Deck-created Worktrees trigger it — worktrees created on the CLI and merely discovered by ExternalGitWatch, including every worktree seen when a Repository is registered, do not.
 _Avoid_: post-create hook (it is launcher data, not a script Deck owns), provisioning script, autorun (ambiguous about which event)
 
 **Terminal**:
@@ -129,7 +133,8 @@ _Avoid_: file watcher, watcher controller (implementation); polling (it is event
 - A **Worktree** hosts zero or more **Terminals**.
 - A **Terminal**'s AgentStatus change to NeedsInput/Completed raises one **AgentStatusNotification**.
 - A **Terminal** belongs to exactly one **Worktree** and lives on the one **DeckSocket**.
-- A **Worktree** row offers its Repository's **TerminalLaunchers** (from the worktree's `.deck/launchers.json`) merged with the user's global ones.
+- A **Worktree** row offers its Repository's **TerminalLaunchers** from three sources: the worktree's committed `.deck/launchers.json`, the Repository's user-local **RepositoryLaunchers** (`deck.repositoryLaunchers`), and the user's global ones (`deck.terminalLaunchers`).
+- **RepositoryLaunchers** reference a **Repository** by path but never register one; the **RepositoryRegistry** remains the sole source of which Repositories exist.
 - Creating a **Worktree** through Deck's Add command fires every **RunOnWorktreeCreate** TerminalLauncher, each into its own headless **Terminal**.
 - A **TerminalSnapshot** captures every **Terminal** on the **DeckSocket**.
 - A **Terminal** may be running one **AgentSession**; the **TerminalSnapshot** captures it so the agent is resumed (not just the shell) on restore.
