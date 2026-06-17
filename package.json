@@ -69,18 +69,21 @@
         "deck.terminalLaunchers": {
           "type": "array",
           "default": [],
-          "description": "TerminalLaunchers available in every repository.",
+          "markdownDescription": "TerminalLaunchers available in every repository. Each opens a Terminal and runs `command` (sequence steps with `&&`).\n\nExample:\n```json\n[{ \"label\": \"Claude\", \"command\": \"claude\", \"runOnWorktreeCreate\": true }]\n```",
           "items": {
             "type": "object",
             "properties": {
               "label": {
-                "type": "string"
+                "type": "string",
+                "description": "Display name in the launcher Quick Pick. Defaults to the command."
               },
               "command": {
-                "type": "string"
+                "type": "string",
+                "description": "Shell command typed into a fresh Terminal."
               },
               "runOnWorktreeCreate": {
-                "type": "boolean"
+                "type": "boolean",
+                "description": "Run automatically (headless) when a Worktree is created through Deck."
               }
             },
             "required": [
@@ -91,13 +94,13 @@
         "deck.repositoryLaunchers": {
           "type": "array",
           "default": [],
-          "description": "TerminalLaunchers available only for one Repository.",
+          "markdownDescription": "TerminalLaunchers for a single Repository, kept in your user settings instead of committed to the repo (`.deck/launchers.json`). `repository` is any path inside the repo — a leading `~` is expanded, and it is matched by git common dir, so it applies to every Worktree.\n\nExample:\n```json\n[{ \"repository\": \"~/code/superset\", \"launchers\": [\n  { \"label\": \"Bootstrap\", \"command\": \"mise install && pnpm bootstrap\", \"runOnWorktreeCreate\": true },\n  { \"label\": \"Claude\", \"command\": \"claude\" }\n] }]\n```",
           "items": {
             "type": "object",
             "properties": {
               "repository": {
                 "type": "string",
-                "description": "Path to a Worktree in the Repository these launchers belong to."
+                "markdownDescription": "Any path inside the Repository (a leading `~` is expanded). Matched by git common dir, so it applies to every Worktree."
               },
               "launchers": {
                 "type": "array",
@@ -105,13 +108,16 @@
                   "type": "object",
                   "properties": {
                     "label": {
-                      "type": "string"
+                      "type": "string",
+                      "description": "Display name in the launcher Quick Pick. Defaults to the command."
                     },
                     "command": {
-                      "type": "string"
+                      "type": "string",
+                      "description": "Shell command typed into a fresh Terminal."
                     },
                     "runOnWorktreeCreate": {
-                      "type": "boolean"
+                      "type": "boolean",
+                      "description": "Run automatically (headless) when a Worktree is created through Deck."
                     }
                   },
                   "required": [
