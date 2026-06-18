@@ -1,12 +1,9 @@
 import type { AgentStatusDecorationNodeKind, AgentStatusDecorationTerminal } from './agentStatusDecorations';
+import {
+  agentStatusDecorationResourceUri,
+  type AgentStatusDecorationResourceUri,
+} from './agentStatusDecorationUris';
 import { terminalSessionNumber } from '../terminal/tmuxSafe';
-
-export interface AgentStatusDecorationResourceUri {
-  scheme: string;
-  authority?: string;
-  path: string;
-  query?: string;
-}
 
 export function agentStatusDecorationInvalidationUris(
   sessionNames: Iterable<string>,
@@ -17,13 +14,13 @@ export function agentStatusDecorationInvalidationUris(
   const seen = new Set<string>();
 
   for (const sessionName of sessionNames) {
-    addUri(uris, seen, toResourceUri(agentStatusDecorationUri('terminal', sessionName)));
+    addUri(uris, seen, agentStatusDecorationResourceUri('terminal', sessionName));
 
     const terminal = terminalsBySession.get(sessionName);
     if (terminal === undefined) continue;
 
-    addUri(uris, seen, toResourceUri(agentStatusDecorationUri('worktree', terminal.worktreePath)));
-    addUri(uris, seen, toResourceUri(agentStatusDecorationUri('repository', terminal.repositoryPath)));
+    addUri(uris, seen, agentStatusDecorationResourceUri('worktree', terminal.worktreePath));
+    addUri(uris, seen, agentStatusDecorationResourceUri('repository', terminal.repositoryPath));
 
     const tabUri = terminalTabUri(terminal);
     if (tabUri !== undefined) addUri(uris, seen, tabUri);
@@ -40,40 +37,16 @@ export function agentStatusDecorationCollapseInvalidationUris(
   const uris: AgentStatusDecorationResourceUri[] = [];
   const seen = new Set<string>();
 
-  addUri(uris, seen, toResourceUri(agentStatusDecorationUri(kind, id)));
+  addUri(uris, seen, agentStatusDecorationResourceUri(kind, id));
   for (const terminal of terminals) {
     if (!isDescendant(kind, id, terminal)) continue;
     if (kind === 'repository') {
-      addUri(uris, seen, toResourceUri(agentStatusDecorationUri('worktree', terminal.worktreePath)));
+      addUri(uris, seen, agentStatusDecorationResourceUri('worktree', terminal.worktreePath));
     }
-    addUri(uris, seen, toResourceUri(agentStatusDecorationUri('terminal', terminal.sessionName)));
+    addUri(uris, seen, agentStatusDecorationResourceUri('terminal', terminal.sessionName));
   }
 
   return uris;
-}
-
-function toResourceUri(uri: AgentStatusDecorationUri): AgentStatusDecorationResourceUri {
-  return {
-    scheme: uri.scheme,
-    authority: '',
-    path: uri.path,
-    query: '',
-  };
-}
-
-interface AgentStatusDecorationUri {
-  scheme: string;
-  path: string;
-}
-
-function agentStatusDecorationUri(
-  kind: AgentStatusDecorationNodeKind,
-  id: string,
-): AgentStatusDecorationUri {
-  return {
-    scheme: 'deck-status',
-    path: `/${kind}/${encodeURIComponent(id)}`,
-  };
 }
 
 function terminalTabUri(terminal: AgentStatusDecorationTerminal): AgentStatusDecorationResourceUri | undefined {

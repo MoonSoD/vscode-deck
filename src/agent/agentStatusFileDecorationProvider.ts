@@ -6,7 +6,7 @@ import {
   parseAgentStatusDecorationUri,
   provideAgentStatusDecoration,
 } from './agentStatusDecorations';
-import type { AgentStatusDecorationResourceUri } from './agentStatusDecorationInvalidations';
+import type { AgentStatusDecorationResourceUri } from './agentStatusDecorationUris';
 import { SessionUriCodec, terminalUriScheme } from '../terminal/sessionUriCodec';
 
 interface AgentStatusChange {

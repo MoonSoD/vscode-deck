@@ -15,11 +15,12 @@ import {
 } from '../terminal/terminalSession';
 import type { AgentStatus } from '../agent/agentStatusStore';
 import {
-  agentStatusDecorationUri,
+  agentStatusDecorationResourceUri,
   AgentStatusDecorationRollups,
+  type AgentStatusDecorationNodeKind,
+  type AgentStatusDecorationResourceUri,
   type AgentStatusDecorationTerminal,
 } from '../agent/agentStatusDecorations';
-import type { AgentStatusDecorationResourceUri } from '../agent/agentStatusDecorationInvalidations';
 import { resolveAgentIcon } from '../agent/agentIconResolver';
 import { excludePending } from './excludePending';
 import { reconcileWorktreeOrder } from './reconcileWorktreeOrder';
@@ -646,16 +647,10 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
 }
 
 function toDecorationUri(
-  kind: 'repository' | 'worktree' | 'terminal',
+  kind: AgentStatusDecorationNodeKind,
   id: string,
 ): vscode.Uri {
-  const uri = agentStatusDecorationUri(kind, id);
-  return vscode.Uri.from({
-    scheme: uri.scheme,
-    authority: '',
-    path: uri.path,
-    query: '',
-  });
+  return vscode.Uri.from(agentStatusDecorationResourceUri(kind, id));
 }
 
 function sameWorktrees(left: readonly Worktree[], right: readonly Worktree[]): boolean {

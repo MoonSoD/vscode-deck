@@ -2,23 +2,28 @@ import type { AgentStatus } from './agentStatusStore';
 import {
   agentStatusDecorationCollapseInvalidationUris,
   agentStatusDecorationInvalidationUris,
-  type AgentStatusDecorationResourceUri,
 } from './agentStatusDecorationInvalidations';
+import {
+  agentStatusDecorationScheme,
+  type AgentStatusDecorationNodeKind,
+  type AgentStatusDecorationResourceUri,
+  type AgentStatusDecorationUri,
+} from './agentStatusDecorationUris';
 
-export const agentStatusDecorationScheme = 'deck-status';
-
-export interface AgentStatusDecorationUri {
-  scheme: string;
-  path: string;
-}
+export {
+  agentStatusDecorationResourceUri,
+  agentStatusDecorationScheme,
+  agentStatusDecorationUri,
+  type AgentStatusDecorationNodeKind,
+  type AgentStatusDecorationResourceUri,
+  type AgentStatusDecorationUri,
+} from './agentStatusDecorationUris';
 
 export interface AgentStatusDecoration {
   badge: '•';
   colorId: 'list.warningForeground' | 'textLink.foreground' | 'errorForeground';
   tooltip: string;
 }
-
-export type AgentStatusDecorationNodeKind = 'repository' | 'worktree' | 'terminal';
 
 export interface AgentStatusDecorationTerminal {
   repositoryPath: string;
@@ -31,18 +36,6 @@ type AttentionStatus = AgentStatus & (
   | { status: 'failed' }
   | { status: 'completed' }
 );
-
-export function agentStatusDecorationUri(
-  kindOrSessionName: AgentStatusDecorationNodeKind | string,
-  id?: string,
-): AgentStatusDecorationUri {
-  const kind = id === undefined ? 'terminal' : kindOrSessionName as AgentStatusDecorationNodeKind;
-  const value = id ?? kindOrSessionName;
-  return {
-    scheme: agentStatusDecorationScheme,
-    path: `/${kind}/${encodeURIComponent(value)}`,
-  };
-}
 
 export function parseAgentStatusDecorationUri(
   uri: AgentStatusDecorationUri,
