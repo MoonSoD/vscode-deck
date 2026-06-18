@@ -221,28 +221,25 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
     for (const session of sessions) {
       const node = this.renderedTerminals.get(session.sessionName);
       if (!node) continue;
-      if (node.update(
-        session,
-        node.worktreeNode,
-        this.isCurrentWorktree(node.worktreePath),
-        this.agentStatuses?.get(session.sessionName),
-      )) {
-        this._onDidChangeTreeData.fire(node);
-      }
+      this.refreshTerminalDisplay(node, session);
     }
   }
 
   private refreshRenderedTerminals(): void {
     for (const node of this.renderedTerminals.values()) {
-      if (node.update(
-        node.terminal,
-        node.worktreeNode,
-        this.isCurrentWorktree(node.worktreePath),
-        this.agentStatuses?.get(node.terminal.sessionName),
-      )) {
-        this._onDidChangeTreeData.fire(node);
-      }
+      this.refreshTerminalDisplay(node, node.terminal);
     }
+  }
+
+  private refreshTerminalDisplay(node: TerminalNode, terminal: TmuxSession): void {
+    if (!node.update(
+      terminal,
+      node.worktreeNode,
+      this.isCurrentWorktree(node.worktreePath),
+      this.agentStatuses?.get(terminal.sessionName),
+    )) return;
+
+    this._onDidChangeTreeData.fire(node);
   }
 
   getTreeItem(element: RepositoryTreeNode): vscode.TreeItem {
@@ -511,10 +508,7 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
   }
 
   private toTerminalNodes(element: WorktreeNode, terminals: readonly CachedTerminalSession[]): RepositoryTreeNode[] {
-    const activeWorktreePath = this.currentWorktreePath();
-    const isActiveWorktree =
-      activeWorktreePath !== undefined &&
-      path.resolve(element.worktree.path) === path.resolve(activeWorktreePath);
+    const isActiveWorktree = this.isCurrentWorktree(element.worktree.path);
     const liveSessionNames = new Set(terminals.map((terminal) => terminal.sessionName));
     const nodes = terminals.map(
       (terminal) => {
