@@ -158,6 +158,18 @@ describe('package contributions', () => {
     });
   });
 
+  it('contributes the padded tree Terminal icon font', () => {
+    expect(pkg.contributes.icons?.['deck-terminal']).toEqual({
+      description: 'Terminal (padded)',
+      default: {
+        fontPath: './resources/deck-icons.woff',
+        fontCharacter: '\\E001',
+      },
+    });
+    expect(existsSync(join(process.cwd(), 'resources/deck-icons.woff'))).toBe(true);
+    expect(existsSync(join(process.cwd(), 'resources/deck-icons.LICENSE'))).toBe(true);
+  });
+
   it('contributes Deck Terminal find command and keybindings', () => {
     expect(pkg.contributes.commands).toContainEqual({
       command: 'deck.terminal.find',

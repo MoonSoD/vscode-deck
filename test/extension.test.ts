@@ -175,6 +175,9 @@ vi.mock('vscode', () => ({
   ThemeColor: class {
     constructor(readonly id: string) {}
   },
+  ThemeIcon: class {
+    constructor(readonly id: string) {}
+  },
   commands: {
     executeCommand: vscodeState.executeCommand,
     registerCommand: vscodeState.registerCommand,

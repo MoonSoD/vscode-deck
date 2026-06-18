@@ -75,6 +75,10 @@ RED→GREEN: test3→impl3
 
 Each test responds to what you learned from the previous cycle. Never refactor while RED — get to GREEN first.
 
+## Tree Icons
+
+Tree Terminal icons are generated. Never hand-edit padded assets or `resources/deck-icons.woff`; update `scripts/generate-tree-icons.py`, run it, and commit the outputs. See `docs/icon-guidelines.md`.
+
 ## Interface Design
 
 ### Deep Modules

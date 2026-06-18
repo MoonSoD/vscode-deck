@@ -33,6 +33,15 @@
   ],
   "main": "./dist/extension.js",
   "contributes": {
+    "icons": {
+      "deck-terminal": {
+        "description": "Terminal (padded)",
+        "default": {
+          "fontPath": "./resources/deck-icons.woff",
+          "fontCharacter": "\\E001"
+        }
+      }
+    },
     "configuration": {
       "title": "Deck",
       "properties": {

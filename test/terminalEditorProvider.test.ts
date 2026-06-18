@@ -6,6 +6,9 @@ const cfg = vi.hoisted(() => ({
 }));
 
 vi.mock('vscode', () => ({
+  ThemeIcon: class {
+    constructor(readonly id: string) {}
+  },
   Uri: {
     joinPath: (base: unknown, ...paths: string[]) => ({ base, paths }),
   },
@@ -183,10 +186,7 @@ describe('TerminalEditorProvider', () => {
     await flush();
     expect(terminalSessions).toHaveBeenCalledWith('wt-_work_alpha-main__term-1');
     expect(terminalPanel.title).toBe('zsh');
-    expect((terminalPanel as { iconPath?: { light: { paths: string[] }; dark: { paths: string[] } } }).iconPath).toEqual({
-      light: { base: { fsPath: '/extension' }, paths: ['resources', 'terminal-light.svg'] },
-      dark: { base: { fsPath: '/extension' }, paths: ['resources', 'terminal-dark.svg'] },
-    });
+    expect((terminalPanel as { iconPath?: { id: string } }).iconPath).toEqual({ id: 'terminal' });
 
     terminalSessions.mockResolvedValueOnce({
       sessionName: 'wt-_work_alpha-main__term-1',
@@ -199,7 +199,7 @@ describe('TerminalEditorProvider', () => {
     expect(onTitleChange).toHaveBeenCalledWith('wt-_work_alpha-main__term-1');
     expect((terminalPanel as { iconPath?: { base: { fsPath: string }; paths: string[] } }).iconPath).toEqual({
       base: { fsPath: '/extension' },
-      paths: ['resources', 'claude-code.png'],
+      paths: ['resources', 'claude-code-padded-center.png'],
     });
   });
 
@@ -230,7 +230,7 @@ describe('TerminalEditorProvider', () => {
     expect(terminalPanel.title).toBe('fix tab icon');
     expect((terminalPanel as { iconPath?: { base: { fsPath: string }; paths: string[] } }).iconPath).toEqual({
       base: { fsPath: '/extension' },
-      paths: ['resources', 'claude-code.png'],
+      paths: ['resources', 'claude-code-padded-center.png'],
     });
   });
 
@@ -260,7 +260,7 @@ describe('TerminalEditorProvider', () => {
 
     expect((terminalPanel as { iconPath?: { base: { fsPath: string }; paths: string[] } }).iconPath).toEqual({
       base: { fsPath: '/extension' },
-      paths: ['resources', 'codex-code.png'],
+      paths: ['resources', 'codex-code-padded-center.png'],
     });
   });
 

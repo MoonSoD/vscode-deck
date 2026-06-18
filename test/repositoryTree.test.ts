@@ -828,7 +828,7 @@ describe('RepositoryTreeProvider', () => {
 
     expect((terminalRows as Array<{ label: string }>)[0].label).toBe('reconcile checkout state');
     expect((terminalRows as Array<{ iconPath: { fsPath: string } }>)[0].iconPath.fsPath)
-      .toMatch(/resources\/claude-working\.gif$/);
+      .toMatch(/resources\/claude-working-padded\.gif$/);
     expect(vscodeState.emitters[0].fire).toHaveBeenCalledOnce();
     expect(vscodeState.emitters[0].fire).toHaveBeenCalledWith(terminalRows[0]);
     expect(vscodeState.emitters[0].fire).not.toHaveBeenCalledWith(undefined);
@@ -918,7 +918,7 @@ describe('RepositoryTreeProvider', () => {
     const terminalRows = await provider.getChildren(worktrees[0]);
 
     expect((terminalRows as Array<{ iconPath: { fsPath: string } }>)[0].iconPath.fsPath)
-      .toMatch(/resources\/codex-code\.png$/);
+      .toMatch(/resources\/codex-code-padded\.png$/);
   });
 
   it('sets deck-status resource URIs without inline status descriptions on Terminal rows', async () => {
@@ -958,7 +958,7 @@ describe('RepositoryTreeProvider', () => {
       .toEqual(expect.objectContaining({
         description: undefined,
         iconPath: expect.objectContaining({
-          fsPath: expect.stringMatching(/resources\/claude-code\.png$/),
+          fsPath: expect.stringMatching(/resources\/claude-code-padded\.png$/),
         }),
         resourceUri: expect.objectContaining({
           scheme: 'deck-status',

@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { resolveAgentIcon } from '../agent/agentIconResolver';
+import { resolveTerminalTabIcon } from '../agent/agentIconResolver';
 import { SessionUriCodec } from './sessionUriCodec';
 import { TERMINAL_SCROLLBACK_LINES } from './terminalScrollback';
 import { TerminalTransport } from './terminalTransport';
@@ -61,7 +61,7 @@ type TerminalWebviewMessage =
   | FocusedMessage
   | ClearHistoryMessage;
 
-type TerminalTabIconPath = vscode.Uri | { light: vscode.Uri; dark: vscode.Uri };
+type TerminalTabIconPath = vscode.IconPath;
 
 export interface TerminalTransportLike {
   start(sessionName: string, cwd: string, cols: number, rows: number): void;
@@ -259,14 +259,9 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
   // perpetual working animation distracts. Live status rides the sidebar row and
   // the tab's own attention dot (a FileDecoration, which works on hidden tabs).
   private resolveTabIcon(windowName: string): TerminalTabIconPath {
-    // A WebviewPanel's iconPath rejects ThemeIcon, so unlike the sidebar row's
-    // codicon fallback the non-agent tab ships the same glyph as light/dark SVGs.
-    return resolveAgentIcon({ windowName, resourcesDir: 'resources' }, {
+    return resolveTerminalTabIcon({ windowName, resourcesDir: 'resources' }, {
       uriFile: (path) => vscode.Uri.joinPath(this.extensionUri, ...path.split(/[\\/]/)),
-      themeIcon: () => ({
-        light: vscode.Uri.joinPath(this.extensionUri, 'resources', 'terminal-light.svg'),
-        dark: vscode.Uri.joinPath(this.extensionUri, 'resources', 'terminal-dark.svg'),
-      }),
+      themeIcon: (id) => new vscode.ThemeIcon(id),
     }).iconPath;
   }
 
