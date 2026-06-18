@@ -55,7 +55,7 @@ import { AgentSidecarStore } from './agent/agentSidecarStore';
 import { AgentExitSweep } from './agent/agentExitSweep';
 import { PsProcessProbe } from './agent/agentLivenessProbe';
 import { AgentPaneProbe } from './agent/agentPaneProbe';
-import { AgentStatusFileDecorationProvider } from './agent/agentStatusFileDecorationProvider';
+import { DeckDecorationProvider } from './tree/deckDecorationProvider';
 import { AgentStatusNotifier } from './agent/agentStatusNotifier';
 import { AgentStatusStore } from './agent/agentStatusStore';
 import { AgentTitlePoll } from './agent/agentTitlePoll';
@@ -344,16 +344,21 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     dragAndDropController,
     canSelectMany: false,
   });
-  const agentStatusDecorationProvider = new AgentStatusFileDecorationProvider(
+  const deckDecorationProvider = new DeckDecorationProvider(
     agentStatuses,
     tree.agentStatusDecorationRollups,
+    {
+      isActiveRepository: (id) => tree.isActiveRepositoryDecorationTarget(id),
+      isActiveWorktree: (id) => tree.isActiveWorktreeDecorationTarget(id),
+      onDidChange: (listener) => tree.onDidChangeDeckDecorations(listener),
+    },
   );
-  const agentStatusDecorationWatch = vscode.window.registerFileDecorationProvider(agentStatusDecorationProvider);
+  const deckDecorationWatch = vscode.window.registerFileDecorationProvider(deckDecorationProvider);
   const agentStatusCollapseWatch = treeView.onDidCollapseElement((event) => {
-    agentStatusDecorationProvider.fire(tree.setCollapsed(event.element, true));
+    deckDecorationProvider.fire(tree.setCollapsed(event.element, true));
   });
   const agentStatusExpandWatch = treeView.onDidExpandElement((event) => {
-    agentStatusDecorationProvider.fire(tree.setCollapsed(event.element, false));
+    deckDecorationProvider.fire(tree.setCollapsed(event.element, false));
   });
   // Kick off the reboot restore after the tree view exists so restore feedback
   // can show the sidebar banner while the snapshot is being restored.
@@ -416,8 +421,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     ...(agentExitSweep ? [agentExitSweep] : []),
     ...(agentTitlePoll ? [agentTitlePoll] : []),
     ...(agentTitlePollWatch ? [agentTitlePollWatch] : []),
-    agentStatusDecorationProvider,
-    agentStatusDecorationWatch,
+    deckDecorationProvider,
+    deckDecorationWatch,
     agentStatusCollapseWatch,
     agentStatusExpandWatch,
     agentStatusNotifierWatch,

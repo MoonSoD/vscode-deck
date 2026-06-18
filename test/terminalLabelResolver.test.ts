@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { resolveTerminalLabel } from '../src/terminal/terminalLabelResolver';
+import { resolveTerminalLabel, resolveTerminalTooltip } from '../src/terminal/terminalLabelResolver';
 
 describe('resolveTerminalLabel', () => {
   it('labels agent terminals with their glyph-stripped AgentTitle', () => {
@@ -23,5 +23,15 @@ describe('resolveTerminalLabel', () => {
   it('falls back to the agent identity when the stripped AgentTitle is empty', () => {
     expect(resolveTerminalLabel('claude', '✳   ')).toBe('claude');
     expect(resolveTerminalLabel('codex', undefined)).toBe('codex');
+  });
+});
+
+describe('resolveTerminalTooltip', () => {
+  it('shows the stable term-N identity from the session name', () => {
+    expect(resolveTerminalTooltip('/work/alpha-main', 'wt-_work_alpha-main__term-3')).toBe('term-3');
+  });
+
+  it('falls back to the session name when it does not match the worktree', () => {
+    expect(resolveTerminalTooltip('/work/alpha-main', 'foreign-session')).toBe('foreign-session');
   });
 });

@@ -7,6 +7,7 @@ import { ActiveWorktreeStore } from '../switch/activeWorktreeStore';
 import { WorktreeListCacheStore } from '../worktree/worktreeListCacheStore';
 import { WorktreeOrderStore } from '../worktree/worktreeOrderStore';
 import { terminalSessionPrefix } from '../terminal/tmuxSafe';
+import { resolveTerminalTooltip } from '../terminal/terminalLabelResolver';
 import { TerminalOrderStore } from '../terminal/terminalOrderStore';
 import type { TmuxSession } from '../terminal/tmuxCli';
 import {
@@ -77,7 +78,6 @@ class RepositoryNode extends vscode.TreeItem {
     this.description = item.description;
     this.tooltip = repositoryPath;
     this.resourceUri = toDecorationUri('repository', repositoryPath);
-    this.iconPath = new vscode.ThemeIcon(item.iconId);
   }
 }
 
@@ -93,8 +93,8 @@ class WorktreeNode extends vscode.TreeItem {
     this.id = `worktree::${worktree.path}`;
     this.contextValue = item.contextValue;
     this.description = item.description;
+    this.tooltip = item.tooltip;
     this.resourceUri = toDecorationUri('worktree', worktree.path);
-    this.iconPath = new vscode.ThemeIcon(item.iconId);
   }
 }
 
@@ -130,7 +130,8 @@ class TerminalNode extends vscode.TreeItem {
       status,
       terminal.paneTitle,
     );
-    const nextSignature = JSON.stringify([item.label, item.contextValue, item.iconId]);
+    const tooltip = resolveTerminalTooltip(this.worktreePath, terminal.sessionName);
+    const nextSignature = JSON.stringify([item.label, item.contextValue, item.iconId, tooltip]);
     const changed = this.renderSignature !== '' && this.renderSignature !== nextSignature;
 
     this.terminal = terminal;
@@ -138,7 +139,7 @@ class TerminalNode extends vscode.TreeItem {
     this.label = item.label;
     this.contextValue = item.contextValue;
     this.description = item.description;
-    this.tooltip = item.tooltip;
+    this.tooltip = tooltip;
     this.iconPath = terminalIconPath(terminal.windowName, status);
     this.renderSignature = nextSignature;
     return changed;
@@ -166,9 +167,12 @@ class TmuxUnavailableNode extends vscode.TreeItem {
 
 export class RepositoryTreeProvider implements vscode.TreeDataProvider<RepositoryTreeNode> {
   private readonly _onDidChangeTreeData = new vscode.EventEmitter<RepositoryTreeNode | undefined>();
+  private readonly _onDidChangeDeckDecorations = new vscode.EventEmitter<AgentStatusDecorationResourceUri[]>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
+  readonly onDidChangeDeckDecorations = this._onDidChangeDeckDecorations.event;
   readonly agentStatusDecorationRollups = new AgentStatusDecorationRollups();
   private activeRepositoryCommonDir: string | null = null;
+  private activeWorktreePath: string | undefined = this.currentWorktreePath();
   private resolvingActiveRepository = false;
   private readonly repositoryCommonDirs = new Map<string, string | null>();
   private readonly resolvingRepositoryPaths = new Set<string>();
@@ -215,6 +219,7 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
   }
 
   refresh(): void {
+    this.fireDeckDecorations(this.updateActiveWorktreeDecorationTarget());
     this.resolveActiveRepository();
     this._onDidChangeTreeData.fire(undefined);
   }
@@ -246,6 +251,14 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
 
   getTreeItem(element: RepositoryTreeNode): vscode.TreeItem {
     return element;
+  }
+
+  isActiveRepositoryDecorationTarget(repositoryPath: string): boolean {
+    return this.isActiveRepository(repositoryPath);
+  }
+
+  isActiveWorktreeDecorationTarget(worktreePath: string): boolean {
+    return this.isCurrentWorktree(worktreePath);
   }
 
   setCollapsed(element: RepositoryTreeNode, collapsed: boolean): AgentStatusDecorationResourceUri[] {
@@ -474,7 +487,29 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
   private setActiveRepositoryCommonDir(commonDir: string | null, fire = true): void {
     if (this.activeRepositoryCommonDir === commonDir) return;
     this.activeRepositoryCommonDir = commonDir;
+    this.fireDeckDecorations(this.activeRepositoryDecorationInvalidationUris());
     if (fire) this._onDidChangeTreeData.fire(undefined);
+  }
+
+  private updateActiveWorktreeDecorationTarget(): AgentStatusDecorationResourceUri[] {
+    const current = this.currentWorktreePath();
+    const previous = this.activeWorktreePath;
+    if (current === previous) return [];
+    this.activeWorktreePath = current;
+    const uris: AgentStatusDecorationResourceUri[] = [];
+    if (previous !== undefined) uris.push(agentStatusDecorationResourceUri('worktree', previous));
+    if (current !== undefined) uris.push(agentStatusDecorationResourceUri('worktree', current));
+    return uris;
+  }
+
+  private activeRepositoryDecorationInvalidationUris(): AgentStatusDecorationResourceUri[] {
+    return this.repositoryRegistry.list()
+      .map((repositoryPath) => agentStatusDecorationResourceUri('repository', repositoryPath));
+  }
+
+  private fireDeckDecorations(uris: readonly AgentStatusDecorationResourceUri[]): void {
+    if (uris.length === 0) return;
+    this._onDidChangeDeckDecorations.fire([...uris]);
   }
 
   private async loadWorktreeChildren(

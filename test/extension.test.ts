@@ -327,6 +327,9 @@ vi.mock('../src/tree/repositoryTree', () => ({
     refresh = vi.fn();
     refreshTerminalDisplays = vi.fn();
     setCollapsed = vi.fn();
+    isActiveRepositoryDecorationTarget = vi.fn();
+    isActiveWorktreeDecorationTarget = vi.fn();
+    onDidChangeDeckDecorations = vi.fn(() => ({ dispose: vi.fn() }));
     getChildren = vi.fn(() => [{ repositoryPath: '/settings/repo' }]);
 
     constructor(...args: unknown[]) {
@@ -700,7 +703,7 @@ describe('activate', () => {
     expect(context.subscriptions[0]).toBe(vscodeState.createTreeView.mock.results[0].value);
   });
 
-  it('registers agent status file decorations without a Deck view badge', async () => {
+  it('registers Deck file decorations without a Deck view badge', async () => {
     vscodeState.agentStatusStoreEntries = [
       ['wt-_work_alpha-main__term-1', { status: 'needsInput', statusAt: 1710000000 }],
       ['wt-_work_alpha-main__term-2', { status: 'completed', statusAt: 1710000001 }],

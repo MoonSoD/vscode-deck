@@ -6,13 +6,12 @@ import { resolveTerminalLabel } from '../terminal/terminalLabelResolver';
 export interface RepositoryTreeItemDescription {
   label: string;
   description: string;
-  iconId: 'folder';
 }
 
 export interface WorktreeTreeItemDescription {
   label: string;
   description: string;
-  iconId: 'check' | 'git-branch';
+  tooltip: string;
   contextValue: 'deck.worktree.active' | 'deck.worktree.main' | 'deck.worktree';
 }
 
@@ -37,8 +36,8 @@ export function describeRepositoryTreeItem(
 ): RepositoryTreeItemDescription {
   return {
     label: repositoryPath.split('/').pop() ?? repositoryPath,
+    // Active text is the non-color channel for colorblind users; do not remove.
     description: isActiveRepository ? 'active' : '',
-    iconId: 'folder',
   };
 }
 
@@ -58,8 +57,9 @@ export function describeWorktreeTreeItem(
 
   return {
     label: worktree.branch ?? worktree.path,
-    description: worktree.path,
-    iconId: isActive ? 'check' : 'git-branch',
+    // Active text is the non-color channel for colorblind users; do not remove.
+    description: isActive ? 'active' : '',
+    tooltip: worktree.path,
     contextValue,
   };
 }

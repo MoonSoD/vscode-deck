@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const vscodeState = vi.hoisted(() => ({
   emitters: [] as Array<{ fire: ReturnType<typeof vi.fn> }>,
+  workspaceFolders: [{ uri: { fsPath: '/work/beta-main' } }] as Array<{ uri: { fsPath: string } }>,
 }));
 
 vi.mock('vscode', () => ({
@@ -52,7 +53,9 @@ vi.mock('vscode', () => ({
         ['/work/alpha-main', '/work/beta-main'] as T,
       update: vi.fn(),
     })),
-    workspaceFolders: [{ uri: { fsPath: '/work/beta-main' } }],
+    get workspaceFolders() {
+      return vscodeState.workspaceFolders;
+    },
   },
 }));
 
@@ -130,6 +133,7 @@ const alphaFeatureWorktree: Worktree = {
 describe('RepositoryTreeProvider', () => {
   beforeEach(() => {
     vscodeState.emitters = [];
+    vscodeState.workspaceFolders = [{ uri: { fsPath: '/work/beta-main' } }];
   });
 
   it('marks only the currently mounted worktree as active', async () => {
@@ -156,12 +160,36 @@ describe('RepositoryTreeProvider', () => {
       'deck.worktree',
       'deck.worktree.active',
     ]);
-    expect(worktreeNodes.map((node) => (node.iconPath as { id: string }).id)).toEqual([
-      'git-branch',
-      'git-branch',
-      'check',
+    expect(worktreeNodes.map((node) => node.description)).toEqual([
+      '',
+      '',
+      'active',
     ]);
+    expect(worktreeNodes.map((node) => node.tooltip)).toEqual([
+      '/work/alpha-main',
+      '/work/alpha-feature',
+      '/work/beta-main',
+    ]);
+    expect(worktreeNodes.map((node) => node.iconPath)).toEqual([undefined, undefined, undefined]);
     expect(get).not.toHaveBeenCalled();
+  });
+
+  it('invalidates old and new active Worktree decorations when the mounted folder changes', () => {
+    vscodeState.workspaceFolders = [{ uri: { fsPath: '/work/alpha-main' } }];
+    const provider = new RepositoryTreeProvider(
+      registry(),
+      { get: vi.fn() } as unknown as ActiveWorktreeStore,
+      { get: vi.fn() } as unknown as WorktreeOrderStore,
+    );
+    vscodeState.emitters[1].fire.mockClear();
+
+    vscodeState.workspaceFolders = [{ uri: { fsPath: '/work/beta-main' } }];
+    provider.refresh();
+
+    expect(vscodeState.emitters[1].fire).toHaveBeenCalledWith([
+      expect.objectContaining({ scheme: 'deck-status', path: '/worktree/%2Fwork%2Falpha-main' }),
+      expect.objectContaining({ scheme: 'deck-status', path: '/worktree/%2Fwork%2Fbeta-main' }),
+    ]);
   });
 
   it('renders worktrees in stored order with unknown worktrees appended', async () => {
@@ -549,12 +577,14 @@ describe('RepositoryTreeProvider', () => {
     expect((terminalRows as Array<{ label: string; command?: { command: string } }>)).toEqual([
       expect.objectContaining({
         label: 'zsh',
+        tooltip: 'term-1',
         command: expect.objectContaining({ command: 'deck.openTerminal' }),
         worktreePath: '/work/alpha-main',
         contextValue: 'deck.terminal.foreign',
       }),
       expect.objectContaining({
         label: 'claude',
+        tooltip: 'term-2',
         command: expect.objectContaining({ command: 'deck.openTerminal' }),
         worktreePath: '/work/alpha-main',
         contextValue: 'deck.terminal.foreign',
@@ -950,6 +980,10 @@ describe('RepositoryTreeProvider', () => {
 
     expect(repositories[0].description).toBe('');
     expect(worktrees.map((worktree) => worktree.description)).toEqual([
+      '',
+      '',
+    ]);
+    expect(worktrees.map((worktree) => worktree.tooltip)).toEqual([
       '/work/alpha-main',
       '/work/alpha-feature',
     ]);

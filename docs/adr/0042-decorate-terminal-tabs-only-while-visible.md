@@ -42,7 +42,7 @@ went stale while hidden.
 This gate is **scoped to the panel writes** — the agent identity **icon glyph**
 (`iconPath`) and the **AgentTitle label** (`title`). The **AgentStatus attention
 dot + tab color** reach the tab through a *different* path: the
-`AgentStatusFileDecorationProvider` (a `FileDecorationProvider` keyed on the
+`DeckDecorationProvider` (a `FileDecorationProvider` keyed on the
 `deck-terminal:` URI), which VS Code applies to the tab without touching the
 `WebviewPanel` — so it is **not** subject to this gate and **stays live on hidden
 tabs**, never stealing activation. The sidebar row (ADR-0025/0040/0041) and

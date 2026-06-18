@@ -29,12 +29,12 @@ vi.mock('vscode', () => ({
 }));
 
 import { AgentStatusDecorationRollups, agentStatusDecorationUri } from '../src/agent/agentStatusDecorations';
-import { AgentStatusFileDecorationProvider } from '../src/agent/agentStatusFileDecorationProvider';
+import { DeckDecorationProvider } from '../src/tree/deckDecorationProvider';
 import type { AgentStatus } from '../src/agent/agentStatusStore';
 import { SessionUriCodec } from '../src/terminal/sessionUriCodec';
 import { terminalSessionName } from '../src/terminal/tmuxSafe';
 
-describe('AgentStatusFileDecorationProvider', () => {
+describe('DeckDecorationProvider', () => {
   it('returns file decorations for deck-status attention rows only', () => {
     const statuses = new Map<string, AgentStatus>([
       ['term-1', { status: 'needsInput', statusAt: 1710000000, message: 'Allow Bash(ls)?' }],
@@ -55,6 +55,47 @@ describe('AgentStatusFileDecorationProvider', () => {
     });
     expect(provider.provideFileDecoration(agentStatusDecorationUri('terminal', 'term-2') as never)).toBeUndefined();
     expect(provider.provideFileDecoration({ scheme: 'file', path: '/tmp/term-1' } as never)).toBeUndefined();
+  });
+
+  it('returns purple file decorations for active Repository and Worktree rows', () => {
+    const provider = createProvider(new Map(), new AgentStatusDecorationRollups(), {
+      isActiveRepository: (id) => id === '/repo',
+      isActiveWorktree: (id) => id === '/repo/main',
+    });
+
+    expect(provider.provideFileDecoration(agentStatusDecorationUri('repository', '/repo') as never)).toEqual({
+      badge: undefined,
+      tooltip: undefined,
+      color: { id: 'charts.purple' },
+      propagate: false,
+    });
+    expect(provider.provideFileDecoration(agentStatusDecorationUri('worktree', '/repo/main') as never)).toEqual({
+      badge: undefined,
+      tooltip: undefined,
+      color: { id: 'charts.purple' },
+      propagate: false,
+    });
+    expect(provider.provideFileDecoration(agentStatusDecorationUri('worktree', '/repo/other') as never)).toBeUndefined();
+  });
+
+  it('keeps agent attention decoration ahead of active color', () => {
+    const statuses = new Map<string, AgentStatus>([
+      ['term-1', { status: 'needsInput', statusAt: 1710000000, message: 'Review' }],
+    ]);
+    const rollups = new AgentStatusDecorationRollups();
+    rollups.setTerminals([{ repositoryPath: '/repo', worktreePath: '/repo/main', sessionName: 'term-1' }]);
+    rollups.setCollapsed('worktree', '/repo/main', true);
+    const provider = createProvider(statuses, rollups, {
+      isActiveRepository: () => false,
+      isActiveWorktree: (id) => id === '/repo/main',
+    });
+
+    expect(provider.provideFileDecoration(agentStatusDecorationUri('worktree', '/repo/main') as never)).toEqual({
+      badge: '•',
+      tooltip: 'Input needed: Review',
+      color: { id: 'list.warningForeground' },
+      propagate: false,
+    });
   });
 
   it('returns Terminal editor-tab decorations from the tab session status', () => {
@@ -155,7 +196,7 @@ describe('AgentStatusFileDecorationProvider', () => {
       { repositoryPath: '/repo', worktreePath, sessionName: unrelatedSession },
     ]);
     const store = new FakeStatusStore(statuses);
-    const provider = new AgentStatusFileDecorationProvider(store, rollups);
+    const provider = new DeckDecorationProvider(store, rollups);
 
     statuses.set(changedSession, { status: 'completed', statusAt: 1710000002, unread: true });
     store.fire([changedSession]);
@@ -185,7 +226,7 @@ describe('AgentStatusFileDecorationProvider', () => {
     const rollups = new AgentStatusDecorationRollups();
     rollups.setTerminals([{ repositoryPath: '/repo', worktreePath, sessionName }]);
     const store = new FakeStatusStore(statuses);
-    const provider = new AgentStatusFileDecorationProvider(store, rollups);
+    const provider = new DeckDecorationProvider(store, rollups);
     const emitter = provider as unknown as {
       _onDidChangeFileDecorations: { fire: ReturnType<typeof vi.fn> };
     };
@@ -200,12 +241,16 @@ describe('AgentStatusFileDecorationProvider', () => {
 function createProvider(
   statuses: Map<string, AgentStatus>,
   rollups = new AgentStatusDecorationRollups(),
-): AgentStatusFileDecorationProvider {
-  return new AgentStatusFileDecorationProvider({
+  activeTargets?: {
+    isActiveRepository(id: string): boolean;
+    isActiveWorktree(id: string): boolean;
+  },
+): DeckDecorationProvider {
+  return new DeckDecorationProvider({
     get: (sessionName: string) => statuses.get(sessionName),
     entries: () => statuses.entries(),
     onDidChange: vi.fn(() => ({ dispose: vi.fn() })),
-  }, rollups);
+  }, rollups, activeTargets);
 }
 
 const terminalUriCodec = new SessionUriCodec();

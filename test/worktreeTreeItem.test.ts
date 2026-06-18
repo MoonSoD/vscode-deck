@@ -10,13 +10,11 @@ describe('describeRepositoryTreeItem', () => {
     expect(describeRepositoryTreeItem('/work/alpha', true)).toEqual({
       label: 'alpha',
       description: 'active',
-      iconId: 'folder',
     });
 
     expect(describeRepositoryTreeItem('/work/beta', false)).toEqual({
       label: 'beta',
       description: '',
-      iconId: 'folder',
     });
   });
 
@@ -52,14 +50,14 @@ describe('describeWorktreeTreeItem', () => {
     ).toEqual([
       {
         label: 'main',
-        description: '/work/alpha-main',
-        iconId: 'check',
+        description: 'active',
+        tooltip: '/work/alpha-main',
         contextValue: 'deck.worktree.active',
       },
       {
         label: 'feature',
-        description: '/work/alpha-feature',
-        iconId: 'git-branch',
+        description: '',
+        tooltip: '/work/alpha-feature',
         contextValue: 'deck.worktree.main',
       },
     ]);
@@ -84,7 +82,7 @@ describe('describeWorktreeTreeItem', () => {
     };
 
     expect(describeWorktreeTreeItem(worktree, '/work/alpha-main', '/work/alpha-main').description)
-      .toBe('/work/alpha-feature');
+      .toBe('');
   });
 });
 
