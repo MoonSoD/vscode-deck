@@ -64,43 +64,37 @@ export function resolveAgentIcon<TUri = { fsPath: string }, TThemeIcon = { id: s
   input: AgentIconInput,
   factory: AgentIconFactory<TUri, TThemeIcon> = defaultIconFactory as AgentIconFactory<TUri, TThemeIcon>,
 ): ResolvedAgentIcon<TUri, TThemeIcon> {
-  const agent = agentFromWindowName(input.windowName) ?? agentFromStatus(input.status);
-  if (agent === undefined) {
-    return {
-      iconPath: factory.themeIcon('deck-terminal'),
-      isAgent: false,
-    };
-  }
-
-  const state = iconStateFromStatus(input.status);
-  return {
-    iconPath: factory.uriFile(join(input.resourcesDir, AGENT_ICONS[agent].tree[state])),
-    isAgent: true,
-    agent,
-    state,
-    surface: 'tree',
-  };
+  return resolveIcon(input, factory, 'tree', 'deck-terminal');
 }
 
 export function resolveTerminalTabIcon<TUri = { fsPath: string }, TThemeIcon = { id: string }>(
   input: AgentIconInput,
   factory: AgentIconFactory<TUri, TThemeIcon> = defaultIconFactory as AgentIconFactory<TUri, TThemeIcon>,
 ): ResolvedAgentIcon<TUri, TThemeIcon> {
+  return resolveIcon(input, factory, 'tab', 'terminal');
+}
+
+function resolveIcon<TUri, TThemeIcon>(
+  input: AgentIconInput,
+  factory: AgentIconFactory<TUri, TThemeIcon>,
+  surface: AgentIconSurface,
+  nonAgentIcon: string,
+): ResolvedAgentIcon<TUri, TThemeIcon> {
   const agent = agentFromWindowName(input.windowName) ?? agentFromStatus(input.status);
   if (agent === undefined) {
     return {
-      iconPath: factory.themeIcon('terminal'),
+      iconPath: factory.themeIcon(nonAgentIcon),
       isAgent: false,
     };
   }
 
   const state = iconStateFromStatus(input.status);
   return {
-    iconPath: factory.uriFile(join(input.resourcesDir, AGENT_ICONS[agent].tab[state])),
+    iconPath: factory.uriFile(join(input.resourcesDir, AGENT_ICONS[agent][surface][state])),
     isAgent: true,
     agent,
     state,
-    surface: 'tab',
+    surface,
   };
 }
 
