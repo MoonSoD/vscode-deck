@@ -174,6 +174,27 @@ describe('RepositoryTreeProvider', () => {
     expect(get).not.toHaveBeenCalled();
   });
 
+  it('uses the same active Worktree match for row text and decorations', async () => {
+    vscodeState.workspaceFolders = [{ uri: { fsPath: '/work/alpha-main/.' } }];
+    const provider = new RepositoryTreeProvider(
+      registry(),
+      { get: vi.fn() } as unknown as ActiveWorktreeStore,
+      { get: vi.fn() } as unknown as WorktreeOrderStore,
+    );
+
+    const repositories = provider.getChildren();
+    if (!Array.isArray(repositories)) throw new Error('expected sync repository roots');
+
+    const worktreeNodes = await provider.getChildren(repositories[0]);
+    if (!Array.isArray(worktreeNodes)) throw new Error('expected worktree children');
+
+    expect(worktreeNodes.map((node) => node.description)).toEqual([
+      'active',
+      '',
+    ]);
+    expect(provider.isActiveWorktreeDecorationTarget('/work/alpha-main')).toBe(true);
+  });
+
   it('invalidates old and new active Worktree decorations when the mounted folder changes', () => {
     vscodeState.workspaceFolders = [{ uri: { fsPath: '/work/alpha-main' } }];
     const provider = new RepositoryTreeProvider(

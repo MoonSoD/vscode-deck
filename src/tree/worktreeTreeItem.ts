@@ -43,10 +43,9 @@ export function describeRepositoryTreeItem(
 
 export function describeWorktreeTreeItem(
   worktree: Worktree,
-  activeWorktreePath: string | undefined,
+  isActive: boolean,
   mainWorktreePath?: string,
 ): WorktreeTreeItemDescription {
-  const isActive = worktree.path === activeWorktreePath;
   const isMain = worktree.path === mainWorktreePath;
   let contextValue: WorktreeTreeItemDescription['contextValue'] = 'deck.worktree';
   if (isActive) {

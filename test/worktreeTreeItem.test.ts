@@ -45,7 +45,7 @@ describe('describeWorktreeTreeItem', () => {
 
     expect(
       worktrees.map((worktree) =>
-        describeWorktreeTreeItem(worktree, '/work/alpha-main', '/work/alpha-feature'),
+        describeWorktreeTreeItem(worktree, worktree.path === '/work/alpha-main', '/work/alpha-feature'),
       ),
     ).toEqual([
       {
@@ -63,11 +63,11 @@ describe('describeWorktreeTreeItem', () => {
     ]);
 
     expect(
-      describeWorktreeTreeItem(worktrees[0], '/work/alpha-main', '/work/alpha-main')
+      describeWorktreeTreeItem(worktrees[0], true, '/work/alpha-main')
         .contextValue,
     ).toBe('deck.worktree.active');
     expect(
-      describeWorktreeTreeItem(worktrees[1], '/work/alpha-main', '/work/other')
+      describeWorktreeTreeItem(worktrees[1], false, '/work/other')
         .contextValue,
     ).toBe('deck.worktree');
   });
@@ -81,7 +81,7 @@ describe('describeWorktreeTreeItem', () => {
       branch: 'feature',
     };
 
-    expect(describeWorktreeTreeItem(worktree, '/work/alpha-main', '/work/alpha-main').description)
+    expect(describeWorktreeTreeItem(worktree, false, '/work/alpha-main').description)
       .toBe('');
   });
 });

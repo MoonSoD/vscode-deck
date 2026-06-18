@@ -85,10 +85,10 @@ class WorktreeNode extends vscode.TreeItem {
   constructor(
     public readonly repositoryPath: string,
     public readonly worktree: Worktree,
-    activeWorktreePath: string | undefined,
+    isActiveWorktree: boolean,
     public readonly mainWorktreePath: string | undefined,
   ) {
-    const item = describeWorktreeTreeItem(worktree, activeWorktreePath, mainWorktreePath);
+    const item = describeWorktreeTreeItem(worktree, isActiveWorktree, mainWorktreePath);
     super(item.label, vscode.TreeItemCollapsibleState.Expanded);
     this.id = `worktree::${worktree.path}`;
     this.contextValue = item.contextValue;
@@ -402,13 +402,12 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
     return new WorktreeNode(
       worktreeNode.repositoryPath,
       worktreeNode.worktree,
-      this.currentWorktreePath(),
+      this.isCurrentWorktree(worktreeNode.worktree.path),
       worktreeNode.mainWorktreePath,
     );
   }
 
   private getWorktreeChildren(element: RepositoryNode): RepositoryTreeNode[] | Promise<RepositoryTreeNode[]> {
-    const activeWorktreePath = this.currentWorktreePath();
     const commonDir =
       this.repositoryCommonDirCache.get(element.repositoryPath) ??
       this.repositoryCommonDirs.get(element.repositoryPath) ??
@@ -423,12 +422,11 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
           element.repositoryPath,
           visibleCached,
           commonDir,
-          activeWorktreePath,
         );
       }
     }
 
-    return this.loadWorktreeChildren(element.repositoryPath, commonDir, activeWorktreePath);
+    return this.loadWorktreeChildren(element.repositoryPath, commonDir);
   }
 
   private resolveActiveRepository(): void {
@@ -515,7 +513,6 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
   private async loadWorktreeChildren(
     repositoryPath: string,
     knownCommonDir: string | undefined,
-    activeWorktreePath: string | undefined,
   ): Promise<RepositoryTreeNode[]> {
     const pendingAtListStart = new Set(this.pendingWorktreeRemovals);
     const gitWorktrees = await listWorktrees(repositoryPath);
@@ -526,7 +523,7 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
       undefined;
     await this.pruneWorktreeOrder(commonDir, gitWorktrees);
     if (commonDir !== undefined) await this.worktreeListCache.set(commonDir, visibleWorktrees);
-    return this.toWorktreeNodes(repositoryPath, visibleWorktrees, commonDir, activeWorktreePath);
+    return this.toWorktreeNodes(repositoryPath, visibleWorktrees, commonDir);
   }
 
   private async getTerminalChildren(element: WorktreeNode): Promise<RepositoryTreeNode[]> {
@@ -609,7 +606,6 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
     repositoryPath: string,
     gitWorktrees: readonly Worktree[],
     commonDir: string | undefined,
-    activeWorktreePath: string | undefined,
   ): WorktreeNode[] {
     const worktrees = this.visibleWorktrees(
       reconcileWorktreeOrder(
@@ -623,7 +619,7 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
       return new WorktreeNode(
         repositoryPath,
         w,
-        activeWorktreePath,
+        this.isCurrentWorktree(w.path),
         mainWorktreePath,
       );
     });
