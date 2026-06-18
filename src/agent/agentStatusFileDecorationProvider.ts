@@ -6,12 +6,17 @@ import {
   parseAgentStatusDecorationUri,
   provideAgentStatusDecoration,
 } from './agentStatusDecorations';
+import type { AgentStatusDecorationResourceUri } from './agentStatusDecorationInvalidations';
 import { SessionUriCodec, terminalUriScheme } from '../terminal/sessionUriCodec';
+
+interface AgentStatusChange {
+  sessionNames: readonly string[];
+}
 
 interface AgentStatusStoreLike {
   get(sessionName: string): AgentStatus | undefined;
   entries(): IterableIterator<[string, AgentStatus]>;
-  onDidChange(listener: () => void): Disposable;
+  onDidChange(listener: (change: AgentStatusChange) => void): Disposable;
 }
 
 export class AgentStatusFileDecorationProvider implements vscode.FileDecorationProvider, Disposable {
@@ -19,15 +24,20 @@ export class AgentStatusFileDecorationProvider implements vscode.FileDecorationP
   readonly onDidChangeFileDecorations = this._onDidChangeFileDecorations.event;
   private readonly statusWatch: Disposable;
   private readonly codec = new SessionUriCodec();
+  private statuses: Map<string, AgentStatus>;
 
   constructor(
     private readonly store: AgentStatusStoreLike,
     private readonly rollups: AgentStatusDecorationRollups,
   ) {
-    this.syncStatuses();
-    this.statusWatch = this.store.onDidChange(() => {
-      this.syncStatuses();
-      this.fire();
+    this.statuses = this.syncStatuses();
+    this.statusWatch = this.store.onDidChange((change) => {
+      const previous = this.statuses;
+      this.statuses = this.syncStatuses();
+      const decoratedSessionNames = change.sessionNames.filter((sessionName) =>
+        hasDecoration(previous.get(sessionName)) || hasDecoration(this.statuses.get(sessionName))
+      );
+      this.fire(this.rollups.invalidationUrisForSessions(decoratedSessionNames));
     });
   }
 
@@ -73,8 +83,9 @@ export class AgentStatusFileDecorationProvider implements vscode.FileDecorationP
     return fileDecoration;
   }
 
-  fire(): void {
-    this._onDidChangeFileDecorations.fire(undefined);
+  fire(uris: readonly AgentStatusDecorationResourceUri[]): void {
+    if (uris.length === 0) return;
+    this._onDidChangeFileDecorations.fire(uris.map((uri) => vscode.Uri.from(uri)));
   }
 
   dispose(): void {
@@ -82,7 +93,13 @@ export class AgentStatusFileDecorationProvider implements vscode.FileDecorationP
     this._onDidChangeFileDecorations.dispose();
   }
 
-  private syncStatuses(): void {
-    this.rollups.setStatuses(this.store.entries());
+  private syncStatuses(): Map<string, AgentStatus> {
+    const statuses = new Map(this.store.entries());
+    this.rollups.setStatuses(statuses);
+    return statuses;
   }
+}
+
+function hasDecoration(status: AgentStatus | undefined): boolean {
+  return provideAgentStatusDecoration(agentStatusDecorationUri('status-check'), status) !== undefined;
 }

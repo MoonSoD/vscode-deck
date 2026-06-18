@@ -124,6 +124,31 @@ describe('AgentStatusStore', () => {
     });
   });
 
+  it('reports changed Terminal session names to listeners', async () => {
+    const root = tempRoot();
+    mkdirSync(root, { recursive: true });
+    writeFileSync(join(root, 'term-1.json'), '{"status":"inProgress","statusAt":1710000000}', 'utf8');
+    writeFileSync(join(root, 'term-2.json'), '{"status":"failed","statusAt":1710000001}', 'utf8');
+    const store = new AgentStatusStore(root, 10);
+    const changes: Array<readonly string[]> = [];
+    disposables.push(store.onDidChange((change) => {
+      changes.push(change.sessionNames);
+    }));
+    disposables.push(await store.start());
+
+    writeFileSync(join(root, 'term-1.json'), '{"status":"needsInput","statusAt":1710000002}', 'utf8');
+    await vi.waitFor(() => expect(changes).toEqual([['term-1']]), WATCH_EVENT_WAIT);
+
+    writeFileSync(join(root, 'term-1.json'), '{"status":"completed","statusAt":1710000003}', 'utf8');
+    await vi.waitFor(() => expect(changes).toEqual([['term-1'], ['term-1']]), WATCH_EVENT_WAIT);
+
+    await store.markRead('term-1');
+    expect(changes).toEqual([['term-1'], ['term-1'], ['term-1']]);
+
+    await store.remove('term-2');
+    expect(changes).toEqual([['term-1'], ['term-1'], ['term-1'], ['term-2']]);
+  });
+
   it('shares read markers across stores watching the same machine status area', async () => {
     const root = tempRoot();
     mkdirSync(root, { recursive: true });

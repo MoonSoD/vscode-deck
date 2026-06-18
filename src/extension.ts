@@ -350,12 +350,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   );
   const agentStatusDecorationWatch = vscode.window.registerFileDecorationProvider(agentStatusDecorationProvider);
   const agentStatusCollapseWatch = treeView.onDidCollapseElement((event) => {
-    tree.setCollapsed(event.element, true);
-    agentStatusDecorationProvider.fire();
+    agentStatusDecorationProvider.fire(tree.setCollapsed(event.element, true));
   });
   const agentStatusExpandWatch = treeView.onDidExpandElement((event) => {
-    tree.setCollapsed(event.element, false);
-    agentStatusDecorationProvider.fire();
+    agentStatusDecorationProvider.fire(tree.setCollapsed(event.element, false));
   });
   // Kick off the reboot restore after the tree view exists so restore feedback
   // can show the sidebar banner while the snapshot is being restored.

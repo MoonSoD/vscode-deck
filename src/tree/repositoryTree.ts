@@ -19,6 +19,7 @@ import {
   AgentStatusDecorationRollups,
   type AgentStatusDecorationTerminal,
 } from '../agent/agentStatusDecorations';
+import type { AgentStatusDecorationResourceUri } from '../agent/agentStatusDecorationInvalidations';
 import { resolveAgentIcon } from '../agent/agentIconResolver';
 import { excludePending } from './excludePending';
 import { reconcileWorktreeOrder } from './reconcileWorktreeOrder';
@@ -246,12 +247,21 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
     return element;
   }
 
-  setCollapsed(element: RepositoryTreeNode, collapsed: boolean): void {
+  setCollapsed(element: RepositoryTreeNode, collapsed: boolean): AgentStatusDecorationResourceUri[] {
     if (element instanceof RepositoryNode) {
+      const uris = this.agentStatusDecorationRollups.invalidationUrisForCollapsedNode(
+        'repository',
+        element.repositoryPath,
+      );
       this.agentStatusDecorationRollups.setCollapsed('repository', element.repositoryPath, collapsed);
-    } else if (element instanceof WorktreeNode) {
-      this.agentStatusDecorationRollups.setCollapsed('worktree', element.worktree.path, collapsed);
+      return uris;
     }
+    if (element instanceof WorktreeNode) {
+      const uris = this.agentStatusDecorationRollups.invalidationUrisForCollapsedNode('worktree', element.worktree.path);
+      this.agentStatusDecorationRollups.setCollapsed('worktree', element.worktree.path, collapsed);
+      return uris;
+    }
+    return [];
   }
 
   getParent(element: RepositoryTreeNode): RepositoryTreeNode | undefined {

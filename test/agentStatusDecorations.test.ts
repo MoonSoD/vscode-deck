@@ -111,4 +111,33 @@ describe('AgentStatusDecorationRollups', () => {
     rollups.setStatus('needs-input', { status: 'inProgress', statusAt: 1710000003 });
     expect(rollups.getDecorationStatus('worktree', '/repo/main')?.status).toBe('failed');
   });
+
+  it('returns targeted invalidation URIs when a rollup node collapses or expands', () => {
+    const rollups = new AgentStatusDecorationRollups();
+    rollups.setTerminals([
+      {
+        repositoryPath: '/repo',
+        worktreePath: '/repo/main',
+        sessionName: 'wt-_repo_main__term-1',
+      },
+      {
+        repositoryPath: '/repo',
+        worktreePath: '/repo/main',
+        sessionName: 'wt-_repo_main__term-2',
+      },
+      {
+        repositoryPath: '/repo',
+        worktreePath: '/repo/other',
+        sessionName: 'wt-_repo_other__term-1',
+      },
+    ]);
+    rollups.setStatus('wt-_repo_main__term-1', { status: 'needsInput', statusAt: 1710000000 });
+    rollups.setStatus('wt-_repo_main__term-2', { status: 'inProgress', statusAt: 1710000001 });
+    rollups.setStatus('wt-_repo_other__term-1', { status: 'failed', statusAt: 1710000002 });
+
+    expect(rollups.invalidationUrisForCollapsedNode('worktree', '/repo/main')).toEqual([
+      expect.objectContaining(agentStatusDecorationUri('worktree', '/repo/main')),
+      expect.objectContaining(agentStatusDecorationUri('terminal', 'wt-_repo_main__term-1')),
+    ]);
+  });
 });

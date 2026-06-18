@@ -140,6 +140,61 @@ describe('AgentStatusFileDecorationProvider', () => {
     });
     expect(provider.provideFileDecoration(agentStatusDecorationUri('terminal', sessionName) as never)).toBeUndefined();
   });
+
+  it('invalidates only the changed Terminal row, rollup rows, and editor tab', () => {
+    const worktreePath = '/repo/main';
+    const changedSession = terminalSessionName(worktreePath, 1);
+    const unrelatedSession = terminalSessionName(worktreePath, 2);
+    const statuses = new Map<string, AgentStatus>([
+      [changedSession, { status: 'needsInput', statusAt: 1710000000, message: 'Review' }],
+      [unrelatedSession, { status: 'failed', statusAt: 1710000001 }],
+    ]);
+    const rollups = new AgentStatusDecorationRollups();
+    rollups.setTerminals([
+      { repositoryPath: '/repo', worktreePath, sessionName: changedSession },
+      { repositoryPath: '/repo', worktreePath, sessionName: unrelatedSession },
+    ]);
+    const store = new FakeStatusStore(statuses);
+    const provider = new AgentStatusFileDecorationProvider(store, rollups);
+
+    statuses.set(changedSession, { status: 'completed', statusAt: 1710000002, unread: true });
+    store.fire([changedSession]);
+
+    const emitter = provider as unknown as {
+      _onDidChangeFileDecorations: { fire: ReturnType<typeof vi.fn> };
+    };
+    expect(emitter._onDidChangeFileDecorations.fire).toHaveBeenCalledWith([
+      expect.objectContaining(agentStatusDecorationUri('terminal', changedSession)),
+      expect.objectContaining(agentStatusDecorationUri('worktree', worktreePath)),
+      expect.objectContaining(agentStatusDecorationUri('repository', '/repo')),
+      expect.objectContaining(terminalUri(worktreePath, 1)),
+    ]);
+    expect(emitter._onDidChangeFileDecorations.fire).not.toHaveBeenCalledWith(undefined);
+    expect(emitter._onDidChangeFileDecorations.fire).not.toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining(agentStatusDecorationUri('terminal', unrelatedSession)),
+        expect.objectContaining(terminalUri(worktreePath, 2)),
+      ]),
+    );
+  });
+
+  it('does not invalidate decorations for a quiet in-progress status change', () => {
+    const worktreePath = '/repo/main';
+    const sessionName = terminalSessionName(worktreePath, 1);
+    const statuses = new Map<string, AgentStatus>();
+    const rollups = new AgentStatusDecorationRollups();
+    rollups.setTerminals([{ repositoryPath: '/repo', worktreePath, sessionName }]);
+    const store = new FakeStatusStore(statuses);
+    const provider = new AgentStatusFileDecorationProvider(store, rollups);
+    const emitter = provider as unknown as {
+      _onDidChangeFileDecorations: { fire: ReturnType<typeof vi.fn> };
+    };
+
+    statuses.set(sessionName, { status: 'inProgress', statusAt: 1710000000 });
+    store.fire([sessionName]);
+
+    expect(emitter._onDidChangeFileDecorations.fire).not.toHaveBeenCalled();
+  });
 });
 
 function createProvider(
@@ -157,4 +212,27 @@ const terminalUriCodec = new SessionUriCodec();
 
 function terminalUri(worktreePath: string, term: number): ReturnType<SessionUriCodec['encode']> {
   return terminalUriCodec.encode({ worktreePath, term });
+}
+
+class FakeStatusStore {
+  private listener: ((change: { sessionNames: readonly string[] }) => void) | undefined;
+
+  constructor(private readonly statuses: Map<string, AgentStatus>) {}
+
+  get(sessionName: string): AgentStatus | undefined {
+    return this.statuses.get(sessionName);
+  }
+
+  entries(): IterableIterator<[string, AgentStatus]> {
+    return this.statuses.entries();
+  }
+
+  onDidChange(listener: (change: { sessionNames: readonly string[] }) => void): { dispose(): void } {
+    this.listener = listener;
+    return { dispose: vi.fn() };
+  }
+
+  fire(sessionNames: readonly string[]): void {
+    this.listener?.({ sessionNames });
+  }
 }

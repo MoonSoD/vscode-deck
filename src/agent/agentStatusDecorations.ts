@@ -1,4 +1,9 @@
 import type { AgentStatus } from './agentStatusStore';
+import {
+  agentStatusDecorationCollapseInvalidationUris,
+  agentStatusDecorationInvalidationUris,
+  type AgentStatusDecorationResourceUri,
+} from './agentStatusDecorationInvalidations';
 
 export const agentStatusDecorationScheme = 'deck-status';
 
@@ -116,6 +121,21 @@ export class AgentStatusDecorationRollups {
     } else {
       collapsedSet.delete(id);
     }
+  }
+
+  invalidationUrisForSessions(sessionNames: Iterable<string>): AgentStatusDecorationResourceUri[] {
+    return agentStatusDecorationInvalidationUris(sessionNames, this.terminals);
+  }
+
+  invalidationUrisForCollapsedNode(
+    kind: Exclude<AgentStatusDecorationNodeKind, 'terminal'>,
+    id: string,
+  ): AgentStatusDecorationResourceUri[] {
+    return agentStatusDecorationCollapseInvalidationUris(
+      kind,
+      id,
+      this.terminals.filter((terminal) => attentionStatus(this.statuses.get(terminal.sessionName)) !== undefined),
+    );
   }
 
   getDecorationStatus(kind: AgentStatusDecorationNodeKind, id: string): AgentStatus | undefined {

@@ -16,7 +16,11 @@ export interface Disposable {
 }
 
 type WatchListener = (eventType: string, filename: string | Buffer | null) => void;
-type ChangeListener = () => void;
+export interface AgentStatusChange {
+  sessionNames: readonly string[];
+}
+
+type ChangeListener = (change: AgentStatusChange) => void;
 
 export class AgentStatusStore {
   private statuses = new Map<string, AgentStatus>();
@@ -83,7 +87,7 @@ export class AgentStatusStore {
     const removedStatus = this.statuses.delete(sessionName);
     const removedReadMarker = this.readMarkers.delete(sessionName);
     if (removedStatus || removedReadMarker) {
-      this.notify();
+      this.notify([sessionName]);
     }
   }
 
@@ -95,7 +99,7 @@ export class AgentStatusStore {
     await mkdir(this.readRoot, { recursive: true });
     await writeFile(this.readMarkerPath(sessionName), `${JSON.stringify({ statusAt: status.statusAt })}\n`);
     this.readMarkers.set(sessionName, status.statusAt);
-    this.notify();
+    this.notify([sessionName]);
   }
 
   private scheduleReload(): void {
@@ -116,15 +120,23 @@ export class AgentStatusStore {
     await this.pruneOrphanReadMarkers(nextStatuses, nextReadMarkers);
     if (sameStatuses(this.statuses, nextStatuses) && sameReadMarkers(this.readMarkers, nextReadMarkers)) return;
 
+    const changedSessionNames = changedSessions(
+      this.statuses,
+      this.readMarkers,
+      nextStatuses,
+      nextReadMarkers,
+    );
     this.statuses = nextStatuses;
     this.readMarkers = nextReadMarkers;
     if (fire) {
-      this.notify();
+      this.notify(changedSessionNames);
     }
   }
 
-  private notify(): void {
-    for (const listener of this.listeners) listener();
+  private notify(sessionNames: Iterable<string>): void {
+    const change = { sessionNames: [...new Set(sessionNames)] };
+    if (change.sessionNames.length === 0) return;
+    for (const listener of this.listeners) listener(change);
   }
 
   private async ensureRoots(): Promise<void> {
@@ -350,11 +362,40 @@ function sameReadMarkers(left: ReadonlyMap<string, number>, right: ReadonlyMap<s
   return true;
 }
 
+function changedSessions(
+  currentStatuses: ReadonlyMap<string, AgentStatus>,
+  currentReadMarkers: ReadonlyMap<string, number>,
+  nextStatuses: ReadonlyMap<string, AgentStatus>,
+  nextReadMarkers: ReadonlyMap<string, number>,
+): string[] {
+  const sessionNames = new Set([...currentStatuses.keys(), ...nextStatuses.keys()]);
+  const changed: string[] = [];
+  for (const sessionName of sessionNames) {
+    if (sameStatus(
+      withReadState(currentStatuses.get(sessionName), currentReadMarkers.get(sessionName)),
+      withReadState(nextStatuses.get(sessionName), nextReadMarkers.get(sessionName)),
+    )) continue;
+    changed.push(sessionName);
+  }
+  return changed;
+}
+
+function withReadState(status: AgentStatus | undefined, readStatusAt: number | undefined): AgentStatus | undefined {
+  if (status?.status !== 'completed') return status;
+  return {
+    ...status,
+    unread: readStatusAt === undefined || status.statusAt > readStatusAt,
+  };
+}
+
 function sameStatus(left: AgentStatus | undefined, right: AgentStatus | undefined): boolean {
   if (left === undefined || right === undefined) return left === right;
   if (left.status !== right.status) return false;
   if (left.message !== right.message) return false;
-  return left.status !== 'completed' || left.statusAt === right.statusAt;
+  return left.status !== 'completed' || (
+    left.statusAt === right.statusAt &&
+    left.unread === right.unread
+  );
 }
 
 function isNotFound(error: unknown): boolean {
