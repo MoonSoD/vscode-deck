@@ -76,6 +76,7 @@ export interface TerminalTransportLike {
 
 export type TerminalTransportFactory = () => TerminalTransportLike;
 export type TerminalEditorDisposeHandler = (sessionName: string) => Promise<void> | void;
+export type TerminalEditorTitleChangeHandler = (sessionName: string) => Promise<void> | void;
 
 export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvider<TerminalDocument> {
   private readonly panels = new Map<string, vscode.WebviewPanel>();
@@ -91,7 +92,7 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
     private readonly transportFactory: TerminalTransportFactory = () =>
       new TerminalTransport(this.configPath),
     private readonly onPanelDispose: TerminalEditorDisposeHandler = () => undefined,
-    private readonly onTitleChange: () => void = () => undefined,
+    private readonly onTitleChange: TerminalEditorTitleChangeHandler = () => undefined,
     private readonly resolveTerminalSession: (sessionName: string) => Promise<TmuxSession | undefined> = async () =>
       undefined,
     // Awaited before a reattach issues `new-session -A`. On reopen after the
@@ -193,7 +194,7 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
       }),
       transport.onRename(() => {
         applyTabDecoration();
-        this.onTitleChange();
+        this.onTitleChange(document.sessionName);
       }),
       // Decoration deferred while hidden lands here: a Terminal tab carries its
       // current label/icon the moment it's shown. Gated on staleness so a plain

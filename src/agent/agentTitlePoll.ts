@@ -16,7 +16,7 @@ interface AgentTitlePollOptions {
   onError?: (error: unknown) => void;
 }
 
-type ChangeListener = (changedSessionNames: readonly string[]) => void;
+type ChangeListener = (changedSessions: readonly TmuxSession[]) => void;
 
 const AGENT_WINDOW_NAMES = new Set(['claude', 'codex']);
 
@@ -102,7 +102,7 @@ export class AgentTitlePoll implements Disposable {
     const sessions = await this.options.listSessions();
     const nextLabels = new Map<string, string>();
     let hasAgentSession = false;
-    const changedSessionNames: string[] = [];
+    const changedSessions: TmuxSession[] = [];
 
     for (const session of sessions) {
       const label = resolveTerminalLabel(session.windowName, session.paneTitle);
@@ -110,7 +110,7 @@ export class AgentTitlePoll implements Disposable {
       if (AGENT_WINDOW_NAMES.has(session.windowName)) hasAgentSession = true;
       const previousLabel = this.labels.get(session.sessionName);
       if (previousLabel !== undefined && previousLabel !== label) {
-        changedSessionNames.push(session.sessionName);
+        changedSessions.push(session);
       }
     }
 
@@ -119,8 +119,8 @@ export class AgentTitlePoll implements Disposable {
       this.labels.set(sessionName, label);
     }
 
-    if (changedSessionNames.length > 0) {
-      for (const listener of this.listeners) listener(changedSessionNames);
+    if (changedSessions.length > 0) {
+      for (const listener of this.listeners) listener(changedSessions);
     }
 
     return hasAgentSession;

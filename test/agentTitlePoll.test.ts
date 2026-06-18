@@ -29,7 +29,9 @@ describe('AgentTitlePoll', () => {
     await scheduler.runNext();
 
     expect(changes).toHaveBeenCalledOnce();
-    expect(changes).toHaveBeenCalledWith(['term-1']);
+    expect(changes).toHaveBeenCalledWith([
+      { sessionName: 'term-1', windowName: 'claude', paneTitle: '✳ renamed task' },
+    ]);
     expect(listSessions).toHaveBeenCalledTimes(2);
   });
 
@@ -63,7 +65,9 @@ describe('AgentTitlePoll', () => {
     focusHandler?.(true);
     await flush();
 
-    expect(changes).toHaveBeenCalledWith(['term-1']);
+    expect(changes).toHaveBeenCalledWith([
+      { sessionName: 'term-1', windowName: 'codex', paneTitle: '⠋ renamed task' },
+    ]);
     expect(scheduler.hasTick()).toBe(true);
   });
 
@@ -121,7 +125,9 @@ describe('AgentTitlePoll', () => {
     poll.start();
     await flush();
 
-    expect(changes).toHaveBeenCalledWith(['term-1']);
+    expect(changes).toHaveBeenCalledWith([
+      { sessionName: 'term-1', windowName: 'claude', paneTitle: '✳ started agent' },
+    ]);
     expect(scheduler.hasTick()).toBe(true);
   });
 });

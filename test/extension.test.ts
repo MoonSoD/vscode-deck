@@ -45,7 +45,7 @@ const vscodeState = vi.hoisted(() => ({
     start: ReturnType<typeof vi.fn>;
     dispose: ReturnType<typeof vi.fn>;
     onChange: ReturnType<typeof vi.fn>;
-    listener?: (changedSessionNames: readonly string[]) => void;
+    listener?: (changedSessions: ReadonlyArray<{ sessionName: string; windowName: string; paneTitle?: string }>) => void;
   }>,
   restoreOnActivationImpl: (async () => undefined) as () => Promise<unknown>,
   agentStatusStoreStart: vi.fn(async () => ({ dispose: vi.fn() })),
@@ -91,6 +91,7 @@ const vscodeState = vi.hoisted(() => ({
     findTerminalBySessionName: ReturnType<typeof vi.fn>;
     describeSession: ReturnType<typeof vi.fn>;
     refresh: ReturnType<typeof vi.fn>;
+    refreshTerminalDisplays: ReturnType<typeof vi.fn>;
     getChildren: ReturnType<typeof vi.fn>;
   }>,
   registerCommand: vi.fn(() => ({ dispose: vi.fn() })),
@@ -324,6 +325,7 @@ vi.mock('../src/tree/repositoryTree', () => ({
     findTerminalBySessionName = vi.fn();
     describeSession = vi.fn();
     refresh = vi.fn();
+    refreshTerminalDisplays = vi.fn();
     setCollapsed = vi.fn();
     getChildren = vi.fn(() => [{ repositoryPath: '/settings/repo' }]);
 
@@ -448,10 +450,10 @@ vi.mock('../src/agent/agentStatusStore', () => ({
 
 vi.mock('../src/agent/agentTitlePoll', () => ({
   AgentTitlePoll: class {
-    listener?: (changedSessionNames: readonly string[]) => void;
+    listener?: (changedSessions: ReadonlyArray<{ sessionName: string; windowName: string; paneTitle?: string }>) => void;
     start = vi.fn();
     dispose = vi.fn();
-    onChange = vi.fn((listener: (changedSessionNames: readonly string[]) => void) => {
+    onChange = vi.fn((listener: (changedSessions: ReadonlyArray<{ sessionName: string; windowName: string; paneTitle?: string }>) => void) => {
       this.listener = listener;
       return { dispose: vi.fn() };
     });
@@ -1037,12 +1039,20 @@ describe('activate', () => {
     };
     const refreshTitles = vi.spyOn(provider, 'refreshTitles');
     tree.refresh.mockClear();
+    tree.refreshTerminalDisplays.mockClear();
+    poll.start.mockClear();
 
-    poll.listener?.(['wt-_work_alpha-main__term-1']);
+    const changedSessions = [{
+      sessionName: 'wt-_work_alpha-main__term-1',
+      windowName: 'claude',
+      paneTitle: '✳ renamed task',
+    }];
+    poll.listener?.(changedSessions);
 
-    expect(tree.refresh).toHaveBeenCalledOnce();
+    expect(tree.refresh).not.toHaveBeenCalled();
+    expect(tree.refreshTerminalDisplays).toHaveBeenCalledWith(changedSessions);
     expect(refreshTitles).toHaveBeenCalledWith(['wt-_work_alpha-main__term-1']);
-    expect(poll.start).toHaveBeenCalled();
+    expect(poll.start).not.toHaveBeenCalled();
   });
 
   it('shares pending WorktreeRemoval state between the command and tree', async () => {

@@ -97,30 +97,49 @@ class WorktreeNode extends vscode.TreeItem {
 }
 
 class TerminalNode extends vscode.TreeItem {
+  private renderSignature = '';
+
   constructor(
-    public readonly terminal: TmuxSession,
-    public readonly worktreeNode: WorktreeNode,
+    public terminal: TmuxSession,
+    public worktreeNode: WorktreeNode,
     isActiveWorktree: boolean,
     status?: AgentStatus,
   ) {
+    super('', vscode.TreeItemCollapsibleState.None);
+    this.id = `terminal::${terminal.sessionName}`;
+    this.resourceUri = toDecorationUri('terminal', terminal.sessionName);
+    this.command = {
+      command: 'deck.openTerminal',
+      title: 'Open Terminal',
+      arguments: [this],
+    };
+    this.update(terminal, worktreeNode, isActiveWorktree, status);
+  }
+
+  update(
+    terminal: TmuxSession,
+    worktreeNode: WorktreeNode,
+    isActiveWorktree: boolean,
+    status?: AgentStatus,
+  ): boolean {
     const item = describeTerminalTreeItem(
       terminal.windowName,
       isActiveWorktree,
       status,
       terminal.paneTitle,
     );
-    super(item.label, vscode.TreeItemCollapsibleState.None);
-    this.id = `terminal::${terminal.sessionName}`;
+    const nextSignature = JSON.stringify([item.label, item.contextValue, item.iconId]);
+    const changed = this.renderSignature !== '' && this.renderSignature !== nextSignature;
+
+    this.terminal = terminal;
+    this.worktreeNode = worktreeNode;
+    this.label = item.label;
     this.contextValue = item.contextValue;
     this.description = item.description;
     this.tooltip = item.tooltip;
-    this.resourceUri = toDecorationUri('terminal', terminal.sessionName);
     this.iconPath = terminalIconPath(terminal.windowName, status);
-    this.command = {
-      command: 'deck.openTerminal',
-      title: 'Open Terminal',
-      arguments: [this],
-    };
+    this.renderSignature = nextSignature;
+    return changed;
   }
 
   get repositoryPath(): string {
@@ -154,6 +173,7 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
   private readonly refreshingWorktrees = new Set<string>();
   private readonly knownWorktreeRepositories = new Map<string, string>();
   private readonly knownTerminals = new Map<string, AgentStatusDecorationTerminal>();
+  private readonly renderedTerminals = new Map<string, TerminalNode>();
   private readonly tmux: TerminalSessionLister;
   private readonly tmuxAvailable: boolean;
 
@@ -179,7 +199,7 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
     this.syncAgentStatusDecorations();
     this.agentStatuses?.onDidChange(() => {
       this.syncAgentStatusDecorations();
-      this.refresh();
+      this.refreshRenderedTerminals();
     });
 
     if (typeof tmuxOrAvailable === 'boolean') {
@@ -195,6 +215,34 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
   refresh(): void {
     this.resolveActiveRepository();
     this._onDidChangeTreeData.fire(undefined);
+  }
+
+  refreshTerminalDisplays(sessions: readonly TmuxSession[]): void {
+    for (const session of sessions) {
+      const node = this.renderedTerminals.get(session.sessionName);
+      if (!node) continue;
+      if (node.update(
+        session,
+        node.worktreeNode,
+        this.isCurrentWorktree(node.worktreePath),
+        this.agentStatuses?.get(session.sessionName),
+      )) {
+        this._onDidChangeTreeData.fire(node);
+      }
+    }
+  }
+
+  private refreshRenderedTerminals(): void {
+    for (const node of this.renderedTerminals.values()) {
+      if (node.update(
+        node.terminal,
+        node.worktreeNode,
+        this.isCurrentWorktree(node.worktreePath),
+        this.agentStatuses?.get(node.terminal.sessionName),
+      )) {
+        this._onDidChangeTreeData.fire(node);
+      }
+    }
   }
 
   getTreeItem(element: RepositoryTreeNode): vscode.TreeItem {
@@ -313,6 +361,11 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
 
   private currentWorktreePath(): string | undefined {
     return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  }
+
+  private isCurrentWorktree(worktreePath: string): boolean {
+    const activeWorktreePath = this.currentWorktreePath();
+    return activeWorktreePath !== undefined && path.resolve(worktreePath) === path.resolve(activeWorktreePath);
   }
 
   private isActiveRepository(repositoryPath: string): boolean {
@@ -462,6 +515,7 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
     const isActiveWorktree =
       activeWorktreePath !== undefined &&
       path.resolve(element.worktree.path) === path.resolve(activeWorktreePath);
+    const liveSessionNames = new Set(terminals.map((terminal) => terminal.sessionName));
     const nodes = terminals.map(
       (terminal) => {
         this.knownTerminals.set(terminal.sessionName, {
@@ -469,14 +523,22 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
           worktreePath: element.worktree.path,
           sessionName: terminal.sessionName,
         });
-        return new TerminalNode(
-          terminal,
-          element,
-          isActiveWorktree,
-          this.agentStatuses?.get(terminal.sessionName),
-        );
+        const status = this.agentStatuses?.get(terminal.sessionName);
+        const existing = this.renderedTerminals.get(terminal.sessionName);
+        if (existing) {
+          existing.update(terminal, element, isActiveWorktree, status);
+          return existing;
+        }
+        const node = new TerminalNode(terminal, element, isActiveWorktree, status);
+        this.renderedTerminals.set(terminal.sessionName, node);
+        return node;
       },
     );
+    for (const [sessionName, node] of this.renderedTerminals) {
+      if (node.worktreePath === element.worktree.path && !liveSessionNames.has(sessionName)) {
+        this.renderedTerminals.delete(sessionName);
+      }
+    }
     this.syncAgentStatusDecorations();
     return nodes;
   }

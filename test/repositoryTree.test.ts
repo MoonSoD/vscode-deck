@@ -730,7 +730,7 @@ describe('RepositoryTreeProvider', () => {
     ]);
   });
 
-  it('renders agent identity on Terminal rows and refreshes on status changes', async () => {
+  it('relabels only the rendered Terminal row when its working status changes', async () => {
     const tmux = {
       listSessions: vi.fn(async () => [
         {
@@ -741,10 +741,11 @@ describe('RepositoryTreeProvider', () => {
       ]),
     };
     let statusChange: (() => void) | undefined;
+    let status = { status: 'completed' as const, statusAt: 1710000000 };
     const agentStatuses = {
       get: vi.fn((sessionName: string) =>
         sessionName === 'wt-_work_alpha-main__term-1'
-          ? { status: 'completed' as const, statusAt: 1710000000 }
+          ? status
           : undefined,
       ),
       entries: vi.fn(() => new Map().entries()),
@@ -770,12 +771,70 @@ describe('RepositoryTreeProvider', () => {
     if (!Array.isArray(worktrees)) throw new Error('expected worktree children');
 
     const terminalRows = await provider.getChildren(worktrees[0]);
+    vscodeState.emitters[0].fire.mockClear();
+    status = { status: 'inProgress' as const, statusAt: 1710000001 };
     statusChange?.();
 
-    expect((terminalRows as Array<{ iconPath: { fsPath: string } }>)[0].iconPath.fsPath)
-      .toMatch(/resources\/claude-code\.png$/);
     expect((terminalRows as Array<{ label: string }>)[0].label).toBe('reconcile checkout state');
-    expect(vscodeState.emitters[0].fire).toHaveBeenCalledWith(undefined);
+    expect((terminalRows as Array<{ iconPath: { fsPath: string } }>)[0].iconPath.fsPath)
+      .toMatch(/resources\/claude-working\.gif$/);
+    expect(vscodeState.emitters[0].fire).toHaveBeenCalledOnce();
+    expect(vscodeState.emitters[0].fire).toHaveBeenCalledWith(terminalRows[0]);
+    expect(vscodeState.emitters[0].fire).not.toHaveBeenCalledWith(undefined);
+  });
+
+  it('does not repaint Terminal rows when only the status message changes', async () => {
+    const tmux = {
+      listSessions: vi.fn(async () => [
+        {
+          sessionName: 'wt-_work_alpha-main__term-1',
+          windowName: 'claude',
+          paneTitle: '✳ reconcile checkout state',
+        },
+      ]),
+    };
+    let status = {
+      status: 'inProgress' as const,
+      statusAt: 1710000000,
+      message: 'first',
+    };
+    let statusChange: (() => void) | undefined;
+    const agentStatuses = {
+      get: vi.fn((sessionName: string) =>
+        sessionName === 'wt-_work_alpha-main__term-1' ? status : undefined,
+      ),
+      entries: vi.fn(() => new Map().entries()),
+      onDidChange: vi.fn((listener: () => void) => {
+        statusChange = listener;
+        return { dispose: vi.fn() };
+      }),
+    };
+    const provider = new RepositoryTreeProvider(
+      registry(['/work/alpha-main']),
+      { get: vi.fn() } as unknown as ActiveWorktreeStore,
+      { get: vi.fn() } as unknown as WorktreeOrderStore,
+      { get: vi.fn(), set: vi.fn(async () => undefined) } as unknown as WorktreeListCacheStore,
+      { get: vi.fn(() => '/git/alpha'), set: vi.fn(async () => undefined) } as unknown as RepositoryCommonDirCache,
+      tmux,
+      true,
+      new Set(),
+      agentStatuses,
+    );
+    const repositories = provider.getChildren();
+    if (!Array.isArray(repositories)) throw new Error('expected sync repository roots');
+    const worktrees = await provider.getChildren(repositories[0]);
+    if (!Array.isArray(worktrees)) throw new Error('expected worktree children');
+    await provider.getChildren(worktrees[0]);
+    vscodeState.emitters[0].fire.mockClear();
+
+    status = {
+      status: 'inProgress',
+      statusAt: 1710000001,
+      message: 'second',
+    };
+    statusChange?.();
+
+    expect(vscodeState.emitters[0].fire).not.toHaveBeenCalled();
   });
 
   it('renders a Codex identity icon for a codex window before status exists', async () => {
@@ -1107,12 +1166,60 @@ describe('RepositoryTreeProvider', () => {
     if (!Array.isArray(worktrees)) throw new Error('expected worktree children');
 
     const firstRows = await provider.getChildren(worktrees[0]);
+    expect((firstRows as Array<{ label: string }>).map((row) => row.label)).toEqual(['zsh']);
     provider.refresh();
     const secondRows = await provider.getChildren(worktrees[0]);
 
     expect(tmux.listSessions).toHaveBeenCalledTimes(2);
-    expect((firstRows as Array<{ label: string }>).map((row) => row.label)).toEqual(['zsh']);
+    expect((secondRows as Array<unknown>)[0]).toBe((firstRows as Array<unknown>)[0]);
     expect((secondRows as Array<{ label: string }>).map((row) => row.label)).toEqual(['claude']);
+  });
+
+  it('relabels only the rendered Terminal row when its display changes', async () => {
+    const tmux = {
+      listSessions: vi.fn(async () => [
+        {
+          sessionName: 'wt-_work_alpha-main__term-1',
+          windowName: 'claude',
+          paneTitle: '✳ first task',
+        },
+        {
+          sessionName: 'wt-_work_alpha-main__term-2',
+          windowName: 'zsh',
+        },
+      ]),
+    };
+    const provider = new RepositoryTreeProvider(
+      registry(['/work/alpha-main']),
+      { get: vi.fn() } as unknown as ActiveWorktreeStore,
+      { get: vi.fn() } as unknown as WorktreeOrderStore,
+      { get: vi.fn(), set: vi.fn(async () => undefined) } as unknown as WorktreeListCacheStore,
+      { get: vi.fn(() => '/git/alpha'), set: vi.fn(async () => undefined) } as unknown as RepositoryCommonDirCache,
+      tmux,
+      true,
+    );
+    const repositories = provider.getChildren();
+    if (!Array.isArray(repositories)) throw new Error('expected sync repository roots');
+    const worktrees = await provider.getChildren(repositories[0]);
+    if (!Array.isArray(worktrees)) throw new Error('expected worktree children');
+    const terminalRows = await provider.getChildren(worktrees[0]);
+    if (!Array.isArray(terminalRows)) throw new Error('expected terminal children');
+    vscodeState.emitters[0].fire.mockClear();
+
+    provider.refreshTerminalDisplays([
+      {
+        sessionName: 'wt-_work_alpha-main__term-1',
+        windowName: 'claude',
+        paneTitle: '✳ renamed task',
+      },
+    ]);
+
+    expect((terminalRows[0] as { label: string }).label).toBe('renamed task');
+    expect((terminalRows[1] as { label: string }).label).toBe('zsh');
+    expect(vscodeState.emitters[0].fire).toHaveBeenCalledOnce();
+    expect(vscodeState.emitters[0].fire).toHaveBeenCalledWith(terminalRows[0]);
+    expect(vscodeState.emitters[0].fire).not.toHaveBeenCalledWith(undefined);
+    expect(tmux.listSessions).toHaveBeenCalledTimes(1);
   });
 
   it('renders tmux install placeholder when tmux is unavailable', async () => {

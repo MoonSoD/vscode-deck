@@ -251,7 +251,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     refreshTree,
     // %window-renamed from any open terminal's control client → relabel the row
     // live (automatic-rename tracks the foreground command); event-driven, no poll.
-    refreshTree,
+    async (sessionName) => {
+      const session = await tmux.terminalSession(sessionName);
+      if (session) tree.refreshTerminalDisplays([session]);
+    },
     (sessionName) => tmux.terminalSession(sessionName),
     ensureSnapshotRestored,
   );
@@ -264,9 +267,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         onError: (error) => console.warn('Deck: agent title poll failed', error),
       })
     : undefined;
-  const agentTitlePollWatch = agentTitlePoll?.onChange((changedSessionNames) => {
-    refreshTree();
-    terminalEditorProvider.refreshTitles(changedSessionNames);
+  const agentTitlePollWatch = agentTitlePoll?.onChange((changedSessions) => {
+    tree.refreshTerminalDisplays(changedSessions);
+    terminalEditorProvider.refreshTitles(changedSessions.map((session) => session.sessionName));
   });
   agentTitlePoll?.start();
   const openTerminal = new OpenTerminalCommand({

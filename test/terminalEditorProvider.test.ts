@@ -158,6 +158,7 @@ describe('TerminalEditorProvider', () => {
       renameHandler = handler;
       return { dispose: vi.fn() };
     });
+    const onTitleChange = vi.fn();
     const terminalSessions = vi.fn(async () => ({
       sessionName: 'wt-_work_alpha-main__term-1',
       windowName: 'zsh',
@@ -170,7 +171,7 @@ describe('TerminalEditorProvider', () => {
       undefined,
       () => terminalBridge,
       undefined,
-      undefined,
+      onTitleChange,
       terminalSessions,
     );
     const document = provider.openCustomDocument({
@@ -195,6 +196,7 @@ describe('TerminalEditorProvider', () => {
     renameHandler?.();
     await flush();
     expect(terminalPanel.title).toBe('fix tab label');
+    expect(onTitleChange).toHaveBeenCalledWith('wt-_work_alpha-main__term-1');
     expect((terminalPanel as { iconPath?: { base: { fsPath: string }; paths: string[] } }).iconPath).toEqual({
       base: { fsPath: '/extension' },
       paths: ['resources', 'claude-code.png'],
