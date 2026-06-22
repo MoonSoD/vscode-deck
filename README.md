@@ -5,7 +5,7 @@
 <h1 align="center">Deck</h1>
 
 <p align="center">
-  <b>A home in VS Code for the coding agents you run across git worktrees — persistent terminals keep each one alive, and Deck taps you the moment an agent needs you.</b>
+  <b>Run coding agents across multiple repos and worktrees</b>
 </p>
 
 <p align="center">
@@ -22,17 +22,19 @@
 
 ![Deck in action](https://raw.githubusercontent.com/a9a4k/vscode-deck/main/docs/images/hero.gif)
 
+**▶ [Watch the full demo](https://youtu.be/nJ4AQmnY2Oo)**
+
 > **Install:** open the Extensions sidebar (`Cmd/Ctrl+Shift+X`), search **Deck**, click Install. Then open **Deck** from the secondary sidebar.
 
-Deck adds a **Repositories & Worktrees** tree to VS Code's secondary sidebar and gives every worktree its own **persistent terminals**. Run **Claude Code** or **Codex** in them across as many worktrees as you like — the terminals keep your agents alive through window reloads and reboots, and Deck shows each agent's status on its tree row, so you're tapped the moment one needs you instead of hunting across windows.
+Deck adds a **Repositories & Worktrees** tree to VS Code's secondary sidebar and gives every worktree its own **persistent terminals**. Run your **coding agents** in them across as many worktrees as you like — the terminals keep your agents alive through window reloads and reboots, and Deck shows each agent's status and notifies the moment one needs you.
 
-It's not another app to leave your editor for. Deck closes two gaps VS Code leaves open — working across **multiple repos and worktrees at once**, and **terminals that persist** instead of dying on every reload — right in the sidebar you already have open.
+Deck closes two gaps VS Code has — working across **multiple repos and worktrees**, and **terminals that persist** instead of dying on every reload.
 
 ## Features
 
 ### See every repo and worktree in one tree
 
-A unified **Repositories & Worktrees** tree lives in the secondary sidebar — register your repos once and every worktree shows up under them. Click a worktree to open it in this window, or open it in a new window to work on several at the same time. The tree stays put across switches, so you never lose your map of what's where.
+A unified **Repositories & Worktrees** tree lives in the secondary sidebar — register your repo and every worktree will show up automatically. Click a worktree to open it in this window, or open it in a new window to work on several at the same time.
 
 <!-- SCREENSHOT — the Repositories & Worktrees tree with a few repos expanded.
      Save to docs/images/tree.png -->
@@ -40,12 +42,12 @@ A unified **Repositories & Worktrees** tree lives in the secondary sidebar — r
 
 ### Persistent per-worktree terminals
 
-Each worktree gets its own terminals, opened as **editor tabs** (not crammed in the bottom panel) so you can `Ctrl+Tab` between them like any other tab. A dedicated tmux server keeps them alive in the background — but **you never touch tmux**: no prefix keys, no status bar, just a normal VS Code terminal, the same way iTerm2 uses tmux under the hood. A terminal is durable like a file — its tab is just a view onto it:
+Each worktree gets its own terminals, opened as **editor tabs** (not in the bottom panel) so you can `Ctrl+Tab`, `Ctrl+@`, `Ctrl+Shift+T` them like any other tab. A terminal is durable like a file - a dedicated tmux server keeps them alive in the background.
 
 - **Close the tab** — the terminal keeps running; reopen its row anytime.
 - **Open it in two windows at once** — both are live views of the same terminal; type in one and it shows in the other.
 - **Switch worktree or reload the window** — terminals reattach with whatever's running *still running*, untouched.
-- **Reboot, crash, or `kill-server`** — terminals come back at their working directory with scrollback, and your **Claude Code / Codex sessions resume mid-conversation** (`claude --resume` / `codex resume`). Plain shells return to a fresh prompt.
+- **Reboot, crash, or `kill-server`** — terminals come back at their working directory with scrollback, and your **coding agent sessions resume automatically**.
 
 <!-- GIF — close a terminal tab / reload the window, reopen, scrollback intact.
      Save to docs/images/terminals.gif -->
@@ -53,11 +55,47 @@ Each worktree gets its own terminals, opened as **editor tabs** (not crammed in 
 
 ### Agent status in the tree
 
-Run **Claude Code** or **Codex** in a worktree's terminal and Deck reads its status straight from the agent — **working**, **needs input**, **done**, or **failed** — and shows it on the tree row, **labeled with what that agent is working on** (pulled from the agent's own task summary) so a dozen concurrent agents stay distinguishable at a glance. Run several at once and only step in when one actually needs you: optional notifications fire when an agent asks a question or finishes a turn, and stay quiet while you're already looking at that terminal's tab. Deck only *observes* — you start and drive the agents; it gives them a durable home and a status light. (The agent status and notification are shown in the demo at the top.)
+Run a **coding agent** in a worktree's terminal and Deck reads its status straight from the agent — **working**, **needs input**, **done**, or **failed** — and shows it on the tree row, **labeled with what that agent is working on** (pulled from the agent's own task summary) so a dozen concurrent agents stay distinguishable at a glance. Run several at once and only step in when one actually needs you: optional notifications fire when an agent asks a question or finishes a turn, and stay quiet while you're already looking at that terminal's tab. Deck only *observes* — you start and drive the agents; it gives them a durable home and a status light. (The agent status and notification are shown in the demo at the top.)
 
 ### One-click terminal launchers
 
 Save a command as a launcher — your agent with its usual flags, or a project bootstrap — and start a terminal running it in one click. Define launchers **per user** (global), **shared with your team** (committed to `<worktree>/.deck/launchers.json`), or **personal to one repo**. Flip **run on worktree create** and Deck fires them automatically when you add a worktree through it, so a fresh worktree can bootstrap itself and kick off an agent without you typing a thing.
+
+**Configuring launchers.** Each launcher is `{ "command": …, "label"?: …, "runOnWorktreeCreate"?: true }` — only `command` is required (`label` defaults to it; sequence commands with `&&`). The launch button on a worktree row opens a Quick Pick listing of all three sources, in this order:
+
+**1. Shared, per repo** — committed to the repo at `<worktree>/.deck/launchers.json` (a bare array):
+
+```jsonc
+[
+  { "label": "Bootstrap", "command": "pnpm install", "runOnWorktreeCreate": true },
+  { "label": "Dev server", "command": "pnpm dev" }
+]
+```
+
+**2. Personal, per repo** — in your user `settings.json`, keyed by any path inside the repo (matched by git common dir, so it applies to every worktree):
+
+```jsonc
+"deck.repositoryLaunchers": [
+  {
+    "repository": "~/code/myapp",
+    "launchers": [
+      { "label": "Claude", "command": "claude --dangerously-skip-permissions", "runOnWorktreeCreate": true },
+      { "label": "Open PR", "command": "gh pr view --web && exit" }
+    ]
+  }
+]
+```
+
+**3. All repos** — in your user `settings.json`:
+
+```jsonc
+"deck.terminalLaunchers": [
+  { "label": "Claude", "command": "claude --dangerously-skip-permissions" },
+  { "label": "Codex", "command": "codex --dangerously-bypass-approvals-and-sandbox" }
+]
+```
+
+A launcher with `"runOnWorktreeCreate": true` runs when you create a worktree through Deck — only for Deck-created worktrees, not ones it discovers from the CLI.
 
 ## Getting started
 
@@ -81,12 +119,14 @@ Save a command as a launcher — your agent with its usual flags, or a project b
 | `deck.agentResumeTemplates.claude` | — | Claude Code command template Deck uses to resume a session. Include `{id}` for the session id. |
 | `deck.agentResumeTemplates.codex` | — | Codex command template Deck uses to resume a session. Include `{id}` for the session id. |
 | `deck.tmux.automaticRenameFormat` | — | tmux automatic-rename format for Deck terminals. |
+| `deck.terminalLaunchers` | `[]` | Launchers available in every repo — see [terminal launchers](#one-click-terminal-launchers). |
+| `deck.repositoryLaunchers` | `[]` | Per-repo launchers kept in user settings — see [terminal launchers](#one-click-terminal-launchers). |
 
 ## FAQ
 
 **Is it free / open source?** Yes — MIT licensed. Source: [github.com/a9a4k/vscode-deck](https://github.com/a9a4k/vscode-deck).
 
-**Which agents work with Deck?** The terminals run any command or agent. Status, notifications, and session resume currently support **Claude Code and Codex**, via hooks Deck installs in their config.
+**Which agents work with Deck?** The terminals run any command or agent. Status, notifications, and session resume currently support **Claude Code and Codex only** — wired up via hooks Deck installs in each agent's config. Using a different agent? [Open an issue](https://github.com/a9a4k/vscode-deck/issues) and we'll look at adding support.
 
 **Do I have to use AI agents?** No. The worktree tree and persistent terminals are useful on their own; agent status is just a bonus when you do run agents in them.
 
