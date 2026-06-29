@@ -24,7 +24,7 @@
 
 **▶ [Watch the full demo](https://youtu.be/nJ4AQmnY2Oo)**
 
-> **Install:** open the Extensions sidebar (`Cmd/Ctrl+Shift+X`), search **Deck**, click Install. Then open **Deck** from the secondary sidebar.
+> **Install:** from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=a9a4k.deck), or open the Extensions sidebar (`Cmd/Ctrl+Shift+X`), search **Deck**, click Install. Then open **Deck** from the secondary sidebar.
 
 Deck adds a **Repositories & Worktrees** tree to VS Code's secondary sidebar and gives every worktree its own **persistent terminals**. Run your **coding agents** in them across as many worktrees as you like — the terminals keep your agents alive through window reloads and reboots, and Deck shows each agent's status and notifies the moment one needs you.
 
