@@ -696,6 +696,7 @@ function sameWorktree(left: Worktree, right: Worktree): boolean {
     left.branch === right.branch &&
     left.bare === right.bare &&
     left.detached === right.detached &&
-    left.locked === right.locked
+    left.locked === right.locked &&
+    left.createdAt === right.createdAt
   );
 }

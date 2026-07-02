@@ -1,5 +1,18 @@
-import { describe, expect, it } from 'vitest';
-import { parseBranchRefs, parsePorcelain } from '../src/git/worktrees';
+import { execFile } from 'node:child_process';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { promisify } from 'node:util';
+import { afterEach, describe, expect, it } from 'vitest';
+import { listWorktrees, parseBranchRefs, parsePorcelain } from '../src/git/worktrees';
+
+const exec = promisify(execFile);
+const roots: string[] = [];
+
+afterEach(async () => {
+  await Promise.all(roots.map((root) => rm(root, { force: true, recursive: true })));
+  roots.length = 0;
+});
 
 describe('parsePorcelain', () => {
   it('parses normal, detached, and bare worktree entries', () => {
@@ -76,3 +89,30 @@ feature/foo
     ).toEqual(['main', 'feature/foo', 'origin/main', 'origin/feature/foo']);
   });
 });
+
+describe('listWorktrees', () => {
+  it('populates linked worktree creation timestamps from reflog', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'deck-list-worktrees-'));
+    roots.push(root);
+    const repositoryPath = join(root, 'repo');
+    await mkdir(repositoryPath);
+    await git(repositoryPath, 'init');
+    await git(repositoryPath, 'config', 'user.email', 'deck@example.com');
+    await git(repositoryPath, 'config', 'user.name', 'Deck Test');
+    await writeFile(join(repositoryPath, 'README.md'), 'hello\n');
+    await git(repositoryPath, 'add', 'README.md');
+    await git(repositoryPath, 'commit', '-m', 'initial');
+
+    const worktreePath = join(root, 'feature');
+    await git(repositoryPath, 'worktree', 'add', '-b', 'feature', worktreePath);
+
+    const worktrees = await listWorktrees(repositoryPath);
+
+    expect(worktrees.find((worktree) => worktree.path === worktreePath)?.createdAt).toEqual(expect.any(Number));
+    expect(worktrees.find((worktree) => worktree.path === repositoryPath)?.createdAt).toBeUndefined();
+  });
+});
+
+async function git(cwd: string, ...args: string[]) {
+  return exec('git', args, { cwd });
+}

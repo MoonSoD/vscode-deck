@@ -23,8 +23,13 @@ vi.mock('../src/git/worktrees', () => ({
   listBranches: vi.fn(async () => ['main', 'feature/foo']),
 }));
 
+vi.mock('../src/git/worktreeCreationTimes', () => ({
+  worktreeCreationTimes: vi.fn(async () => new Map()),
+}));
+
 import * as vscode from 'vscode';
 import { addWorktree, getCommonDir, listBranches } from '../src/git/worktrees';
+import { worktreeCreationTimes } from '../src/git/worktreeCreationTimes';
 import { AddWorktreeCommand } from '../src/worktree/addWorktreeCommand';
 
 interface InputBoxMock {
@@ -120,6 +125,8 @@ describe('AddWorktreeCommand', () => {
     vi.mocked(addWorktree).mockResolvedValue(undefined);
     vi.mocked(getCommonDir).mockResolvedValue('/git/myrepo');
     vi.mocked(listBranches).mockResolvedValue(['main', 'feature/foo']);
+    vi.mocked(worktreeCreationTimes).mockReset();
+    vi.mocked(worktreeCreationTimes).mockResolvedValue(new Map());
     vi.mocked(vscode.window.createInputBox).mockReset();
     vi.mocked(vscode.window.showErrorMessage).mockReset();
     vi.mocked(vscode.window.showInformationMessage).mockReset();
@@ -298,6 +305,29 @@ describe('AddWorktreeCommand', () => {
       bare: false,
       detached: false,
       branch: 'feature/foo',
+    });
+  });
+
+  it('adds the new worktree creation timestamp to the optimistic cache row', async () => {
+    const { command, worktreeListCache } = createCommand('/custom/worktrees');
+    const input = createAcceptingInputBox();
+
+    pickExistingBranch();
+    vi.mocked(worktreeCreationTimes).mockResolvedValue(new Map([
+      ['/custom/worktrees/feature-foo', 1234],
+    ]));
+    vi.mocked(vscode.window.createInputBox).mockReturnValue(input as vscode.InputBox);
+
+    await command.run({ repositoryPath: '/work/myrepo' });
+
+    expect(worktreeCreationTimes).toHaveBeenCalledWith('/git/myrepo');
+    expect(worktreeListCache.add).toHaveBeenCalledWith('/git/myrepo', {
+      path: '/custom/worktrees/feature-foo',
+      head: '',
+      bare: false,
+      detached: false,
+      branch: 'feature/foo',
+      createdAt: 1234,
     });
   });
 

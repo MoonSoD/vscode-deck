@@ -390,6 +390,76 @@ describe('RepositoryTreeProvider', () => {
     expect(worktreeListCache.set).not.toHaveBeenCalled();
   });
 
+  it('refreshes warm cached worktrees when creation timestamps are discovered', async () => {
+    vi.mocked(listWorktrees).mockResolvedValueOnce([
+      {
+        path: '/work/alpha-main',
+        head: 'a',
+        branch: 'main',
+        bare: false,
+        detached: false,
+      },
+      {
+        path: '/work/alpha-feature',
+        head: 'aa',
+        branch: 'feature',
+        bare: false,
+        detached: false,
+        createdAt: 1234,
+      },
+    ]);
+    const worktreeListCache = {
+      get: vi.fn(() => [
+        {
+          path: '/work/alpha-main',
+          head: 'a',
+          branch: 'main',
+          bare: false,
+          detached: false,
+        },
+        {
+          path: '/work/alpha-feature',
+          head: 'aa',
+          branch: 'feature',
+          bare: false,
+          detached: false,
+        },
+      ]),
+      set: vi.fn(async () => undefined),
+    } as unknown as WorktreeListCacheStore;
+    const provider = new RepositoryTreeProvider(
+      registry(['/work/alpha-main']),
+      { get: vi.fn() } as unknown as ActiveWorktreeStore,
+      { get: vi.fn() } as unknown as WorktreeOrderStore,
+      worktreeListCache,
+      { get: vi.fn(() => '/git/alpha'), set: vi.fn(async () => undefined) } as unknown as RepositoryCommonDirCache,
+    );
+
+    const repositoryNode = provider.getChildren();
+    if (!Array.isArray(repositoryNode)) throw new Error('expected sync repository roots');
+
+    provider.getChildren(repositoryNode[0]);
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(worktreeListCache.set).toHaveBeenCalledWith('/git/alpha', [
+      {
+        path: '/work/alpha-main',
+        head: 'a',
+        branch: 'main',
+        bare: false,
+        detached: false,
+      },
+      {
+        path: '/work/alpha-feature',
+        head: 'aa',
+        branch: 'feature',
+        bare: false,
+        detached: false,
+        createdAt: 1234,
+      },
+    ]);
+  });
+
   it('hides pending worktree removals from warm cached rows', () => {
     const activeWorktrees = {
       get: vi.fn(),

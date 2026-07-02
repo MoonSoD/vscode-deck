@@ -2,7 +2,7 @@ import type { Worktree } from '../git/worktrees';
 import type { MementoLike } from '../switch/activeWorktreeStore';
 
 export const WORKTREE_LIST_CACHE_KEY = 'deck.worktreeListCache';
-export const WORKTREE_LIST_CACHE_SCHEMA_VERSION = 1;
+export const WORKTREE_LIST_CACHE_SCHEMA_VERSION = 2;
 
 interface WorktreeListCacheEntry {
   schemaVersion: number;

@@ -11,6 +11,7 @@ import {
   type AddWorktreeOptions,
   type Worktree,
 } from '../git/worktrees';
+import { worktreeCreationTimes } from '../git/worktreeCreationTimes';
 import { branchWorktreeName, defaultWorktreePath } from './defaultWorktreePath';
 
 const CREATE_BRANCH_LABEL = 'Create new branch...';
@@ -104,13 +105,16 @@ export class AddWorktreeCommand {
     }
 
     await this.worktreeRoots.set(commonDir, path.dirname(request.path));
-    await this.worktreeListCache.add(commonDir, {
+    const createdAt = (await worktreeCreationTimes(commonDir)).get(path.normalize(request.path));
+    const worktree: Worktree = {
       path: request.path,
       head: '',
       bare: false,
       detached: false,
       branch: request.branch,
-    });
+    };
+    if (createdAt !== undefined) worktree.createdAt = createdAt;
+    await this.worktreeListCache.add(commonDir, worktree);
     this.refresh();
     try {
       await this.worktreeCreateLaunchers.run({ worktree: { path: request.path } });

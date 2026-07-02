@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process';
 import * as path from 'node:path';
 import { promisify } from 'node:util';
+import { worktreeCreationTimes } from './worktreeCreationTimes';
 
 const exec = promisify(execFile);
 
@@ -11,6 +12,7 @@ export interface Worktree {
   bare: boolean;
   detached: boolean;
   locked?: boolean;
+  createdAt?: number;
 }
 
 export type AddWorktreeOptions =
@@ -28,7 +30,13 @@ export async function listWorktrees(repositoryPath: string): Promise<Worktree[]>
   const { stdout } = await exec('git', ['worktree', 'list', '--porcelain'], {
     cwd: repositoryPath,
   });
-  return parsePorcelain(stdout);
+  const worktrees = parsePorcelain(stdout);
+  const creationTimes = await worktreeCreationTimes(await getCommonDir(repositoryPath));
+
+  return worktrees.map((worktree) => {
+    const createdAt = creationTimes.get(path.normalize(worktree.path));
+    return createdAt === undefined ? worktree : { ...worktree, createdAt };
+  });
 }
 
 export async function listBranches(repositoryPath: string): Promise<string[]> {

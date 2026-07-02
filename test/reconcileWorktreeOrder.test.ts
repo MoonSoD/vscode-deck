@@ -2,29 +2,40 @@ import { describe, expect, it } from 'vitest';
 import { Worktree } from '../src/git/worktrees';
 import { reconcileWorktreeOrder } from '../src/tree/reconcileWorktreeOrder';
 
-function worktree(path: string): Worktree {
+function worktree(path: string, createdAt?: number): Worktree {
   return {
     path,
     head: path,
     bare: false,
     detached: false,
     branch: path,
+    createdAt,
   };
 }
 
 describe('reconcileWorktreeOrder', () => {
-  it('returns git worktrees verbatim when no order is stored', () => {
-    const gitWorktrees = [worktree('/work/main'), worktree('/work/feature')];
-
-    expect(reconcileWorktreeOrder(undefined, gitWorktrees)).toBe(gitWorktrees);
-  });
-
-  it('puts stored worktrees first and appends unknown worktrees in git order', () => {
+  it('defaults to main first, then creation order with newest last', () => {
     const gitWorktrees = [
       worktree('/work/main'),
-      worktree('/work/feature-a'),
+      worktree('/work/feature-new', 3000),
+      worktree('/work/feature-old', 1000),
+      worktree('/work/feature-middle', 2000),
+    ];
+
+    expect(reconcileWorktreeOrder(undefined, gitWorktrees).map((w) => w.path)).toEqual([
+      '/work/main',
+      '/work/feature-old',
+      '/work/feature-middle',
+      '/work/feature-new',
+    ]);
+  });
+
+  it('puts stored worktrees first and appends unplaced worktrees in creation order', () => {
+    const gitWorktrees = [
+      worktree('/work/main'),
+      worktree('/work/feature-a', 3000),
       worktree('/work/feature-b'),
-      worktree('/work/feature-c'),
+      worktree('/work/feature-c', 1000),
     ];
 
     expect(
@@ -35,8 +46,8 @@ describe('reconcileWorktreeOrder', () => {
     ).toEqual([
       '/work/feature-b',
       '/work/main',
-      '/work/feature-a',
       '/work/feature-c',
+      '/work/feature-a',
     ]);
   });
 
