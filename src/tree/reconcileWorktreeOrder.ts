@@ -29,6 +29,8 @@ function sortUnplacedWorktrees(
     (worktree) => worktree.path !== mainWorktree?.path && !placedPaths.has(worktree.path),
   );
 
+  // Stable sort (ES2019): worktrees with equal or absent createdAt keep git order.
+  // Undated worktrees fall to epoch 0, i.e. the top — a mixed dated/undated repo is out of scope (ADR-0048).
   unplacedWorktrees.sort((left, right) => (left.createdAt ?? 0) - (right.createdAt ?? 0));
 
   if (mainWorktree === undefined || placedPaths.has(mainWorktree.path)) return unplacedWorktrees;

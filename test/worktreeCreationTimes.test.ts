@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
@@ -17,7 +17,7 @@ afterEach(async () => {
 
 describe('worktreeCreationTimes', () => {
   it('reads linked worktree creation timestamps from reflog admin dirs', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'deck-worktree-times-'));
+    const root = await realpath(await mkdtemp(join(tmpdir(), 'deck-worktree-times-')));
     roots.push(root);
     const repositoryPath = join(root, 'repo');
     await mkdir(repositoryPath);
