@@ -5,34 +5,32 @@ export function reconcileWorktreeOrder(
   gitWorktrees: readonly Worktree[],
 ): readonly Worktree[] {
   const byPath = new Map(gitWorktrees.map((worktree) => [worktree.path, worktree]));
-  const emitted = new Set<string>();
+  const placedPaths = new Set<string>();
   const ordered: Worktree[] = [];
 
   for (const path of storedOrder ?? []) {
     const worktree = byPath.get(path);
     if (!worktree) continue;
     ordered.push(worktree);
-    emitted.add(path);
+    placedPaths.add(path);
   }
 
-  for (const worktree of sortUnplacedWorktrees(gitWorktrees, emitted)) {
-    if (!emitted.has(worktree.path)) ordered.push(worktree);
-  }
+  ordered.push(...sortUnplacedWorktrees(gitWorktrees, placedPaths));
 
   return ordered;
 }
 
 function sortUnplacedWorktrees(
   gitWorktrees: readonly Worktree[],
-  emitted: ReadonlySet<string>,
+  placedPaths: ReadonlySet<string>,
 ): Worktree[] {
   const mainWorktree = gitWorktrees.find((worktree) => !worktree.bare);
-  const unplaced = gitWorktrees.filter(
-    (worktree) => worktree.path !== mainWorktree?.path && !emitted.has(worktree.path),
+  const unplacedWorktrees = gitWorktrees.filter(
+    (worktree) => worktree.path !== mainWorktree?.path && !placedPaths.has(worktree.path),
   );
 
-  unplaced.sort((left, right) => (left.createdAt ?? 0) - (right.createdAt ?? 0));
+  unplacedWorktrees.sort((left, right) => (left.createdAt ?? 0) - (right.createdAt ?? 0));
 
-  if (mainWorktree === undefined || emitted.has(mainWorktree.path)) return unplaced;
-  return [mainWorktree, ...unplaced];
+  if (mainWorktree === undefined || placedPaths.has(mainWorktree.path)) return unplacedWorktrees;
+  return [mainWorktree, ...unplacedWorktrees];
 }

@@ -51,6 +51,38 @@ describe('reconcileWorktreeOrder', () => {
     ]);
   });
 
+  it('keeps git order for unplaced worktrees with equal creation timestamps', () => {
+    const gitWorktrees = [
+      worktree('/work/main'),
+      worktree('/work/feature-b', 1000),
+      worktree('/work/feature-a', 1000),
+      worktree('/work/feature-c', 1000),
+    ];
+
+    expect(reconcileWorktreeOrder(undefined, gitWorktrees).map((w) => w.path)).toEqual([
+      '/work/main',
+      '/work/feature-b',
+      '/work/feature-a',
+      '/work/feature-c',
+    ]);
+  });
+
+  it('keeps git order for unplaced worktrees without creation timestamps', () => {
+    const gitWorktrees = [
+      worktree('/work/main'),
+      worktree('/work/feature-b'),
+      worktree('/work/feature-a'),
+      worktree('/work/feature-c'),
+    ];
+
+    expect(reconcileWorktreeOrder(undefined, gitWorktrees).map((w) => w.path)).toEqual([
+      '/work/main',
+      '/work/feature-b',
+      '/work/feature-a',
+      '/work/feature-c',
+    ]);
+  });
+
   it('drops stale stored paths while preserving kept order', () => {
     const gitWorktrees = [
       worktree('/work/main'),
