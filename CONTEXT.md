@@ -61,8 +61,8 @@ The user-curated set and order of registered Repositories.
 _Avoid_: repository list, config
 
 **WorktreeOrder**:
-The user-curated display order of Worktrees within a Repository.
-_Avoid_: sort order
+The user-curated display order of Worktrees within a Repository, overlaid on a default of **creation order** (newest last) with the main Worktree pinned first. Like TerminalOrder it stores order without owning existence — reconciled against the live `git worktree list`, so an uncurated Worktree falls to its creation-order slot, not an alphabetical one.
+_Avoid_: sort order, alphabetical order (the default is by creation, not name)
 
 **TerminalOrder**:
 The user-curated display order of Terminals within a Worktree. An order overlay reconciled against the live tmux list — tmux owns which Terminals exist; this owns only their order. Absent it, Terminals fall back to ascending `term-N` order.
@@ -168,4 +168,5 @@ _Avoid_: file watcher, watcher controller (implementation); polling (it is event
 - "agent session" could mean a Deck-managed entity (with its own tree rows / chat surface) or an observed attribute of a Terminal — resolved: it is an **AgentSession**, an observed attribute. Deck never launches agents; it discovers the session via agent hooks keyed to the Terminal and resumes it by rewriting the TerminalSnapshot. (The intro's "agent chat sessions are planned" is this, not a separate chat UI.)
 - "tmux session" was used for **Terminal** — resolved: the session is the backing mechanism; **Terminal** is the domain concept.
 - "close" conflated closing a **Terminal**'s editor tab with destroying the **Terminal** — resolved: closing the tab is a non-destructive view operation; destroying is **TerminalRemoval** ("Delete"). Reverses ADR-0011 §6's kill-on-tab-close.
+- An uncurated **WorktreeOrder** implied a curated order but had no *defined* default — git listed worktrees alphabetically by path, so a newly added Worktree surfaced mid-list, not last. Resolved: the default is **creation order** (newest last), main pinned first — mirroring the append-at-bottom invariant ADR-0028 built for TerminalOrder. See ADR-0048.
 - "Project" was the canonical term for a registered repo — resolved: renamed to **Repository** for precision (it is literally a git repo, keyed by common dir). "project" is now avoided because a VS Code user reads the open *folder* as their "project," and that folder is a **Worktree** in Deck.
