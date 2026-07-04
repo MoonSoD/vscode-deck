@@ -14,8 +14,8 @@ A git repository registered with Deck, identified by its git common dir (the dir
 _Avoid_: project (a VS Code user reads the open folder as their "project" — that folder is a Worktree), folder
 
 **Worktree**:
-A `git worktree` entry within a Repository, identified by its filesystem path.
-_Avoid_: branch (a Worktree has a branch but is not one)
+A `git worktree` entry within a Repository, identified by its filesystem path. Usually on a branch, but may be a **Detached Worktree** (checked out at a commit with no branch — shown, labelled by folder name + short commit) or a **Bare Worktree** (no working tree at all — Deck hides it, since it cannot be mounted).
+_Avoid_: branch (a Worktree usually has a branch but is not one; a Detached Worktree has none)
 
 **Discovery seed**:
 The path recorded when a Repository is registered — whichever Worktree was checked out then — used to rediscover the repo, not the Repository's identity.
@@ -170,3 +170,4 @@ _Avoid_: file watcher, watcher controller (implementation); polling (it is event
 - "close" conflated closing a **Terminal**'s editor tab with destroying the **Terminal** — resolved: closing the tab is a non-destructive view operation; destroying is **TerminalRemoval** ("Delete"). Reverses ADR-0011 §6's kill-on-tab-close.
 - An uncurated **WorktreeOrder** implied a curated order but had no *defined* default — git listed worktrees alphabetically by path, so a newly added Worktree surfaced mid-list, not last. Resolved: the default is **creation order** (newest last), main pinned first — mirroring the append-at-bottom invariant ADR-0028 built for TerminalOrder. See ADR-0048.
 - "Project" was the canonical term for a registered repo — resolved: renamed to **Repository** for precision (it is literally a git repo, keyed by common dir). "project" is now avoided because a VS Code user reads the open *folder* as their "project," and that folder is a **Worktree** in Deck.
+- A **Worktree** was assumed to always have a branch, so a branchless one fell back to showing its full filesystem path as the row label — resolved: a **Detached Worktree** is a real checkout and stays shown, labelled by folder name + short commit; a **Bare Worktree** has no working tree and is hidden, because Switching to one would mount git internals and poison the **ActiveWorktree**.
