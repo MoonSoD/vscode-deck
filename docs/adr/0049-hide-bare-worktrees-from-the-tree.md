@@ -59,5 +59,3 @@ merely relabelled.
 ## Status
 
 Accepted.
-</content>
-</invoke>
