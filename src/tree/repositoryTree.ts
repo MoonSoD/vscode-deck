@@ -338,7 +338,7 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
     if (worktree === undefined) return undefined;
     return {
       repo: path.basename(worktree.repositoryPath),
-      branch: worktree.worktree.branch ?? worktree.worktree.path,
+      branch: worktree.worktree.branch ?? path.basename(worktree.worktree.path),
     };
   }
 

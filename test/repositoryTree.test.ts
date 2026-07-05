@@ -1242,6 +1242,31 @@ describe('RepositoryTreeProvider', () => {
     expect(ensureSnapshotRestored).not.toHaveBeenCalled();
   });
 
+  it('describes a detached session by folder name, matching its tree label', async () => {
+    vi.mocked(listWorktrees).mockResolvedValueOnce([
+      alphaMainWorktree,
+      {
+        path: '/work/alpha-origin-fix',
+        head: 'abcdef1234567890',
+        bare: false,
+        detached: true,
+      },
+    ]);
+    const provider = new RepositoryTreeProvider(
+      registry(['/work/alpha-main']),
+      { get: vi.fn() } as unknown as ActiveWorktreeStore,
+      { get: vi.fn() } as unknown as WorktreeOrderStore,
+      { get: vi.fn(), set: vi.fn(async () => undefined) } as unknown as WorktreeListCacheStore,
+      { get: vi.fn(() => '/git/alpha'), set: vi.fn(async () => undefined) } as unknown as RepositoryCommonDirCache,
+      { listSessions: vi.fn(async () => []) },
+      true,
+    );
+
+    const description = await provider.describeSession('wt-_work_alpha-origin-fix__term-1');
+
+    expect(description).toEqual({ repo: 'alpha-main', branch: 'alpha-origin-fix' });
+  });
+
   it('returns no session description when no Worktree owns the session prefix', async () => {
     const provider = new RepositoryTreeProvider(
       registry(['/work/alpha-main']),
