@@ -1,3 +1,4 @@
+import * as path from 'node:path';
 import { Worktree } from '../git/worktrees';
 import type { AgentStatus } from '../agent/agentStatusStore';
 import { resolveAgentIcon } from '../agent/agentIconResolver';
@@ -55,12 +56,18 @@ export function describeWorktreeTreeItem(
   }
 
   return {
-    label: worktree.branch ?? worktree.path,
+    label: worktree.branch ?? path.basename(worktree.path),
     // Active text is the non-color channel for colorblind users; do not remove.
     description: isActive ? 'active' : '',
-    tooltip: worktree.path,
+    tooltip: worktree.detached ? detachedWorktreeTooltip(worktree) : worktree.path,
     contextValue,
   };
+}
+
+function detachedWorktreeTooltip(worktree: Worktree): string {
+  const shortHead = worktree.head.slice(0, 7);
+  if (shortHead.length === 0) return `${worktree.path}\nDetached HEAD`;
+  return `${worktree.path}\nDetached HEAD · ${shortHead}`;
 }
 
 export function describeTerminalTreeItem(

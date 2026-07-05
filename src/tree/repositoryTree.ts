@@ -23,6 +23,7 @@ import {
   type AgentStatusDecorationTerminal,
 } from '../agent/agentStatusDecorations';
 import { resolveAgentIcon } from '../agent/agentIconResolver';
+import { excludeBare } from './excludeBare';
 import { excludePending } from './excludePending';
 import { reconcileWorktreeOrder } from './reconcileWorktreeOrder';
 import { reconcileTerminalOrder } from './reconcileTerminalOrder';
@@ -643,7 +644,7 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
     worktrees: readonly Worktree[],
     pendingAtListStart?: ReadonlySet<string>,
   ): Worktree[] {
-    const currentlyVisible = excludePending(worktrees, this.pendingWorktreeRemovals);
+    const currentlyVisible = excludePending(excludeBare(worktrees), this.pendingWorktreeRemovals);
     if (pendingAtListStart === undefined) return currentlyVisible;
     return excludePending(currentlyVisible, pendingAtListStart);
   }

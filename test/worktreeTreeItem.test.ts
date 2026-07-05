@@ -84,6 +84,34 @@ describe('describeWorktreeTreeItem', () => {
     expect(describeWorktreeTreeItem(worktree, false, '/work/alpha-main').description)
       .toBe('');
   });
+
+  it('labels an active detached worktree by folder and shows the short commit in the tooltip', () => {
+    const worktree = {
+      path: '/work/alpha-origin-fix',
+      head: 'abcdef1234567890',
+      bare: false,
+      detached: true,
+    };
+
+    expect(describeWorktreeTreeItem(worktree, true, '/work/alpha-main')).toEqual({
+      label: 'alpha-origin-fix',
+      description: 'active',
+      tooltip: '/work/alpha-origin-fix\nDetached HEAD · abcdef1',
+      contextValue: 'deck.worktree.active',
+    });
+  });
+
+  it('omits the detached commit separator when HEAD is unknown', () => {
+    const worktree = {
+      path: '/work/alpha-detached',
+      head: '',
+      bare: false,
+      detached: true,
+    };
+
+    expect(describeWorktreeTreeItem(worktree, false, '/work/alpha-main').tooltip)
+      .toBe('/work/alpha-detached\nDetached HEAD');
+  });
 });
 
 describe('describeTerminalTreeItem', () => {

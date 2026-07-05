@@ -284,6 +284,44 @@ describe('RepositoryTreeProvider', () => {
     expect(worktreeOrders.set).not.toHaveBeenCalled();
   });
 
+  it('hides bare worktrees while keeping detached worktrees visible', async () => {
+    vi.mocked(listWorktrees).mockResolvedValueOnce([
+      alphaMainWorktree,
+      {
+        path: '/git/alpha',
+        head: '',
+        bare: true,
+        detached: false,
+      },
+      {
+        path: '/work/alpha-detached',
+        head: 'abcdef1234567890',
+        bare: false,
+        detached: true,
+      },
+    ]);
+    const provider = new RepositoryTreeProvider(
+      registry(['/work/alpha-main']),
+      { get: vi.fn() } as unknown as ActiveWorktreeStore,
+      { get: vi.fn() } as unknown as WorktreeOrderStore,
+    );
+
+    const repositoryNode = provider.getChildren();
+    if (!Array.isArray(repositoryNode)) throw new Error('expected sync repository roots');
+
+    const worktreeNodes = await provider.getChildren(repositoryNode[0]);
+    if (!Array.isArray(worktreeNodes)) throw new Error('expected worktree children');
+
+    expect(worktreeNodes.map((node) => ('worktree' in node ? node.worktree.path : ''))).toEqual([
+      '/work/alpha-main',
+      '/work/alpha-detached',
+    ]);
+    expect(worktreeNodes.map((node) => node.label)).toEqual([
+      'main',
+      'alpha-detached',
+    ]);
+  });
+
   it('renders warm cached worktrees synchronously and refreshes in the background only on diff', async () => {
     const activeWorktrees = {
       get: vi.fn(),
