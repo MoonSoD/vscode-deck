@@ -92,6 +92,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       return undefined;
     }
   };
+  const tmuxSessionsWithAgentNames = {
+    listSessions: async (prefix?: string): Promise<TmuxSession[]> => {
+      const sessions = await tmux.listSessions(prefix);
+      return Promise.all(sessions.map(async (session) => {
+        const agentName = session.agentName ?? await resolveAgentName(session.sessionName);
+        if (agentName === undefined) return session;
+        return { ...session, agentName };
+      }));
+    },
+  };
   let agentExitSweep: AgentExitSweep | undefined;
   let agentTitlePoll: AgentTitlePoll | undefined;
   let agentExitSweepReady = false;
@@ -198,7 +208,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     worktreeOrders,
     worktreeListCache,
     repositoryCommonDirCache,
-    tmux,
+    tmuxSessionsWithAgentNames,
     tmuxAvailability.available,
     pendingWorktreeRemovals,
     agentStatuses,

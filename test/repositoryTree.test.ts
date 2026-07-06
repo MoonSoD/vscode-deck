@@ -1363,6 +1363,38 @@ describe('RepositoryTreeProvider', () => {
     expect((secondRows as Array<{ label: string }>).map((row) => row.label)).toEqual(['claude']);
   });
 
+  it('renders an agent row from explicit session identity when the window name is volatile', async () => {
+    const tmux = {
+      listSessions: vi.fn(async () => [
+        {
+          sessionName: 'wt-_work_alpha-main__term-1',
+          windowName: '2.1.172',
+          paneTitle: '✳ tracking-service-grpc-gateway-pivot',
+          agentName: 'claude' as const,
+        },
+      ]),
+    };
+    const provider = new RepositoryTreeProvider(
+      registry(['/work/alpha-main']),
+      { get: vi.fn() } as unknown as ActiveWorktreeStore,
+      { get: vi.fn() } as unknown as WorktreeOrderStore,
+      { get: vi.fn(), set: vi.fn(async () => undefined) } as unknown as WorktreeListCacheStore,
+      { get: vi.fn(() => '/git/alpha'), set: vi.fn(async () => undefined) } as unknown as RepositoryCommonDirCache,
+      tmux,
+      true,
+    );
+    const repositories = provider.getChildren();
+    if (!Array.isArray(repositories)) throw new Error('expected sync repository roots');
+    const worktrees = await provider.getChildren(repositories[0]);
+    if (!Array.isArray(worktrees)) throw new Error('expected worktree children');
+
+    const terminalRows = await provider.getChildren(worktrees[0]);
+
+    expect((terminalRows as Array<{ label: string }>).map((row) => row.label)).toEqual([
+      'tracking-service-grpc-gateway-pivot',
+    ]);
+  });
+
   it('relabels only the rendered Terminal row when its display changes', async () => {
     const tmux = {
       listSessions: vi.fn(async () => [
