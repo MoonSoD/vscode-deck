@@ -23,13 +23,16 @@ export interface WorktreeTreeItemDescription {
 
 export type TerminalTreeIconId = 'terminal' | 'agent-working' | 'agent';
 
-export interface TerminalTreeItemDescription<TIconPath = unknown> {
+export interface TerminalTreeItemDescription {
   label: string;
   description?: string;
   tooltip?: string;
   iconId: TerminalTreeIconId;
-  iconPath?: TIconPath;
   contextValue: 'deck.terminal.active' | 'deck.terminal.foreign';
+}
+
+export interface TerminalTreeItemDescriptionWithIcon<TIconPath> extends TerminalTreeItemDescription {
+  iconPath: TIconPath;
 }
 
 interface TerminalTreeIconOptions<TUri, TThemeIcon> {
@@ -97,7 +100,7 @@ export function describeTerminalTreeItem<TUri, TThemeIcon>(
   paneTitle: string | undefined,
   agentName: AgentName | undefined,
   icon: TerminalTreeIconOptions<TUri, TThemeIcon>,
-): TerminalTreeItemDescription<TUri | TThemeIcon>;
+): TerminalTreeItemDescriptionWithIcon<TUri | TThemeIcon>;
 export function describeTerminalTreeItem<TUri, TThemeIcon>(
   windowName: string,
   isActive: boolean,
@@ -105,7 +108,7 @@ export function describeTerminalTreeItem<TUri, TThemeIcon>(
   paneTitle?: string,
   agentName?: AgentName,
   icon?: TerminalTreeIconOptions<TUri, TThemeIcon>,
-): TerminalTreeItemDescription<TUri | TThemeIcon> {
+): TerminalTreeItemDescription | TerminalTreeItemDescriptionWithIcon<TUri | TThemeIcon> {
   const contextValue = isActive ? 'deck.terminal.active' : 'deck.terminal.foreign';
   const identity = agentName ?? agentNameFromStatus(status);
   const label = resolveTerminalLabel(windowName, paneTitle, identity);
@@ -117,12 +120,13 @@ export function describeTerminalTreeItem<TUri, TThemeIcon>(
     { windowName, status, agentName: identity, resourcesDir: icon?.resourcesDir ?? '' },
     icon?.factory,
   );
-  return {
+  const item: TerminalTreeItemDescription = {
     label,
     iconId: terminalTreeIconId(resolvedIcon),
-    ...(icon === undefined ? {} : { iconPath: resolvedIcon.iconPath }),
     contextValue,
   };
+  if (icon === undefined) return item;
+  return { ...item, iconPath: resolvedIcon.iconPath };
 }
 
 function terminalTreeIconId(resolvedIcon: ResolvedAgentIcon<unknown, unknown>): TerminalTreeIconId {
