@@ -40,6 +40,7 @@ export interface AgentIconInput {
   windowName: string;
   resourcesDir: string;
   status?: AgentStatus;
+  agentName?: AgentName;
 }
 
 export type ResolvedAgentIcon<TUri = { fsPath: string }, TThemeIcon = { id: string }> =
@@ -80,7 +81,8 @@ function resolveIcon<TUri, TThemeIcon>(
   surface: AgentIconSurface,
   nonAgentIcon: string,
 ): ResolvedAgentIcon<TUri, TThemeIcon> {
-  const agent = agentFromWindowName(input.windowName) ?? agentFromStatus(input.status);
+  const agent =
+    agentFromWindowName(input.windowName) ?? agentFromStatus(input.status) ?? input.agentName;
   if (agent === undefined) {
     return {
       iconPath: factory.themeIcon(nonAgentIcon),

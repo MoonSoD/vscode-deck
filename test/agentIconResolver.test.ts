@@ -89,6 +89,16 @@ describe('resolveAgentIcon', () => {
     });
   });
 
+  it('resolves an agent tab from explicit agentName when the window name is a volatile process name', () => {
+    expect(resolveTerminalTabIcon({ windowName: '2.1.172', resourcesDir, agentName: 'claude' })).toEqual({
+      iconPath: { fsPath: '/extension/resources/claude-code-padded-center.png' },
+      isAgent: true,
+      agent: 'claude',
+      state: 'identity',
+      surface: 'tab',
+    });
+  });
+
   it('resolves a non-agent sidebar terminal to the padded terminal theme icon', () => {
     expect(resolveAgentIcon({ windowName: 'zsh', resourcesDir })).toEqual({
       iconPath: { id: 'deck-terminal' },

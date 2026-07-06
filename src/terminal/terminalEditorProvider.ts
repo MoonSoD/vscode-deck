@@ -254,7 +254,7 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
     ]).then(([terminal, agentName]) => {
       if (!terminal || !panel.visible) return;
       panel.title = resolveTerminalLabel(terminal.windowName, terminal.paneTitle, terminal.agentName ?? agentName);
-      panel.iconPath = this.resolveTabIcon(terminal.windowName);
+      panel.iconPath = this.resolveTabIcon(terminal.windowName, terminal.agentName ?? agentName);
       this.staleDecorations.delete(sessionName);
     });
   }
@@ -264,8 +264,8 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
   // stealing focus, so a status-driven icon would lie on background tabs, and a
   // perpetual working animation distracts. Live status rides the sidebar row and
   // the tab's own attention dot (a FileDecoration, which works on hidden tabs).
-  private resolveTabIcon(windowName: string): TerminalTabIconPath {
-    return resolveTerminalTabIcon({ windowName, resourcesDir: 'resources' }, {
+  private resolveTabIcon(windowName: string, agentName?: AgentName): TerminalTabIconPath {
+    return resolveTerminalTabIcon({ windowName, agentName, resourcesDir: 'resources' }, {
       uriFile: (path) => vscode.Uri.joinPath(this.extensionUri, ...path.split(/[\\/]/)),
       themeIcon: (id) => new vscode.ThemeIcon(id),
     }).iconPath;
