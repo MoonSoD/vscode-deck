@@ -123,6 +123,20 @@ describe('describeTerminalTreeItem', () => {
     });
   });
 
+  it('renders the agent icon from explicit identity for a sidecar-only agent (no status) with a volatile window name', () => {
+    expect(describeTerminalTreeItem(
+      '2.1.172',
+      false,
+      undefined,
+      '✳ tracking-service-grpc-gateway-pivot',
+      'claude',
+    )).toEqual({
+      label: 'tracking-service-grpc-gateway-pivot',
+      iconId: 'agent',
+      contextValue: 'deck.terminal.foreign',
+    });
+  });
+
   it('renders a known agent row label from AgentTitle when the window name is a volatile process name', () => {
     expect(describeTerminalTreeItem(
       '2.1.172',

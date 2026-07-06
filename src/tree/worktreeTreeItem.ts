@@ -79,10 +79,13 @@ export function describeTerminalTreeItem(
   agentName?: AgentName,
 ): TerminalTreeItemDescription {
   const contextValue = isActive ? 'deck.terminal.active' : 'deck.terminal.foreign';
-  const label = resolveTerminalLabel(windowName, paneTitle, agentName ?? agentNameFromStatus(status));
-  // The icon resolver keeps the legacy window-name path for pre-status agent
-  // sessions, and also trusts AgentStatus once hooks have written it.
-  const resolvedIcon = resolveAgentIcon({ windowName, status, resourcesDir: '' });
+  const identity = agentName ?? agentNameFromStatus(status);
+  const label = resolveTerminalLabel(windowName, paneTitle, identity);
+  // Resolve the icon from the same explicit identity as the label, so a
+  // sidecar-only agent (idle, no status file yet) whose window name has gone
+  // volatile still shows its mark instead of the plain terminal glyph. The
+  // window-name and AgentStatus paths remain as fallbacks.
+  const resolvedIcon = resolveAgentIcon({ windowName, status, agentName: identity, resourcesDir: '' });
   if (resolvedIcon.isAgent && resolvedIcon.state === 'working') {
     return {
       label,
