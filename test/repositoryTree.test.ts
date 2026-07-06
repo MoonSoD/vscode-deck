@@ -5,6 +5,10 @@ const vscodeState = vi.hoisted(() => ({
   workspaceFolders: [{ uri: { fsPath: '/work/beta-main' } }] as Array<{ uri: { fsPath: string } }>,
 }));
 
+const agentIconResolverState = vi.hoisted(() => ({
+  resolveAgentIcon: vi.fn(),
+}));
+
 vi.mock('vscode', () => ({
   commands: {
     executeCommand: vi.fn(),
@@ -58,6 +62,15 @@ vi.mock('vscode', () => ({
     },
   },
 }));
+
+vi.mock('../src/agent/agentIconResolver', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/agent/agentIconResolver')>();
+  agentIconResolverState.resolveAgentIcon.mockImplementation(actual.resolveAgentIcon);
+  return {
+    ...actual,
+    resolveAgentIcon: agentIconResolverState.resolveAgentIcon,
+  };
+});
 
 vi.mock('../src/git/worktrees', () => ({
   getCommonDir: vi.fn(async (worktreePath: string) =>
@@ -134,6 +147,7 @@ describe('RepositoryTreeProvider', () => {
   beforeEach(() => {
     vscodeState.emitters = [];
     vscodeState.workspaceFolders = [{ uri: { fsPath: '/work/beta-main' } }];
+    agentIconResolverState.resolveAgentIcon.mockClear();
   });
 
   it('marks only the currently mounted worktree as active', async () => {
@@ -1027,6 +1041,38 @@ describe('RepositoryTreeProvider', () => {
 
     expect((terminalRows as Array<{ iconPath: { fsPath: string } }>)[0].iconPath.fsPath)
       .toMatch(/resources\/codex-code-padded\.png$/);
+  });
+
+  it('resolves a Terminal row icon once for its rendered icon and refresh signature', async () => {
+    const tmux = {
+      listSessions: vi.fn(async () => [
+        {
+          sessionName: 'wt-_work_alpha-main__term-1',
+          windowName: '2.1.172',
+          paneTitle: '✳ tracking-service-grpc-gateway-pivot',
+          agentName: 'claude' as const,
+        },
+      ]),
+    };
+    const provider = new RepositoryTreeProvider(
+      registry(['/work/alpha-main']),
+      { get: vi.fn() } as unknown as ActiveWorktreeStore,
+      { get: vi.fn() } as unknown as WorktreeOrderStore,
+      { get: vi.fn(), set: vi.fn(async () => undefined) } as unknown as WorktreeListCacheStore,
+      { get: vi.fn(() => '/git/alpha'), set: vi.fn(async () => undefined) } as unknown as RepositoryCommonDirCache,
+      tmux,
+      true,
+    );
+    const repositories = provider.getChildren();
+    if (!Array.isArray(repositories)) throw new Error('expected sync repository roots');
+    const worktrees = await provider.getChildren(repositories[0]);
+    if (!Array.isArray(worktrees)) throw new Error('expected worktree children');
+
+    const terminalRows = await provider.getChildren(worktrees[0]);
+
+    expect((terminalRows as Array<{ iconPath: { fsPath: string } }>)[0].iconPath.fsPath)
+      .toMatch(/resources\/claude-code-padded\.png$/);
+    expect(agentIconResolverState.resolveAgentIcon).toHaveBeenCalledOnce();
   });
 
   it('sets deck-status resource URIs without inline status descriptions on Terminal rows', async () => {

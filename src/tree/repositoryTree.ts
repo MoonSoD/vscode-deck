@@ -15,7 +15,6 @@ import {
   toCachedTerminalSessions,
 } from '../terminal/terminalSession';
 import type { AgentStatus } from '../agent/agentStatusStore';
-import type { AgentName } from '../agent/agentTypes';
 import {
   agentStatusDecorationResourceUri,
   AgentStatusDecorationRollups,
@@ -23,7 +22,6 @@ import {
   type AgentStatusDecorationResourceUri,
   type AgentStatusDecorationTerminal,
 } from '../agent/agentStatusDecorations';
-import { resolveAgentIcon } from '../agent/agentIconResolver';
 import { excludeBare } from './excludeBare';
 import { excludePending } from './excludePending';
 import { reconcileWorktreeOrder } from './reconcileWorktreeOrder';
@@ -48,16 +46,13 @@ const resourcesDir = path.join(__dirname, '..', '..', 'resources');
 // the codicon spin keyframe has no prefers-reduced-motion guard and ignores
 // `workbench.reduceMotion` too, so it buys no a11y and loses the brand. No
 // extension-side option makes an animated tree icon reduce-motion-aware. See ADR-0025 §6.
-function terminalIconPath(
-  windowName: string,
-  status?: AgentStatus,
-  agentName?: AgentName,
-): vscode.Uri | vscode.ThemeIcon {
-  return resolveAgentIcon({ windowName, status, agentName, resourcesDir }, {
+const terminalTreeIcon = {
+  resourcesDir,
+  factory: {
     uriFile: vscode.Uri.file,
-    themeIcon: (id) => new vscode.ThemeIcon(id),
-  }).iconPath;
-}
+    themeIcon: (id: string) => new vscode.ThemeIcon(id),
+  },
+};
 
 interface TerminalSessionLister {
   listSessions(prefix?: string): Promise<TmuxSession[]>;
@@ -136,6 +131,7 @@ class TerminalNode extends vscode.TreeItem {
       status,
       terminal.paneTitle,
       terminal.agentName,
+      terminalTreeIcon,
     );
     const tooltip = resolveTerminalTooltip(this.worktreePath, terminal.sessionName);
     const nextSignature = JSON.stringify([item.label, item.contextValue, item.iconId, tooltip]);
@@ -147,7 +143,7 @@ class TerminalNode extends vscode.TreeItem {
     this.contextValue = item.contextValue;
     this.description = item.description;
     this.tooltip = tooltip;
-    this.iconPath = terminalIconPath(terminal.windowName, status, terminal.agentName);
+    this.iconPath = item.iconPath;
     this.renderSignature = nextSignature;
     return changed;
   }

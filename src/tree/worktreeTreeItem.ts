@@ -2,7 +2,11 @@ import * as path from 'node:path';
 import { Worktree } from '../git/worktrees';
 import type { AgentStatus } from '../agent/agentStatusStore';
 import type { AgentName } from '../agent/agentTypes';
-import { resolveAgentIcon } from '../agent/agentIconResolver';
+import {
+  type AgentIconFactory,
+  type ResolvedAgentIcon,
+  resolveAgentIcon,
+} from '../agent/agentIconResolver';
 import { resolveTerminalLabel } from '../terminal/terminalLabelResolver';
 
 export interface RepositoryTreeItemDescription {
@@ -17,12 +21,20 @@ export interface WorktreeTreeItemDescription {
   contextValue: 'deck.worktree.active' | 'deck.worktree.main' | 'deck.worktree';
 }
 
-export interface TerminalTreeItemDescription {
+export type TerminalTreeIconId = 'terminal' | 'agent-working' | 'agent';
+
+export interface TerminalTreeItemDescription<TIconPath = unknown> {
   label: string;
   description?: string;
   tooltip?: string;
-  iconId: 'terminal' | 'agent-working' | 'agent';
+  iconId: TerminalTreeIconId;
+  iconPath?: TIconPath;
   contextValue: 'deck.terminal.active' | 'deck.terminal.foreign';
+}
+
+interface TerminalTreeIconOptions<TUri, TThemeIcon> {
+  resourcesDir: string;
+  factory: AgentIconFactory<TUri, TThemeIcon>;
 }
 
 export interface TmuxUnavailableTreeItemDescription {
@@ -77,7 +89,23 @@ export function describeTerminalTreeItem(
   status?: AgentStatus,
   paneTitle?: string,
   agentName?: AgentName,
-): TerminalTreeItemDescription {
+): TerminalTreeItemDescription;
+export function describeTerminalTreeItem<TUri, TThemeIcon>(
+  windowName: string,
+  isActive: boolean,
+  status: AgentStatus | undefined,
+  paneTitle: string | undefined,
+  agentName: AgentName | undefined,
+  icon: TerminalTreeIconOptions<TUri, TThemeIcon>,
+): TerminalTreeItemDescription<TUri | TThemeIcon>;
+export function describeTerminalTreeItem<TUri, TThemeIcon>(
+  windowName: string,
+  isActive: boolean,
+  status?: AgentStatus,
+  paneTitle?: string,
+  agentName?: AgentName,
+  icon?: TerminalTreeIconOptions<TUri, TThemeIcon>,
+): TerminalTreeItemDescription<TUri | TThemeIcon> {
   const contextValue = isActive ? 'deck.terminal.active' : 'deck.terminal.foreign';
   const identity = agentName ?? agentNameFromStatus(status);
   const label = resolveTerminalLabel(windowName, paneTitle, identity);
@@ -85,27 +113,22 @@ export function describeTerminalTreeItem(
   // sidecar-only agent (idle, no status file yet) whose window name has gone
   // volatile still shows its mark instead of the plain terminal glyph. The
   // window-name and AgentStatus paths remain as fallbacks.
-  const resolvedIcon = resolveAgentIcon({ windowName, status, agentName: identity, resourcesDir: '' });
-  if (resolvedIcon.isAgent && resolvedIcon.state === 'working') {
-    return {
-      label,
-      iconId: 'agent-working',
-      contextValue,
-    };
-  }
-  if (resolvedIcon.isAgent) {
-    return {
-      label,
-      iconId: 'agent',
-      contextValue,
-    };
-  }
-
+  const resolvedIcon = resolveAgentIcon(
+    { windowName, status, agentName: identity, resourcesDir: icon?.resourcesDir ?? '' },
+    icon?.factory,
+  );
   return {
     label,
-    iconId: 'terminal',
+    iconId: terminalTreeIconId(resolvedIcon),
+    ...(icon === undefined ? {} : { iconPath: resolvedIcon.iconPath }),
     contextValue,
   };
+}
+
+function terminalTreeIconId(resolvedIcon: ResolvedAgentIcon<unknown, unknown>): TerminalTreeIconId {
+  if (resolvedIcon.isAgent && resolvedIcon.state === 'working') return 'agent-working';
+  if (resolvedIcon.isAgent) return 'agent';
+  return 'terminal';
 }
 
 function agentNameFromStatus(status?: AgentStatus): AgentName | undefined {
