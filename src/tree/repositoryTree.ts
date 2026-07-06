@@ -15,6 +15,7 @@ import {
   toCachedTerminalSessions,
 } from '../terminal/terminalSession';
 import type { AgentStatus } from '../agent/agentStatusStore';
+import type { AgentName } from '../agent/agentTypes';
 import {
   agentStatusDecorationResourceUri,
   AgentStatusDecorationRollups,
@@ -47,8 +48,12 @@ const resourcesDir = path.join(__dirname, '..', '..', 'resources');
 // the codicon spin keyframe has no prefers-reduced-motion guard and ignores
 // `workbench.reduceMotion` too, so it buys no a11y and loses the brand. No
 // extension-side option makes an animated tree icon reduce-motion-aware. See ADR-0025 §6.
-function terminalIconPath(windowName: string, status?: AgentStatus): vscode.Uri | vscode.ThemeIcon {
-  return resolveAgentIcon({ windowName, status, resourcesDir }, {
+function terminalIconPath(
+  windowName: string,
+  status?: AgentStatus,
+  agentName?: AgentName,
+): vscode.Uri | vscode.ThemeIcon {
+  return resolveAgentIcon({ windowName, status, agentName, resourcesDir }, {
     uriFile: vscode.Uri.file,
     themeIcon: (id) => new vscode.ThemeIcon(id),
   }).iconPath;
@@ -142,7 +147,7 @@ class TerminalNode extends vscode.TreeItem {
     this.contextValue = item.contextValue;
     this.description = item.description;
     this.tooltip = tooltip;
-    this.iconPath = terminalIconPath(terminal.windowName, status);
+    this.iconPath = terminalIconPath(terminal.windowName, status, terminal.agentName);
     this.renderSignature = nextSignature;
     return changed;
   }

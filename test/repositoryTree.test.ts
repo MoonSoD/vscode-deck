@@ -1393,6 +1393,11 @@ describe('RepositoryTreeProvider', () => {
     expect((terminalRows as Array<{ label: string }>).map((row) => row.label)).toEqual([
       'tracking-service-grpc-gateway-pivot',
     ]);
+    // The rendered icon (not just the change-detection iconId) must resolve from
+    // the explicit identity too — a sidecar-only agent with a volatile window
+    // name keeps its mark instead of the plain terminal glyph.
+    expect((terminalRows as Array<{ iconPath: { fsPath: string } }>)[0].iconPath.fsPath)
+      .toMatch(/resources\/claude-code-padded\.png$/);
   });
 
   it('relabels only the rendered Terminal row when its display changes', async () => {
