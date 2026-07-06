@@ -73,6 +73,16 @@ name persists — this is exactly the "stuck / does not recover" case.
 - **Expected:** the tab icon is the **Claude** (or Codex) icon.
 - **Pre-fix (fail):** the tab icon was the generic terminal glyph.
 
+### 4b. Sidebar tree-row icon
+
+1. With the window renamed to `2.1.172`, run **`Deck: Refresh`** (command palette)
+   to force the tree to re-render the row.
+
+- **Expected:** the row keeps the **Claude** (or Codex) mark.
+- **Pre-fix (fail):** the row icon reverted to the plain terminal glyph — this bit
+  hardest for a **sidecar-only** agent (idle, no status file yet), where the icon
+  had no AgentStatus to fall back on once the window name went volatile.
+
 ### 5. No regression for plain shells (control)
 
 1. Open a Deck terminal that is **not** an agent (a plain shell — one where you
