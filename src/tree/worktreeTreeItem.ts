@@ -1,6 +1,7 @@
 import * as path from 'node:path';
 import { Worktree } from '../git/worktrees';
 import type { AgentStatus } from '../agent/agentStatusStore';
+import type { AgentName } from '../agent/agentTypes';
 import { resolveAgentIcon } from '../agent/agentIconResolver';
 import { resolveTerminalLabel } from '../terminal/terminalLabelResolver';
 
@@ -75,13 +76,12 @@ export function describeTerminalTreeItem(
   isActive: boolean,
   status?: AgentStatus,
   paneTitle?: string,
+  agentName?: AgentName,
 ): TerminalTreeItemDescription {
   const contextValue = isActive ? 'deck.terminal.active' : 'deck.terminal.foreign';
-  const label = resolveTerminalLabel(windowName, paneTitle);
-  // Agent identity comes from the window name — the hook renames the tmux
-  // window to the agent name on SessionStart (incl. `claude --resume`), before
-  // any status file exists. Key the icon off identity so a resumed/idle agent
-  // still shows its mark; status only adds the working spinner.
+  const label = resolveTerminalLabel(windowName, paneTitle, agentName ?? agentNameFromStatus(status));
+  // The icon resolver keeps the legacy window-name path for pre-status agent
+  // sessions, and also trusts AgentStatus once hooks have written it.
   const resolvedIcon = resolveAgentIcon({ windowName, status, resourcesDir: '' });
   if (resolvedIcon.isAgent && resolvedIcon.state === 'working') {
     return {
@@ -103,6 +103,11 @@ export function describeTerminalTreeItem(
     iconId: 'terminal',
     contextValue,
   };
+}
+
+function agentNameFromStatus(status?: AgentStatus): AgentName | undefined {
+  if (status === undefined) return undefined;
+  return status.agent ?? 'claude';
 }
 
 export function describeTmuxUnavailableTreeItem(): TmuxUnavailableTreeItemDescription {

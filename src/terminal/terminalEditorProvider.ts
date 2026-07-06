@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { resolveTerminalTabIcon } from '../agent/agentIconResolver';
+import type { AgentName } from '../agent/agentTypes';
 import { SessionUriCodec } from './sessionUriCodec';
 import { TERMINAL_SCROLLBACK_LINES } from './terminalScrollback';
 import { TerminalTransport } from './terminalTransport';
@@ -101,6 +102,8 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
     // TerminalSnapshot restore, losing scrollback. Gating it makes the reattach
     // bind to the restored session instead.
     private readonly beforeReattach: () => Promise<void> = () => Promise.resolve(),
+    private readonly resolveTerminalAgentName: (sessionName: string) => Promise<AgentName | undefined> = async () =>
+      undefined,
   ) {
     this.configChangeSubscription = vscode.workspace.onDidChangeConfiguration((event) => {
       const fontKeys = [
@@ -245,9 +248,12 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
       this.staleDecorations.add(sessionName);
       return;
     }
-    void this.resolveTerminalSession(sessionName).then((terminal) => {
+    void Promise.all([
+      this.resolveTerminalSession(sessionName),
+      this.resolveTerminalAgentName(sessionName),
+    ]).then(([terminal, agentName]) => {
       if (!terminal || !panel.visible) return;
-      panel.title = resolveTerminalLabel(terminal.windowName, terminal.paneTitle);
+      panel.title = resolveTerminalLabel(terminal.windowName, terminal.paneTitle, terminal.agentName ?? agentName);
       panel.iconPath = this.resolveTabIcon(terminal.windowName);
       this.staleDecorations.delete(sessionName);
     });

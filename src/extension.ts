@@ -59,6 +59,7 @@ import { DeckDecorationProvider } from './tree/deckDecorationProvider';
 import { AgentStatusNotifier } from './agent/agentStatusNotifier';
 import { AgentStatusStore } from './agent/agentStatusStore';
 import { AgentTitlePoll } from './agent/agentTitlePoll';
+import type { AgentName } from './agent/agentTypes';
 import { AgentDetection } from './agent/agentDetection';
 import { AgentSetupPrompt, type AgentConfigChange } from './agent/agentSetupPrompt';
 import { HookInstaller, type HookReconcileResult } from './agent/hookInstaller';
@@ -81,6 +82,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const agentSidecars = new AgentSidecarStore(join(deckDir, 'hooks'));
   const agentStatuses = new AgentStatusStore(join(deckDir, 'status'), 100);
   const agentStatusWatch = await agentStatuses.start();
+  const resolveAgentName = async (sessionName: string): Promise<AgentName | undefined> => {
+    const status = agentStatuses.get(sessionName);
+    if (status !== undefined) return status.agent ?? 'claude';
+
+    try {
+      return (await agentSidecars.read(sessionName))?.agent;
+    } catch {
+      return undefined;
+    }
+  };
   let agentExitSweep: AgentExitSweep | undefined;
   let agentTitlePoll: AgentTitlePoll | undefined;
   let agentExitSweepReady = false;
@@ -257,6 +268,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     },
     (sessionName) => tmux.terminalSession(sessionName),
     ensureSnapshotRestored,
+    resolveAgentName,
   );
   agentTitlePoll = tmuxAvailability.available
     ? new AgentTitlePoll({
@@ -265,6 +277,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         onDidChangeFocus: (listener) =>
           vscode.window.onDidChangeWindowState((state) => listener(state.focused)),
         onError: (error) => console.warn('Deck: agent title poll failed', error),
+        resolveAgentName,
       })
     : undefined;
   const agentTitlePollWatch = agentTitlePoll?.onChange((changedSessions) => {

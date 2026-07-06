@@ -1,5 +1,6 @@
-import { resolveTerminalLabel } from '../terminal/terminalLabelResolver';
+import { agentNameFromWindowName, resolveTerminalLabel } from '../terminal/terminalLabelResolver';
 import type { TmuxSession } from '../terminal/tmuxCli';
+import type { AgentName } from './agentTypes';
 import type { Disposable } from './agentStatusStore';
 
 export interface AgentTitlePollScheduler {
@@ -14,11 +15,10 @@ interface AgentTitlePollOptions {
   scheduler?: AgentTitlePollScheduler;
   intervalMs?: number;
   onError?: (error: unknown) => void;
+  resolveAgentName?: (sessionName: string) => Promise<AgentName | undefined>;
 }
 
 type ChangeListener = (changedSessions: readonly TmuxSession[]) => void;
-
-const AGENT_WINDOW_NAMES = new Set(['claude', 'codex']);
 
 export class AgentTitlePoll implements Disposable {
   private readonly scheduler: AgentTitlePollScheduler;
@@ -100,17 +100,19 @@ export class AgentTitlePoll implements Disposable {
 
   private async runOnce(): Promise<boolean> {
     const sessions = await this.options.listSessions();
+    const agentIdentities = await this.resolveAgentNames(sessions);
     const nextLabels = new Map<string, string>();
     let hasAgentSession = false;
     const changedSessions: TmuxSession[] = [];
 
-    for (const session of sessions) {
-      const label = resolveTerminalLabel(session.windowName, session.paneTitle);
+    for (const [index, session] of sessions.entries()) {
+      const { agentName, explicit } = agentIdentities[index];
+      const label = resolveTerminalLabel(session.windowName, session.paneTitle, agentName);
       nextLabels.set(session.sessionName, label);
-      if (AGENT_WINDOW_NAMES.has(session.windowName)) hasAgentSession = true;
+      if (agentName !== undefined) hasAgentSession = true;
       const previousLabel = this.labels.get(session.sessionName);
       if (previousLabel !== undefined && previousLabel !== label) {
-        changedSessions.push(session);
+        changedSessions.push(explicit && agentName !== undefined ? { ...session, agentName } : session);
       }
     }
 
@@ -124,6 +126,25 @@ export class AgentTitlePoll implements Disposable {
     }
 
     return hasAgentSession;
+  }
+
+  private async resolveAgentNames(
+    sessions: readonly TmuxSession[],
+  ): Promise<Array<{ agentName?: AgentName; explicit: boolean }>> {
+    if (this.options.resolveAgentName === undefined) {
+      return sessions.map((session) => {
+        const agentName = session.agentName ?? agentNameFromWindowName(session.windowName);
+        return { agentName, explicit: session.agentName !== undefined };
+      });
+    }
+
+    return Promise.all(sessions.map(async (session) => {
+      const explicitAgentName = session.agentName ?? await this.options.resolveAgentName!(session.sessionName);
+      if (explicitAgentName !== undefined) {
+        return { agentName: explicitAgentName, explicit: true };
+      }
+      return { agentName: agentNameFromWindowName(session.windowName), explicit: false };
+    }));
   }
 
   private clearTimer(): void {

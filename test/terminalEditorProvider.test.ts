@@ -234,6 +234,35 @@ describe('TerminalEditorProvider', () => {
     });
   });
 
+  it('titles a known agent tab from AgentTitle when the window name is a volatile process name', async () => {
+    const terminalSessions = vi.fn(async () => ({
+      sessionName: 'wt-_work_alpha-main__term-1',
+      windowName: '2.1.172',
+      paneTitle: '✳ tracking-service-grpc-gateway-pivot',
+    }));
+    const provider = new TerminalEditorProvider(
+      { fsPath: '/extension' } as never,
+      '/extension/resources/deck.conf',
+      undefined,
+      () => bridge(),
+      undefined,
+      undefined,
+      terminalSessions,
+      undefined,
+      vi.fn(async () => 'claude' as const),
+    );
+    const terminalPanel = panel();
+    const document = provider.openCustomDocument({
+      scheme: 'deck-terminal',
+      path: '/work/alpha-main/term-1',
+    } as never);
+
+    provider.resolveCustomEditor(document, terminalPanel as never);
+    await flush();
+
+    expect(terminalPanel.title).toBe('tracking-service-grpc-gateway-pivot');
+  });
+
   it('keeps the agent tab icon at identity regardless of agent status', async () => {
     const terminalSessions = vi.fn(async () => ({
       sessionName: 'wt-_work_alpha-main__term-1',

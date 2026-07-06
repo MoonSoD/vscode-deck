@@ -123,6 +123,19 @@ describe('describeTerminalTreeItem', () => {
     });
   });
 
+  it('renders a known agent row label from AgentTitle when the window name is a volatile process name', () => {
+    expect(describeTerminalTreeItem(
+      '2.1.172',
+      false,
+      { status: 'completed', statusAt: 1710000000, agent: 'claude' },
+      '✳ tracking-service-grpc-gateway-pivot',
+    )).toEqual({
+      label: 'tracking-service-grpc-gateway-pivot',
+      iconId: 'agent',
+      contextValue: 'deck.terminal.foreign',
+    });
+  });
+
   it('renders in-progress agent status as a loading row without inline status text', () => {
     expect(describeTerminalTreeItem('claude', false, { status: 'inProgress', statusAt: 1710000000 })).toEqual({
       label: 'claude',

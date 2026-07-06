@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process';
+import type { AgentName } from '../agent/agentTypes';
 import { isWedged } from './deckSocketRecovery';
 
 export interface CommandResult {
@@ -15,6 +16,7 @@ export interface TmuxSession {
   sessionName: string;
   windowName: string;
   paneTitle?: string;
+  agentName?: AgentName;
 }
 
 export class ExecFileCommandRunner implements CommandRunner {

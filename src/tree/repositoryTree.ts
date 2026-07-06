@@ -130,6 +130,7 @@ class TerminalNode extends vscode.TreeItem {
       isActiveWorktree,
       status,
       terminal.paneTitle,
+      terminal.agentName,
     );
     const tooltip = resolveTerminalTooltip(this.worktreePath, terminal.sessionName);
     const nextSignature = JSON.stringify([item.label, item.contextValue, item.iconId, tooltip]);

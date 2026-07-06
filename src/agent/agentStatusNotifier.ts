@@ -83,10 +83,10 @@ export class AgentStatusNotifier {
       this.resolveTerminalSession(sessionName),
       this.describeSession(sessionName),
     ]);
-    const agentName = status.agent ?? terminal?.windowName ?? 'Agent';
+    const agentName = status.agent ?? 'claude';
     const label = terminal === undefined
       ? agentName
-      : resolveTerminalLabel(agentName, terminal.paneTitle);
+      : resolveTerminalLabel(terminal.windowName, terminal.paneTitle, agentName);
     const line = composeAgentStatusNotificationLine({
       status: notificationStatus,
       agentName,

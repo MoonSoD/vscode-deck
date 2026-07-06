@@ -20,9 +20,16 @@ describe('resolveTerminalLabel', () => {
     expect(resolveTerminalLabel('zsh', ':/work/alpha-main')).toBe('zsh');
   });
 
+  it('labels a known agent from AgentTitle when the window name is a volatile process name', () => {
+    expect(resolveTerminalLabel('2.1.172', '✳ tracking-service-grpc-gateway-pivot', 'claude')).toBe(
+      'tracking-service-grpc-gateway-pivot',
+    );
+  });
+
   it('falls back to the agent identity when the stripped AgentTitle is empty', () => {
     expect(resolveTerminalLabel('claude', '✳   ')).toBe('claude');
     expect(resolveTerminalLabel('codex', undefined)).toBe('codex');
+    expect(resolveTerminalLabel('2.1.172', '✳   ', 'claude')).toBe('claude');
   });
 });
 

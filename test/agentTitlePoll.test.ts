@@ -101,6 +101,43 @@ describe('AgentTitlePoll', () => {
     expect(changes).not.toHaveBeenCalled();
   });
 
+  it('emits known agent sessions when a volatile window name would otherwise hide the AgentTitle', async () => {
+    const scheduler = new ManualScheduler();
+    let sessions: TmuxSession[] = [
+      { sessionName: 'term-1', windowName: '2.1.172', paneTitle: '✳ first task' },
+    ];
+    const poll = new AgentTitlePoll({
+      listSessions: vi.fn(async () => sessions),
+      isFocused: () => true,
+      onDidChangeFocus: () => ({ dispose: vi.fn() }),
+      scheduler,
+      resolveAgentName: vi.fn(async (sessionName: string) =>
+        sessionName === 'term-1' ? 'claude' : undefined,
+      ),
+    });
+    const changes = vi.fn();
+    poll.onChange(changes);
+
+    poll.start();
+    await flush();
+
+    sessions = [
+      { sessionName: 'term-1', windowName: '2.1.172', paneTitle: '✳ renamed task' },
+    ];
+    await scheduler.runNext();
+    await flush();
+
+    expect(changes).toHaveBeenCalledWith([
+      {
+        sessionName: 'term-1',
+        windowName: '2.1.172',
+        paneTitle: '✳ renamed task',
+        agentName: 'claude',
+      },
+    ]);
+    expect(scheduler.hasTick()).toBe(true);
+  });
+
   it('stops after a zero-agent tick and resumes on a later start', async () => {
     const scheduler = new ManualScheduler();
     let sessions: TmuxSession[] = [
