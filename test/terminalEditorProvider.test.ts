@@ -597,6 +597,24 @@ describe('TerminalEditorProvider', () => {
     expect(terminalPanel.webview.html).not.toContain('rgba(');
   });
 
+  it('renders Copy Link as a contextual terminal link menu action', () => {
+    const terminalPanel = panel();
+    const { provider, document } = providerDocument();
+
+    provider.resolveCustomEditor(document, terminalPanel as never);
+
+    const copyLinkIndex = terminalPanel.webview.html.indexOf('data-action="copy-link"');
+    const copyIndex = terminalPanel.webview.html.indexOf('data-action="copy"');
+    expect(copyLinkIndex).toBeGreaterThan(-1);
+    expect(copyLinkIndex).toBeLessThan(copyIndex);
+    expect(terminalPanel.webview.html).toContain('let currentLink');
+    expect(terminalPanel.webview.html).toContain('hover: (_event, uri) => { currentLink = uri; }');
+    expect(terminalPanel.webview.html).toContain('leave: () => { currentLink = undefined; }');
+    expect(terminalPanel.webview.html).toContain("copyLinkButton.style.display = currentLink ? 'block' : 'none'");
+    expect(terminalPanel.webview.html).toContain("if (action === 'copy-link' && currentLink)");
+    expect(terminalPanel.webview.html).toContain('navigator.clipboard.writeText(currentLink)');
+  });
+
   it('renders image-aware paste forwarding while leaving text paste to xterm', () => {
     const terminalPanel = panel();
     const { provider, document } = providerDocument();

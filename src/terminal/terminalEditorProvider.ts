@@ -391,6 +391,7 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
     <button id="find-close" type="button">x</button>
   </div>
   <div id="context-menu">
+    <button type="button" data-action="copy-link" style="display: none;">Copy Link</button>
     <button type="button" data-action="copy">Copy</button>
     <button type="button" data-action="paste">Paste</button>
     <button type="button" data-action="select-all">Select All</button>
@@ -465,11 +466,15 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
       const fitAddon = new FitAddon.FitAddon();
       const searchAddon = new SearchAddon.SearchAddon();
       const unicode11Addon = new Unicode11Addon.Unicode11Addon();
+      let currentLink;
       const webLinksAddon = new WebLinksAddon.WebLinksAddon((event, uri) => {
         if (event.metaKey || event.ctrlKey) {
           event.preventDefault();
           vscode.postMessage({ type: 'openExternal', payload: uri });
         }
+      }, {
+        hover: (_event, uri) => { currentLink = uri; },
+        leave: () => { currentLink = undefined; },
       });
       let resizeTimer;
       let lastCols = 0;
@@ -582,6 +587,7 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
       terminal.element.addEventListener('focusin', () => vscode.postMessage({ type: 'focused' }));
 
       const contextMenu = document.getElementById('context-menu');
+      const copyLinkButton = contextMenu.querySelector('[data-action="copy-link"]');
       const findWidget = document.getElementById('find-widget');
       const findInput = document.getElementById('find-input');
       const findOptions = {
@@ -641,6 +647,7 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
 
       terminalElement.addEventListener('contextmenu', (event) => {
         event.preventDefault();
+        copyLinkButton.style.display = currentLink ? 'block' : 'none';
         // Show first so the menu has measurable dimensions, then clamp into the
         // viewport so a click near the bottom/right edge doesn't clip it.
         contextMenu.style.display = 'block';
@@ -671,6 +678,7 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
       });
       contextMenu.addEventListener('click', (event) => {
         const action = event.target.dataset.action;
+        if (action === 'copy-link' && currentLink) void navigator.clipboard.writeText(currentLink);
         if (action === 'copy') copySelection();
         if (action === 'paste') void pasteClipboard();
         if (action === 'select-all') terminal.selectAll();
