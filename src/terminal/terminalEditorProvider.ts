@@ -466,15 +466,16 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
       const fitAddon = new FitAddon.FitAddon();
       const searchAddon = new SearchAddon.SearchAddon();
       const unicode11Addon = new Unicode11Addon.Unicode11Addon();
-      let currentLink;
+      let hoveredLink;
+      let contextMenuLink;
       const webLinksAddon = new WebLinksAddon.WebLinksAddon((event, uri) => {
         if (event.metaKey || event.ctrlKey) {
           event.preventDefault();
           vscode.postMessage({ type: 'openExternal', payload: uri });
         }
       }, {
-        hover: (_event, uri) => { currentLink = uri; },
-        leave: () => { currentLink = undefined; },
+        hover: (_event, uri) => { hoveredLink = uri; },
+        leave: () => { hoveredLink = undefined; },
       });
       let resizeTimer;
       let lastCols = 0;
@@ -603,6 +604,7 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
 
       function hideContextMenu() {
         contextMenu.style.display = 'none';
+        contextMenuLink = undefined;
       }
 
       function copySelection() {
@@ -647,7 +649,8 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
 
       terminalElement.addEventListener('contextmenu', (event) => {
         event.preventDefault();
-        copyLinkButton.style.display = currentLink ? 'block' : 'none';
+        contextMenuLink = hoveredLink;
+        copyLinkButton.style.display = contextMenuLink ? 'block' : 'none';
         // Show first so the menu has measurable dimensions, then clamp into the
         // viewport so a click near the bottom/right edge doesn't clip it.
         contextMenu.style.display = 'block';
@@ -678,7 +681,7 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
       });
       contextMenu.addEventListener('click', (event) => {
         const action = event.target.dataset.action;
-        if (action === 'copy-link' && currentLink) void navigator.clipboard.writeText(currentLink);
+        if (action === 'copy-link' && contextMenuLink) void navigator.clipboard.writeText(contextMenuLink);
         if (action === 'copy') copySelection();
         if (action === 'paste') void pasteClipboard();
         if (action === 'select-all') terminal.selectAll();

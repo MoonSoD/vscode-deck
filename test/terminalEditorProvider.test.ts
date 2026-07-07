@@ -607,12 +607,14 @@ describe('TerminalEditorProvider', () => {
     const copyIndex = terminalPanel.webview.html.indexOf('data-action="copy"');
     expect(copyLinkIndex).toBeGreaterThan(-1);
     expect(copyLinkIndex).toBeLessThan(copyIndex);
-    expect(terminalPanel.webview.html).toContain('let currentLink');
-    expect(terminalPanel.webview.html).toContain('hover: (_event, uri) => { currentLink = uri; }');
-    expect(terminalPanel.webview.html).toContain('leave: () => { currentLink = undefined; }');
-    expect(terminalPanel.webview.html).toContain("copyLinkButton.style.display = currentLink ? 'block' : 'none'");
-    expect(terminalPanel.webview.html).toContain("if (action === 'copy-link' && currentLink)");
-    expect(terminalPanel.webview.html).toContain('navigator.clipboard.writeText(currentLink)');
+    expect(terminalPanel.webview.html).toContain('let hoveredLink');
+    expect(terminalPanel.webview.html).toContain('let contextMenuLink');
+    expect(terminalPanel.webview.html).toContain('hover: (_event, uri) => { hoveredLink = uri; }');
+    expect(terminalPanel.webview.html).toContain('leave: () => { hoveredLink = undefined; }');
+    expect(terminalPanel.webview.html).toContain('contextMenuLink = hoveredLink');
+    expect(terminalPanel.webview.html).toContain("copyLinkButton.style.display = contextMenuLink ? 'block' : 'none'");
+    expect(terminalPanel.webview.html).toContain("if (action === 'copy-link' && contextMenuLink)");
+    expect(terminalPanel.webview.html).toContain('navigator.clipboard.writeText(contextMenuLink)');
   });
 
   it('renders image-aware paste forwarding while leaving text paste to xterm', () => {
