@@ -466,17 +466,30 @@ export class TerminalEditorProvider implements vscode.CustomReadonlyEditorProvid
       const fitAddon = new FitAddon.FitAddon();
       const searchAddon = new SearchAddon.SearchAddon();
       const unicode11Addon = new Unicode11Addon.Unicode11Addon();
+      // Track whichever link is under the pointer so the context menu can offer
+      // Copy Link. Two providers can own a link: WebLinksAddon (bare-URL regex)
+      // and xterm's built-in OSC 8 provider (hyperlinks emitted by agent TUIs
+      // like Claude Code). The OSC provider registers first and wins, and only
+      // routes hover/activate through terminal.options.linkHandler — so without
+      // it, agent-emitted links neither open (its default window.open is blocked
+      // by the webview CSP) nor become copyable. Wire both to one openLink path.
       let hoveredLink;
       let contextMenuLink;
-      const webLinksAddon = new WebLinksAddon.WebLinksAddon((event, uri) => {
+      function openLink(event, uri) {
         if (event.metaKey || event.ctrlKey) {
           event.preventDefault();
           vscode.postMessage({ type: 'openExternal', payload: uri });
         }
-      }, {
+      }
+      const webLinksAddon = new WebLinksAddon.WebLinksAddon(openLink, {
         hover: (_event, uri) => { hoveredLink = uri; },
         leave: () => { hoveredLink = undefined; },
       });
+      terminal.options.linkHandler = {
+        activate: openLink,
+        hover: (_event, uri) => { hoveredLink = uri; },
+        leave: () => { hoveredLink = undefined; },
+      };
       let resizeTimer;
       let lastCols = 0;
       let lastRows = 0;

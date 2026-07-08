@@ -617,6 +617,20 @@ describe('TerminalEditorProvider', () => {
     expect(terminalPanel.webview.html).toContain('navigator.clipboard.writeText(contextMenuLink)');
   });
 
+  it('routes OSC 8 hyperlinks through linkHandler so agent-emitted links are copyable and openable', () => {
+    const terminalPanel = panel();
+    const { provider, document } = providerDocument();
+
+    provider.resolveCustomEditor(document, terminalPanel as never);
+
+    // Bare-URL (WebLinksAddon) and OSC 8 (built-in provider) both feed the same
+    // openLink path and hoveredLink, so Copy Link and Cmd-click work for either.
+    expect(terminalPanel.webview.html).toContain('terminal.options.linkHandler = {');
+    expect(terminalPanel.webview.html).toContain('activate: openLink');
+    expect(terminalPanel.webview.html).toContain('function openLink(event, uri)');
+    expect(terminalPanel.webview.html).toContain('new WebLinksAddon.WebLinksAddon(openLink,');
+  });
+
   it('renders image-aware paste forwarding while leaving text paste to xterm', () => {
     const terminalPanel = panel();
     const { provider, document } = providerDocument();
