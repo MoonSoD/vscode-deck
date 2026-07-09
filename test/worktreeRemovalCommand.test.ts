@@ -20,10 +20,17 @@ vi.mock('../src/git/worktrees', () => ({
   })),
   removeWorktree: vi.fn(async () => undefined),
   deleteBranch: vi.fn(async () => undefined),
+  readBranchTip: vi.fn(async () => 'abc123'),
 }));
 
 import * as vscode from 'vscode';
-import { deleteBranch, getCommonDir, getWorktreeStatus, removeWorktree } from '../src/git/worktrees';
+import {
+  deleteBranch,
+  getCommonDir,
+  getWorktreeStatus,
+  readBranchTip,
+  removeWorktree,
+} from '../src/git/worktrees';
 import { WorktreeRemovalCommand } from '../src/worktree/worktreeRemovalCommand';
 
 const node = {
@@ -335,6 +342,54 @@ describe('WorktreeRemovalCommand', () => {
     expect(refresh).toHaveBeenCalledOnce();
   });
 
+  it('deletes the branch from the main worktree path when it differs from the registered repository path', async () => {
+    const command = new WorktreeRemovalCommand(
+      { get: vi.fn(() => undefined), clear: vi.fn(async () => undefined) },
+      vi.fn(),
+      { get: vi.fn(() => true), set: vi.fn(async () => undefined) },
+    );
+
+    vi.mocked(vscode.window.showWarningMessage).mockResolvedValue(
+      'Remove and delete branch' as never,
+    );
+
+    await command.run({
+      ...node,
+      repositoryPath: '/repo/registered-feature',
+      mainWorktreePath: '/repo/main',
+    });
+    await waitUntil(() => deleteBranch.mock.calls.length > 0);
+
+    expect(removeWorktree).toHaveBeenCalledWith(
+      '/repo/registered-feature',
+      '/repo/feature',
+      { force: false },
+    );
+    expect(deleteBranch).toHaveBeenCalledWith('/repo/main', 'feature');
+  });
+
+  it('falls back to the registered repository path when the main worktree path is absent', async () => {
+    const command = new WorktreeRemovalCommand(
+      { get: vi.fn(() => undefined), clear: vi.fn(async () => undefined) },
+      vi.fn(),
+      { get: vi.fn(() => true), set: vi.fn(async () => undefined) },
+    );
+    const nodeWithoutMainPath = {
+      ...node,
+      repositoryPath: '/repo/registered',
+      mainWorktreePath: undefined,
+    };
+
+    vi.mocked(vscode.window.showWarningMessage).mockResolvedValue(
+      'Remove and delete branch' as never,
+    );
+
+    await command.run(nodeWithoutMainPath);
+    await waitUntil(() => deleteBranch.mock.calls.length > 0);
+
+    expect(deleteBranch).toHaveBeenCalledWith('/repo/registered', 'feature');
+  });
+
   it('does nothing when confirmation is cancelled', async () => {
     const activeWorktrees = {
       get: vi.fn(() => '/repo/feature'),
@@ -402,7 +457,49 @@ describe('WorktreeRemovalCommand', () => {
     expect(pendingRemovals.has('/repo/feature')).toBe(false);
   });
 
-  it('surfaces branch deletion failures after removing the worktree', async () => {
+  it('shows a KeptBranch warning when safe branch deletion is refused after removing the worktree', async () => {
+    const activeWorktrees = {
+      get: vi.fn(() => '/repo/feature'),
+      clear: vi.fn(async () => undefined),
+    };
+    const branchDeletionPreferences = {
+      get: vi.fn(() => true),
+      set: vi.fn(async () => undefined),
+    };
+    const worktreeListCache = {
+      add: vi.fn(async () => undefined),
+      remove: vi.fn(async () => undefined),
+    };
+    const refresh = vi.fn();
+    const command = new WorktreeRemovalCommand(
+      activeWorktrees,
+      refresh,
+      branchDeletionPreferences,
+      worktreeListCache,
+    );
+
+    vi.mocked(vscode.window.showWarningMessage)
+      .mockResolvedValueOnce('Remove and delete branch' as never)
+      .mockResolvedValueOnce(undefined);
+    vi.mocked(deleteBranch).mockRejectedValueOnce({ stderr: 'not fully merged' });
+
+    await command.run(node);
+    await waitUntil(() => readBranchTip.mock.calls.length > 0);
+
+    expect(removeWorktree).toHaveBeenCalledOnce();
+    expect(deleteBranch).toHaveBeenCalledWith('/repo/main', 'feature');
+    expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
+      'Worktree removed — branch `feature` kept: git could not confirm its commits are merged.',
+      'Force Delete Branch',
+    );
+    expect(vscode.window.showErrorMessage).not.toHaveBeenCalled();
+    expect(activeWorktrees.clear).toHaveBeenCalledWith('/git/repo');
+    expect(worktreeListCache.remove).toHaveBeenCalledWith('/git/repo', '/repo/feature');
+    expect(worktreeListCache.add).not.toHaveBeenCalled();
+    expect(refresh).toHaveBeenCalledOnce();
+  });
+
+  it('keeps generic branch deletion errors as error toasts after removing the worktree', async () => {
     const activeWorktrees = {
       get: vi.fn(() => '/repo/feature'),
       clear: vi.fn(async () => undefined),
@@ -426,18 +523,17 @@ describe('WorktreeRemovalCommand', () => {
     vi.mocked(vscode.window.showWarningMessage).mockResolvedValue(
       'Remove and delete branch' as never,
     );
-    vi.mocked(deleteBranch).mockRejectedValueOnce({ stderr: 'not fully merged' });
+    vi.mocked(deleteBranch).mockRejectedValueOnce({
+      stderr: "error: cannot delete branch 'feature' checked out at '/repo/other'",
+    });
 
     await command.run(node);
     await waitUntil(() => deleteBranch.mock.calls.length > 0);
 
-    expect(removeWorktree).toHaveBeenCalledOnce();
-    expect(deleteBranch).toHaveBeenCalledWith('/repo/main', 'feature');
     expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
-      'Cannot delete branch: not fully merged',
+      "Cannot delete branch: error: cannot delete branch 'feature' checked out at '/repo/other'",
     );
-    expect(activeWorktrees.clear).toHaveBeenCalledWith('/git/repo');
-    expect(worktreeListCache.remove).toHaveBeenCalledWith('/git/repo', '/repo/feature');
+    expect(readBranchTip).not.toHaveBeenCalled();
     expect(worktreeListCache.add).not.toHaveBeenCalled();
     expect(refresh).toHaveBeenCalledOnce();
   });

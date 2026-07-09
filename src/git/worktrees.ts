@@ -83,6 +83,16 @@ export async function deleteBranch(
   });
 }
 
+export async function readBranchTip(
+  repositoryPath: string,
+  branchName: string,
+): Promise<string> {
+  const { stdout } = await exec('git', ['rev-parse', '--verify', `refs/heads/${branchName}`], {
+    cwd: repositoryPath,
+  });
+  return stdout.trim();
+}
+
 export interface WorktreeStatus {
   hasChanges: boolean;
   hasUnpushedCommits: boolean;

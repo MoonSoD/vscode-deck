@@ -11,6 +11,7 @@ import {
   removeWorktree,
   Worktree,
 } from '../git/worktrees';
+import { handleBranchDeletionRefusal } from './keptBranch';
 import { canRemoveWorktree } from './worktreeRemoval';
 
 interface WorktreeNodeLike {
@@ -161,10 +162,15 @@ export class WorktreeRemovalCommand {
     }
 
     if (deleteLocalBranch && branchName) {
+      const branchDeletionRepositoryPath = node.mainWorktreePath ?? node.repositoryPath;
       try {
-        await deleteBranch(node.repositoryPath, branchName);
+        await deleteBranch(branchDeletionRepositoryPath, branchName);
       } catch (error) {
-        vscode.window.showErrorMessage(`Cannot delete branch: ${errorMessage(error)}`);
+        await handleBranchDeletionRefusal({
+          repositoryPath: branchDeletionRepositoryPath,
+          branchName,
+          error,
+        });
       }
     }
     this.pendingWorktreeRemovals.delete(node.worktree.path);
