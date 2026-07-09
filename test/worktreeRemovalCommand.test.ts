@@ -490,7 +490,7 @@ describe('WorktreeRemovalCommand', () => {
     expect(removeWorktree).toHaveBeenCalledOnce();
     expect(deleteBranch).toHaveBeenCalledWith('/repo/main', 'feature');
     expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
-      'Worktree removed — branch `feature` kept: git could not confirm its commits are merged.',
+      "Worktree removed — branch 'feature' kept: git could not confirm its commits are merged.",
       'Force Delete Branch',
     );
     expect(vscode.window.showErrorMessage).not.toHaveBeenCalled();

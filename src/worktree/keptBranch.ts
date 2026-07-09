@@ -19,6 +19,7 @@ interface KeptBranchGitLike {
 interface KeptBranchNotificationsLike {
   showErrorMessage(message: string): unknown;
   showWarningMessage(message: string, ...items: string[]): Thenable<string | undefined>;
+  showInformationMessage(message: string): unknown;
 }
 
 interface KeptBranchDeps {
@@ -59,8 +60,9 @@ async function offerGuardedForceDelete(
   deps: KeptBranchDeps,
 ): Promise<void> {
   try {
+    // Notifications render plain text, so quotes, not backticks.
     const picked = await deps.notifications.showWarningMessage(
-      `Worktree removed — branch \`${request.branchName}\` kept: git could not confirm its commits are merged.`,
+      `Worktree removed — branch '${request.branchName}' kept: git could not confirm its commits are merged.`,
       FORCE_DELETE_BRANCH,
     );
     if (picked !== FORCE_DELETE_BRANCH) return;
@@ -68,12 +70,13 @@ async function offerGuardedForceDelete(
     const currentTip = await deps.git.readBranchTip(request.repositoryPath, request.branchName);
     if (currentTip !== keptTip) {
       deps.notifications.showWarningMessage(
-        `Branch \`${request.branchName}\` has new commits since Deck kept it — review it before deleting.`,
+        `Branch '${request.branchName}' has new commits since Deck kept it — review it before deleting.`,
       );
       return;
     }
 
     await deps.git.deleteBranch(request.repositoryPath, request.branchName, { force: true });
+    deps.notifications.showInformationMessage(`Branch '${request.branchName}' deleted.`);
   } catch (error) {
     showBranchDeletionError(deps, error);
   }

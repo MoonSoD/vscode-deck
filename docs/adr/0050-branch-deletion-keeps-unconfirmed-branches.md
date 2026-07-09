@@ -55,9 +55,12 @@ after-the-fact signal must be a self-sufficient toast, not a dialog.
    raises a *warning* toast (the removal succeeded — ADR-0016 §5, the row
    stays gone):
 
-   > Worktree removed — branch `test-21` kept: git could not confirm its
+   > Worktree removed — branch 'test-21' kept: git could not confirm its
    > commits are merged.
    > `[Force Delete Branch]`
+
+   (Plain quotes, not backticks — VS Code notifications render plain text,
+   so markdown would show literally. Found in manual QA.)
 
    The copy is deliberately **baseline-free** ("could not confirm"), because
    naming a baseline overclaims: `-d` checks reachability from the HEAD of the
@@ -81,6 +84,10 @@ after-the-fact signal must be a self-sufficient toast, not a dialog.
    only if the branch still points at the recorded SHA; if it moved, replace
    the toast with a "review it before deleting" message. One `rev-parse`
    compare — orca's `expectedHead` guard, without its `update-ref` machinery.
+   A successful force delete confirms with an info toast naming the branch —
+   the click often comes from the notification center, detached from any
+   context, and silent success reads as nothing happening (found in manual
+   QA).
 
 5. **Nothing else.** No "Show Commits" action (the branch still exists —
    that is the point), no "Keep" button (dismissing the toast is keeping it),

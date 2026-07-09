@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('vscode', () => ({
   window: {
     showErrorMessage: vi.fn(),
+    showInformationMessage: vi.fn(),
     showWarningMessage: vi.fn(),
   },
 }));
@@ -18,6 +19,7 @@ describe('handleBranchDeletionRefusal', () => {
       },
       notifications: {
         showErrorMessage: vi.fn(),
+        showInformationMessage: vi.fn(),
         showWarningMessage: vi.fn(async () => undefined),
       },
     };
@@ -32,7 +34,7 @@ describe('handleBranchDeletionRefusal', () => {
     );
 
     expect(deps.notifications.showWarningMessage).toHaveBeenCalledWith(
-      'Worktree removed — branch `test-21` kept: git could not confirm its commits are merged.',
+      "Worktree removed — branch 'test-21' kept: git could not confirm its commits are merged.",
       'Force Delete Branch',
     );
     expect(deps.notifications.showErrorMessage).not.toHaveBeenCalled();
@@ -47,6 +49,7 @@ describe('handleBranchDeletionRefusal', () => {
       },
       notifications: {
         showErrorMessage: vi.fn(),
+        showInformationMessage: vi.fn(),
         showWarningMessage: vi.fn(() => picked.promise),
       },
     };
@@ -61,12 +64,15 @@ describe('handleBranchDeletionRefusal', () => {
     );
 
     picked.resolve('Force Delete Branch');
-    await waitUntil(() => deps.git.deleteBranch.mock.calls.length > 0);
+    await waitUntil(() => deps.notifications.showInformationMessage.mock.calls.length > 0);
 
     expect(deps.git.readBranchTip).toHaveBeenCalledTimes(2);
     expect(deps.git.deleteBranch).toHaveBeenCalledWith('/repo/main', 'feature', {
       force: true,
     });
+    expect(deps.notifications.showInformationMessage).toHaveBeenCalledWith(
+      "Branch 'feature' deleted.",
+    );
   });
 
   it('keeps the branch when the toast action is clicked after the branch moved', async () => {
@@ -81,6 +87,7 @@ describe('handleBranchDeletionRefusal', () => {
       },
       notifications: {
         showErrorMessage: vi.fn(),
+        showInformationMessage: vi.fn(),
         showWarningMessage: vi.fn(() => picked.promise),
       },
     };
@@ -99,7 +106,7 @@ describe('handleBranchDeletionRefusal', () => {
 
     expect(deps.git.deleteBranch).not.toHaveBeenCalled();
     expect(deps.notifications.showWarningMessage).toHaveBeenLastCalledWith(
-      'Branch `feature` has new commits since Deck kept it — review it before deleting.',
+      "Branch 'feature' has new commits since Deck kept it — review it before deleting.",
     );
   });
 
@@ -114,6 +121,7 @@ describe('handleBranchDeletionRefusal', () => {
       },
       notifications: {
         showErrorMessage: vi.fn(),
+        showInformationMessage: vi.fn(),
         showWarningMessage: vi.fn(() => picked.promise),
       },
     };
@@ -143,6 +151,7 @@ describe('handleBranchDeletionRefusal', () => {
       },
       notifications: {
         showErrorMessage: vi.fn(),
+        showInformationMessage: vi.fn(),
         showWarningMessage: vi.fn(async () => undefined),
       },
     };
@@ -171,6 +180,7 @@ describe('handleBranchDeletionRefusal', () => {
       },
       notifications: {
         showErrorMessage: vi.fn(),
+        showInformationMessage: vi.fn(),
         showWarningMessage: vi.fn(async () => undefined),
       },
     };
