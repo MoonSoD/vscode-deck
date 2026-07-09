@@ -55,6 +55,7 @@ describe('WorktreeRemovalCommand', () => {
     });
     vi.mocked(removeWorktree).mockResolvedValue(undefined);
     vi.mocked(deleteBranch).mockResolvedValue(undefined);
+    vi.mocked(readBranchTip).mockResolvedValue('abc123');
   });
 
   it('removes the worktree without deleting the branch when keep-branch is accepted', async () => {
@@ -528,7 +529,7 @@ describe('WorktreeRemovalCommand', () => {
     });
 
     await command.run(node);
-    await waitUntil(() => deleteBranch.mock.calls.length > 0);
+    await waitUntil(() => vscode.window.showErrorMessage.mock.calls.length > 0);
 
     expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
       "Cannot delete branch: error: cannot delete branch 'feature' checked out at '/repo/other'",

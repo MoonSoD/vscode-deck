@@ -38,7 +38,7 @@ export async function handleBranchDeletionRefusal(
   deps: KeptBranchDeps = defaultDeps,
 ): Promise<void> {
   if (!isUnmergedCommitsRefusal(request.error)) {
-    deps.notifications.showErrorMessage(`Cannot delete branch: ${errorMessage(request.error)}`);
+    showBranchDeletionError(deps, request.error);
     return;
   }
 
@@ -46,31 +46,41 @@ export async function handleBranchDeletionRefusal(
   try {
     keptTip = await deps.git.readBranchTip(request.repositoryPath, request.branchName);
   } catch (error) {
-    deps.notifications.showErrorMessage(`Cannot delete branch: ${errorMessage(error)}`);
+    showBranchDeletionError(deps, error);
     return;
   }
 
-  void (async () => {
-    try {
-      const picked = await deps.notifications.showWarningMessage(
-        `Worktree removed — branch \`${request.branchName}\` kept: git could not confirm its commits are merged.`,
-        FORCE_DELETE_BRANCH,
+  void offerGuardedForceDelete(request, keptTip, deps);
+}
+
+async function offerGuardedForceDelete(
+  request: BranchDeletionRefusal,
+  keptTip: string,
+  deps: KeptBranchDeps,
+): Promise<void> {
+  try {
+    const picked = await deps.notifications.showWarningMessage(
+      `Worktree removed — branch \`${request.branchName}\` kept: git could not confirm its commits are merged.`,
+      FORCE_DELETE_BRANCH,
+    );
+    if (picked !== FORCE_DELETE_BRANCH) return;
+
+    const currentTip = await deps.git.readBranchTip(request.repositoryPath, request.branchName);
+    if (currentTip !== keptTip) {
+      deps.notifications.showWarningMessage(
+        `Branch \`${request.branchName}\` has new commits since Deck kept it — review it before deleting.`,
       );
-      if (picked !== FORCE_DELETE_BRANCH) return;
-
-      const currentTip = await deps.git.readBranchTip(request.repositoryPath, request.branchName);
-      if (currentTip !== keptTip) {
-        deps.notifications.showWarningMessage(
-          `Branch \`${request.branchName}\` has new commits since Deck kept it — review it before deleting.`,
-        );
-        return;
-      }
-
-      await deps.git.deleteBranch(request.repositoryPath, request.branchName, { force: true });
-    } catch (error) {
-      deps.notifications.showErrorMessage(`Cannot delete branch: ${errorMessage(error)}`);
+      return;
     }
-  })();
+
+    await deps.git.deleteBranch(request.repositoryPath, request.branchName, { force: true });
+  } catch (error) {
+    showBranchDeletionError(deps, error);
+  }
+}
+
+function showBranchDeletionError(deps: KeptBranchDeps, error: unknown): void {
+  deps.notifications.showErrorMessage(`Cannot delete branch: ${errorMessage(error)}`);
 }
 
 function isUnmergedCommitsRefusal(error: unknown): boolean {
