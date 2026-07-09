@@ -46,6 +46,14 @@ _Avoid_: new tab, fork
 Removing a Worktree from git, with optional, opt-in deletion of its branch.
 _Avoid_: delete (ambiguous between Worktree and branch)
 
+**UnmergedCommits**:
+Commits on a Worktree's branch that branch deletion would orphan — work git cannot confirm is merged or pushed anywhere else. The risk concept that gates branch deletion in WorktreeRemoval. Detected reactively by git's own safe-delete refusal (an over-cautious approximation: squash-merged and stale-remote branches also trip it), never by an upfront warning — a warning that fires on routine squash-merged branches would train click-through on the destructive path.
+_Avoid_: unpushed commits (measured against `@{u}`; silently absent when the branch has no upstream — the wrong guard for branch deletion), unmerged branch (the commits are at risk, not the ref)
+
+**KeptBranch**:
+The outcome when WorktreeRemoval's opt-in branch deletion is refused over UnmergedCommits: the Worktree is gone, the branch survives, and a toast says so in Deck's words with a Force Delete Branch action. The force action is guarded by the branch tip recorded at refusal — if the branch has moved since (the toast may be clicked hours later from the notification center), Deck asks the user to review instead of deleting.
+_Avoid_: failed deletion (the safe outcome is working as designed, not an error), orphaned branch (nothing is orphaned — that is the point)
+
 **RepositoryRemoval**:
 Delisting a Repository from Deck without touching its git repository or files.
 _Avoid_: delete repository, uninstall
@@ -170,4 +178,5 @@ _Avoid_: file watcher, watcher controller (implementation); polling (it is event
 - "close" conflated closing a **Terminal**'s editor tab with destroying the **Terminal** — resolved: closing the tab is a non-destructive view operation; destroying is **TerminalRemoval** ("Delete"). Reverses ADR-0011 §6's kill-on-tab-close.
 - An uncurated **WorktreeOrder** implied a curated order but had no *defined* default — git listed worktrees alphabetically by path, so a newly added Worktree surfaced mid-list, not last. Resolved: the default is **creation order** (newest last), main pinned first — mirroring the append-at-bottom invariant ADR-0028 built for TerminalOrder. See ADR-0048.
 - "Project" was the canonical term for a registered repo — resolved: renamed to **Repository** for precision (it is literally a git repo, keyed by common dir). "project" is now avoided because a VS Code user reads the open *folder* as their "project," and that folder is a **Worktree** in Deck.
+- "unpushed commits" was the only committed-work warning in WorktreeRemoval, but it is measured against `@{u}` and a branch with no upstream reports none — so a branch whose only ref held unique work warned nothing, and `git branch -d` refused after the fact. Resolved: branch deletion is gated by **UnmergedCommits** (vs. the default branch and remotes); "unpushed" remains a Worktree-removal signal only.
 - A **Worktree** was assumed to always have a branch, so a branchless one fell back to showing its full filesystem path as the row label — resolved: a **Detached Worktree** is a real checkout and stays shown, labelled by folder name + short commit; a **Bare Worktree** has no working tree and is hidden, because Switching to one would mount git internals and poison the **ActiveWorktree**.
