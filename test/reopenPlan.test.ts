@@ -5,13 +5,12 @@ describe('planReopenUnwiredTerminalTabs', () => {
   it('reopens hidden unwired tabs before the active one and restores focus last', () => {
     const snapshot: ReopenPlanSnapshot = {
       groups: [{
-        id: 'group-1',
         viewColumn: 1,
         isActive: true,
         activeTabId: 'term-2',
         tabs: [
           terminalTab('term-1', 0, { unwired: true, pinned: true }),
-          terminalTab('term-2', 1, { active: true, unwired: true }),
+          terminalTab('term-2', 1, { unwired: true }),
         ],
       }],
     };
@@ -38,7 +37,6 @@ describe('planReopenUnwiredTerminalTabs', () => {
   it('skips a group whose active tab cannot be restored afterwards', () => {
     const snapshot: ReopenPlanSnapshot = {
       groups: [{
-        id: 'group-1',
         viewColumn: 1,
         isActive: true,
         activeTabId: 'webview',
@@ -46,7 +44,6 @@ describe('planReopenUnwiredTerminalTabs', () => {
           {
             id: 'webview',
             index: 0,
-            isActive: true,
             isPinned: false,
             isDeckTerminal: false,
             isUnwired: false,
@@ -63,7 +60,6 @@ describe('planReopenUnwiredTerminalTabs', () => {
   it('re-reveals a restorable active non-terminal tab after reopening hidden tabs', () => {
     const snapshot: ReopenPlanSnapshot = {
       groups: [{
-        id: 'group-1',
         viewColumn: 2,
         isActive: false,
         activeTabId: 'source',
@@ -72,7 +68,6 @@ describe('planReopenUnwiredTerminalTabs', () => {
           {
             id: 'source',
             index: 1,
-            isActive: true,
             isPinned: false,
             isDeckTerminal: false,
             isUnwired: false,
@@ -97,12 +92,11 @@ describe('planReopenUnwiredTerminalTabs', () => {
 function terminalTab(
   id: string,
   index: number,
-  options: { active?: boolean; unwired?: boolean; pinned?: boolean } = {},
+  options: { unwired?: boolean; pinned?: boolean } = {},
 ) {
   return {
     id,
     index,
-    isActive: options.active ?? false,
     isPinned: options.pinned ?? false,
     isDeckTerminal: true,
     isUnwired: options.unwired ?? false,

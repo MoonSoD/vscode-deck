@@ -281,7 +281,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     ensureSnapshotRestored,
     resolveAgentName,
   );
-  const disconnectedTabs = new DisconnectedTabWatch(terminalEditorProvider);
+  const disconnectedTabs = new DisconnectedTabWatch({
+    panelFor: (sessionName) => terminalEditorProvider.panelFor(sessionName),
+  });
   agentTitlePoll = tmuxAvailability.available
     ? new AgentTitlePoll({
         listSessions: () => tmux.listSessions(),

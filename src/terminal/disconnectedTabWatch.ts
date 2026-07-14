@@ -37,9 +37,7 @@ interface DisconnectedTabWatchOptions {
   reopen?: () => Promise<void>;
 }
 
-interface PanelRegistryLike {
-  panelFor(sessionName: string): unknown;
-}
+type PanelLookup = (sessionName: string) => unknown;
 
 export class DisconnectedTabWatch implements vscode.Disposable {
   private readonly surface: DisconnectedTabWatchSurface;
@@ -55,23 +53,16 @@ export class DisconnectedTabWatch implements vscode.Disposable {
   private lastPromptAt = -Infinity;
   private disposed = false;
 
-  constructor(options: DisconnectedTabWatchOptions);
-  constructor(panels: PanelRegistryLike, options?: DisconnectedTabWatchOptions);
-  constructor(
-    panelsOrOptions: PanelRegistryLike | DisconnectedTabWatchOptions,
-    maybeOptions: DisconnectedTabWatchOptions = {},
-  ) {
-    const options = isPanelRegistry(panelsOrOptions) ? maybeOptions : panelsOrOptions;
-    const panels = isPanelRegistry(panelsOrOptions) ? panelsOrOptions : undefined;
+  constructor(options: DisconnectedTabWatchOptions = {}) {
     this.surface = options.surface ?? new VsCodeDisconnectedTabSurface();
-    this.panelFor = options.panelFor ?? ((sessionName) => panels?.panelFor(sessionName));
+    this.panelFor = options.panelFor ?? (() => undefined);
     this.notifications = options.notifications ?? vscode.window;
     this.timers = options.timers ?? {
       setTimeout: (handler, ms) => setTimeout(handler, ms),
       clearTimeout: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
       now: () => Date.now(),
     };
-    this.reopen = options.reopen ?? (() => reopenUnwiredTerminalTabs(panels));
+    this.reopen = options.reopen ?? (() => reopenUnwiredTerminalTabs(this.panelFor));
   }
 
   start(): void {
@@ -179,9 +170,9 @@ export class DisconnectedTabWatch implements vscode.Disposable {
   }
 }
 
-export async function reopenUnwiredTerminalTabs(panels?: PanelRegistryLike): Promise<void> {
+export async function reopenUnwiredTerminalTabs(panelFor: PanelLookup = () => undefined): Promise<void> {
   const surface = new VsCodeDisconnectedTabSurface();
-  const snapshot = surface.reopenSnapshot((sessionName) => panels?.panelFor(sessionName) === undefined);
+  const snapshot = surface.reopenSnapshot((sessionName) => panelFor(sessionName) === undefined);
   const operations = planReopenUnwiredTerminalTabs(snapshot);
   const tabsById = surface.tabsById();
 
@@ -194,47 +185,43 @@ async function executeReopenOperation(
   operation: ReopenPlanOperation,
   tabsById: Map<string, vscode.Tab>,
 ): Promise<void> {
-  if (operation.kind === 'close') {
-    const tab = tabsById.get(operation.tabId);
-    if (tab) await vscode.window.tabGroups.close(tab, true);
-    return;
-  }
+  switch (operation.kind) {
+    case 'close': {
+      const tab = tabsById.get(operation.tabId);
+      if (tab) await vscode.window.tabGroups.close(tab, true);
+      return;
+    }
+    case 'open':
+      await vscode.commands.executeCommand(
+        'vscode.openWith',
+        operation.uri,
+        terminalEditorViewType,
+        { viewColumn: operation.viewColumn },
+      );
+      return;
+    case 'move':
+      await moveActiveEditorToIndex(operation.index);
+      return;
+    case 'pin':
+      await vscode.commands.executeCommand('workbench.action.pinEditor');
+      return;
+    case 'reveal':
+      if (operation.viewType) {
+        await vscode.commands.executeCommand(
+          'vscode.openWith',
+          operation.uri,
+          operation.viewType,
+          { viewColumn: operation.viewColumn },
+        );
+        return;
+      }
 
-  if (operation.kind === 'open') {
-    await vscode.commands.executeCommand(
-      'vscode.openWith',
-      operation.uri,
-      terminalEditorViewType,
-      { viewColumn: operation.viewColumn },
-    );
-    return;
+      await vscode.commands.executeCommand(
+        'vscode.open',
+        operation.uri,
+        { viewColumn: operation.viewColumn },
+      );
   }
-
-  if (operation.kind === 'move') {
-    await moveActiveEditorToIndex(operation.index);
-    return;
-  }
-
-  if (operation.kind === 'pin') {
-    await vscode.commands.executeCommand('workbench.action.pinEditor');
-    return;
-  }
-
-  if (operation.viewType) {
-    await vscode.commands.executeCommand(
-      'vscode.openWith',
-      operation.uri,
-      operation.viewType,
-      { viewColumn: operation.viewColumn },
-    );
-    return;
-  }
-
-  await vscode.commands.executeCommand(
-    'vscode.open',
-    operation.uri,
-    { viewColumn: operation.viewColumn },
-  );
 }
 
 async function moveActiveEditorToIndex(index: number): Promise<void> {
@@ -264,7 +251,6 @@ class VsCodeDisconnectedTabSurface implements DisconnectedTabWatchSurface {
   reopenSnapshot(isUnwired: (sessionName: string) => boolean): ReopenPlanSnapshot {
     return {
       groups: vscode.window.tabGroups.all.map((group, groupIndex) => ({
-        id: String(groupIndex),
         viewColumn: group.viewColumn,
         isActive: group.isActive,
         activeTabId: group.activeTab ? this.tabId(groupIndex, group.tabs.indexOf(group.activeTab)) : undefined,
@@ -274,7 +260,6 @@ class VsCodeDisconnectedTabSurface implements DisconnectedTabWatchSurface {
           return {
             id: this.tabId(groupIndex, index),
             index,
-            isActive: tab.isActive,
             isPinned: tab.isPinned,
             isDeckTerminal: decoded !== undefined,
             isUnwired: decoded ? isUnwired(decoded.sessionName) : false,
@@ -327,12 +312,4 @@ class VsCodeDisconnectedTabSurface implements DisconnectedTabWatchSurface {
   private tabId(groupIndex: number, tabIndex: number): string {
     return `${groupIndex}:${tabIndex}`;
   }
-}
-
-function isPanelRegistry(value: PanelRegistryLike | DisconnectedTabWatchOptions): value is PanelRegistryLike {
-  return typeof (value as PanelRegistryLike).panelFor === 'function' &&
-    !('surface' in value) &&
-    !('notifications' in value) &&
-    !('reopen' in value) &&
-    !('timers' in value);
 }

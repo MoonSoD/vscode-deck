@@ -1,7 +1,6 @@
 export interface ReopenPlanTab {
   readonly id: string;
   readonly index: number;
-  readonly isActive: boolean;
   readonly isPinned: boolean;
   readonly isDeckTerminal: boolean;
   readonly isUnwired: boolean;
@@ -11,7 +10,6 @@ export interface ReopenPlanTab {
 }
 
 export interface ReopenPlanGroup {
-  readonly id: string;
   readonly viewColumn: number;
   readonly isActive: boolean;
   readonly activeTabId?: string;
