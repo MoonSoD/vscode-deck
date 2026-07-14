@@ -127,6 +127,10 @@ _Avoid_: post-create hook (it is launcher data, not a script Deck owns), provisi
 A persistent shell owned by Deck — one tmux session on the DeckSocket — shown as a row under a Worktree and opened as an xterm.js editor tab addressed by `deck-terminal:/<worktree>/term-N`. Like a file, the Terminal is the durable thing and its tab is just a view onto it: closing the tab leaves the Terminal running, and any Terminal can be opened from any mounted Worktree without a Switch. Its Worktree is fixed when it is created and never changes — a Terminal cannot move to another Worktree or Repository.
 _Avoid_: tmux session, tmux window, pane (the backing mechanism); tab (a disposable view, not the Terminal itself)
 
+**DisconnectedTab**:
+A Terminal tab whose view outlived the extension host that wired it. This happens when the extension host restarts without a full window reload, such as an extension update or Developer: Restart Extension Host. The Terminal itself is still healthy on the DeckSocket, but the tab keeps showing its last scrollback while keystrokes and output no longer cross the dead webview bridge. VS Code does not re-resolve that surviving custom-editor input, so Deck can only repair it by closing and reopening the tab. Deck marks a tab as a DisconnectedTab only after evidence: the tab is active in its group and still has no registered panel after a grace period. The mark is a grey `!` FileDecoration on the `deck-terminal:` URI and a Reopen Terminals action; Deck never reopens tabs without user consent.
+_Avoid_: dead tab (the Terminal did not die), stale tab (the defect is lost interactivity, not just old content), broken terminal (the Terminal is healthy)
+
 ### External changes
 
 **ExternalGitWatch**:

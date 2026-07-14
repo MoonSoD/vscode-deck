@@ -40,7 +40,8 @@
     "Other"
   ],
   "activationEvents": [
-    "onView:deck.repositories"
+    "onView:deck.repositories",
+    "onStartupFinished"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -264,6 +265,10 @@
         "title": "Deck Terminal: Find"
       },
       {
+        "command": "deck.reopenTerminals",
+        "title": "Deck: Reopen Terminals"
+      },
+      {
         "command": "deck.installAgentHooks",
         "title": "Deck: Install Agent Hooks"
       },
@@ -360,6 +365,9 @@
         {
           "command": "deck.terminal.find",
           "when": "activeCustomEditorId == 'deck.terminal'"
+        },
+        {
+          "command": "deck.reopenTerminals"
         },
         {
           "command": "deck.installAgentHooks"

@@ -37,7 +37,7 @@ describe('package contributions', () => {
   });
 
   it('contributes Deck to the secondary sidebar with first-install walkthrough', () => {
-    expect(pkg.activationEvents).toEqual(['onView:deck.repositories']);
+    expect(pkg.activationEvents).toEqual(['onView:deck.repositories', 'onStartupFinished']);
     expect(pkg.engines.vscode).toBe('^1.110.0');
     expect(pkg.contributes.viewsContainers.activitybar).toBeUndefined();
     expect(pkg.contributes.viewsContainers.secondarySidebar).toEqual([{
@@ -186,6 +186,16 @@ describe('package contributions', () => {
     expect(pkg.contributes.menus.commandPalette).toContainEqual({
       command: 'deck.terminal.find',
       when: "activeCustomEditorId == 'deck.terminal'",
+    });
+  });
+
+  it('contributes Reopen Terminals as a command-palette action', () => {
+    expect(pkg.contributes.commands).toContainEqual({
+      command: 'deck.reopenTerminals',
+      title: 'Deck: Reopen Terminals',
+    });
+    expect(pkg.contributes.menus.commandPalette).toContainEqual({
+      command: 'deck.reopenTerminals',
     });
   });
 

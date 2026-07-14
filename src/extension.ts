@@ -33,6 +33,7 @@ import {
   TerminalEditorProvider,
   terminalEditorViewType,
 } from './terminal/terminalEditorProvider';
+import { DisconnectedTabWatch } from './terminal/disconnectedTabWatch';
 import { TmuxCli, type TmuxSession } from './terminal/tmuxCli';
 import { terminalSessionNumber, terminalSessionPrefix } from './terminal/tmuxSafe';
 import { tmuxPreflight } from './terminal/tmuxPreflight';
@@ -280,6 +281,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     ensureSnapshotRestored,
     resolveAgentName,
   );
+  const disconnectedTabs = new DisconnectedTabWatch(terminalEditorProvider);
   agentTitlePoll = tmuxAvailability.available
     ? new AgentTitlePoll({
         listSessions: () => tmux.listSessions(),
@@ -375,8 +377,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       isActiveWorktree: (id) => tree.isActiveWorktreeDecorationTarget(id),
       onDidChange: (listener) => tree.onDidChangeDeckDecorations(listener),
     },
+    disconnectedTabs,
   );
   const deckDecorationWatch = vscode.window.registerFileDecorationProvider(deckDecorationProvider);
+  const disconnectedTabBadgeWatch = disconnectedTabs.onDidChangeDisconnectedTabs((uris) => {
+    deckDecorationProvider.invalidate(uris);
+  });
   const agentStatusCollapseWatch = treeView.onDidCollapseElement((event) => {
     deckDecorationProvider.fire(tree.setCollapsed(event.element, true));
   });
@@ -446,6 +452,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     ...(agentTitlePollWatch ? [agentTitlePollWatch] : []),
     deckDecorationProvider,
     deckDecorationWatch,
+    disconnectedTabBadgeWatch,
     agentStatusCollapseWatch,
     agentStatusExpandWatch,
     agentStatusNotifierWatch,
@@ -457,6 +464,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       supportsMultipleEditorsPerDocument: false,
     }),
     terminalEditorProvider,
+    disconnectedTabs,
     vscode.commands.registerCommand('deck.refresh', () => {
       refreshTree();
     }),
@@ -477,6 +485,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       terminalRemoval.run(node ?? treeView.selection[0]),
     ),
     vscode.commands.registerCommand('deck.terminal.find', () => terminalEditorProvider.showFind()),
+    vscode.commands.registerCommand('deck.reopenTerminals', () => disconnectedTabs.reopenUnwiredTabs()),
     vscode.commands.registerCommand('deck.installAgentHooks', () => agentSetupPrompt.run({ explicit: true })),
     vscode.commands.registerCommand('deck.removeAgentHooks', () => agentSetupPrompt.uninstall()),
     vscode.commands.registerCommand('deck.removeRepository', (node) => removeRepository.run(node)),
@@ -513,6 +522,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       if (event.visible) refreshTree();
     }),
   );
+  disconnectedTabs.start();
   if (terminalSnapshotRuntime) {
     context.subscriptions.push(terminalSnapshotRuntime.startPeriodicSave(5 * 60 * 1000));
     await openPendingTerminalForCurrentWorktree(pendingTerminalOpens, tmux);

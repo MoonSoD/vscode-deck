@@ -26,6 +26,10 @@ interface ActiveDecorationTargets {
   onDidChange?(listener: (uris: readonly AgentStatusDecorationResourceUri[]) => void): Disposable;
 }
 
+interface DisconnectedTabSource {
+  isDisconnected(sessionName: string): boolean;
+}
+
 export class DeckDecorationProvider implements vscode.FileDecorationProvider, Disposable {
   private readonly _onDidChangeFileDecorations = new vscode.EventEmitter<vscode.Uri | vscode.Uri[] | undefined>();
   readonly onDidChangeFileDecorations = this._onDidChangeFileDecorations.event;
@@ -38,6 +42,7 @@ export class DeckDecorationProvider implements vscode.FileDecorationProvider, Di
     private readonly store: AgentStatusStoreLike,
     private readonly rollups: AgentStatusDecorationRollups,
     private readonly activeTargets?: ActiveDecorationTargets,
+    private readonly disconnectedTabs?: DisconnectedTabSource,
   ) {
     this.statuses = this.syncStatuses();
     this.statusWatch = this.store.onDidChange((change) => {
@@ -89,6 +94,13 @@ export class DeckDecorationProvider implements vscode.FileDecorationProvider, Di
     } catch {
       return undefined;
     }
+    if (this.disconnectedTabs?.isDisconnected(sessionName)) {
+      return this.toFileDecoration(
+        '!',
+        'Disconnected by an extension restart. Run "Deck: Reopen Terminals" to reconnect.',
+        new vscode.ThemeColor('disabledForeground'),
+      );
+    }
     const decoration = provideAgentStatusDecoration(
       agentStatusDecorationUri(sessionName),
       this.store.get(sessionName),
@@ -104,6 +116,11 @@ export class DeckDecorationProvider implements vscode.FileDecorationProvider, Di
   fire(uris: readonly AgentStatusDecorationResourceUri[]): void {
     if (uris.length === 0) return;
     this._onDidChangeFileDecorations.fire(uris.map((uri) => vscode.Uri.from(uri)));
+  }
+
+  invalidate(uris: readonly vscode.Uri[]): void {
+    if (uris.length === 0) return;
+    this._onDidChangeFileDecorations.fire([...uris]);
   }
 
   dispose(): void {

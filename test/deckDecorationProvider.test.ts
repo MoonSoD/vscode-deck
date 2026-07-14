@@ -130,6 +130,27 @@ describe('DeckDecorationProvider', () => {
     });
   });
 
+  it('returns a DisconnectedTab badge ahead of Terminal editor-tab agent status', () => {
+    const worktreePath = '/repo/main';
+    const sessionName = terminalSessionName(worktreePath, 1);
+    const statuses = new Map<string, AgentStatus>([
+      [sessionName, { status: 'needsInput', statusAt: 1710000000, message: 'Review' }],
+    ]);
+    const provider = createProvider(
+      statuses,
+      new AgentStatusDecorationRollups(),
+      undefined,
+      { isDisconnected: (candidate) => candidate === sessionName },
+    );
+
+    expect(provider.provideFileDecoration(terminalUri(worktreePath, 1) as never)).toEqual({
+      badge: '!',
+      tooltip: 'Disconnected by an extension restart. Run "Deck: Reopen Terminals" to reconnect.',
+      color: { id: 'disabledForeground' },
+      propagate: false,
+    });
+  });
+
   it('returns no Terminal editor-tab decoration without attention status', () => {
     const worktreePath = '/repo/main';
     const inProgress = terminalSessionName(worktreePath, 1);
@@ -245,12 +266,15 @@ function createProvider(
     isActiveRepository(id: string): boolean;
     isActiveWorktree(id: string): boolean;
   },
+  disconnectedTabs?: {
+    isDisconnected(sessionName: string): boolean;
+  },
 ): DeckDecorationProvider {
   return new DeckDecorationProvider({
     get: (sessionName: string) => statuses.get(sessionName),
     entries: () => statuses.entries(),
     onDidChange: vi.fn(() => ({ dispose: vi.fn() })),
-  }, rollups, activeTargets);
+  }, rollups, activeTargets, disconnectedTabs);
 }
 
 const terminalUriCodec = new SessionUriCodec();
