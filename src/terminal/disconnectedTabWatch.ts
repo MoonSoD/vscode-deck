@@ -113,8 +113,7 @@ export class DisconnectedTabWatch implements vscode.Disposable {
   }
 
   private scheduleJudgment(sessionName: string): void {
-    const previous = this.pendingJudgments.get(sessionName);
-    if (previous) this.timers.clearTimeout(previous);
+    this.cancelJudgment(sessionName);
     const handle = this.timers.setTimeout(() => {
       this.pendingJudgments.delete(sessionName);
       this.judgeActiveDeckTab(sessionName);
@@ -129,7 +128,8 @@ export class DisconnectedTabWatch implements vscode.Disposable {
   }
 
   private judgeActiveDeckTab(sessionName: string): void {
-    const tab = this.surface.activeDeckTabs().find((candidate) => candidate.sessionName === sessionName);
+    const tab = this.surface.activeDeckTabs()
+      .find((candidate) => candidate.sessionName === sessionName);
     if (tab === undefined) return;
     this.judgeDeckTab(tab);
   }
@@ -151,10 +151,16 @@ export class DisconnectedTabWatch implements vscode.Disposable {
 
   private forget(sessionName: string): void {
     const uri = this.disconnected.get(sessionName);
-    this.pendingJudgments.delete(sessionName);
+    this.cancelJudgment(sessionName);
     if (uri === undefined) return;
     this.disconnected.delete(sessionName);
     this.fire([uri]);
+  }
+
+  private cancelJudgment(sessionName: string): void {
+    const handle = this.pendingJudgments.get(sessionName);
+    if (handle) this.timers.clearTimeout(handle);
+    this.pendingJudgments.delete(sessionName);
   }
 
   private offerReopen(): void {

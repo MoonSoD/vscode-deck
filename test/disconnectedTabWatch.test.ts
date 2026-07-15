@@ -79,6 +79,26 @@ describe('DisconnectedTabWatch', () => {
     expect(watch.isDisconnected('term-b')).toBe(false);
   });
 
+  it('cancels a pending judgment when the same session reopens', async () => {
+    const surface = new FakeSurface([tab('term-1', true)]);
+    const panels = new Set<string>();
+    const watch = createWatch(surface, { panelFor: (sessionName) => panels.has(sessionName) ? {} : undefined });
+
+    watch.start();
+    surface.fireTabsChanged();
+    await vi.advanceTimersByTimeAsync(250);
+    surface.close('term-1');
+    surface.open(tab('term-1', true));
+    await vi.advanceTimersByTimeAsync(250);
+
+    expect(watch.isDisconnected('term-1')).toBe(false);
+
+    panels.add('term-1');
+    await vi.advanceTimersByTimeAsync(250);
+
+    expect(watch.isDisconnected('term-1')).toBe(false);
+  });
+
   it('runs the reopen flow when the notification action is selected', async () => {
     const surface = new FakeSurface([tab('term-1', true)]);
     const notifications = fakeNotifications('Reopen Terminals');
@@ -233,6 +253,11 @@ class FakeSurface implements DisconnectedTabWatchSurface {
 
   activate(sessionName: string): void {
     for (const candidate of this.tabs) candidate.isActive = candidate.sessionName === sessionName;
+    this.fireTabsChanged();
+  }
+
+  open(tab: ReturnType<typeof tab>): void {
+    this.tabs.push(tab);
     this.fireTabsChanged();
   }
 
