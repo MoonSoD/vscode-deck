@@ -59,10 +59,32 @@ describe('DisconnectedTabWatch', () => {
     expect(watch.isDisconnected('term-1')).toBe(false);
   });
 
+  it('judges an activation only after that session gets its own grace window', async () => {
+    const surface = new FakeSurface([
+      tab('term-a', true),
+      tab('term-b', false),
+    ]);
+    const panels = new Set<string>();
+    const watch = createWatch(surface, { panelFor: (sessionName) => panels.has(sessionName) ? {} : undefined });
+
+    watch.start();
+    surface.fireTabsChanged();
+    await vi.advanceTimersByTimeAsync(450);
+    surface.activate('term-b');
+    await vi.advanceTimersByTimeAsync(499);
+    panels.add('term-b');
+    await vi.advanceTimersByTimeAsync(51);
+
+    expect(watch.isDisconnected('term-a')).toBe(false);
+    expect(watch.isDisconnected('term-b')).toBe(false);
+  });
+
   it('runs the reopen flow when the notification action is selected', async () => {
     const surface = new FakeSurface([tab('term-1', true)]);
     const notifications = fakeNotifications('Reopen Terminals');
-    const reopen = vi.fn(async () => undefined);
+    const reopen = vi.fn(async () => {
+      surface.close('term-1');
+    });
     const watch = createWatch(surface, { notifications, reopen });
 
     watch.start();
@@ -73,7 +95,27 @@ describe('DisconnectedTabWatch', () => {
     expect(watch.isDisconnected('term-1')).toBe(false);
   });
 
-  it('re-offers the reopen action when a badged tab is activated after the throttle', async () => {
+  it('keeps skipped disconnected tabs badged after accepting reopen', async () => {
+    const surface = new FakeSurface([
+      tab('repaired', true),
+      tab('skipped', true),
+    ]);
+    const notifications = fakeNotifications('Reopen Terminals');
+    const reopen = vi.fn(async () => {
+      surface.close('repaired');
+    });
+    const watch = createWatch(surface, { notifications, reopen });
+
+    watch.start();
+    await vi.advanceTimersByTimeAsync(1000);
+    await Promise.resolve();
+
+    expect(reopen).toHaveBeenCalledOnce();
+    expect(watch.isDisconnected('repaired')).toBe(false);
+    expect(watch.isDisconnected('skipped')).toBe(true);
+  });
+
+  it('does not re-prompt after dismissal while the badged tab stays active', async () => {
     const surface = new FakeSurface([tab('term-1', true)]);
     const notifications = fakeNotifications(undefined);
     const watch = createWatch(surface, { notifications });
@@ -90,6 +132,26 @@ describe('DisconnectedTabWatch', () => {
     surface.fireTabsChanged();
     await vi.advanceTimersByTimeAsync(500);
 
+    expect(notifications.showWarningMessage).toHaveBeenCalledOnce();
+  });
+
+  it('prompts for a newly proven disconnected tab after the throttle', async () => {
+    const surface = new FakeSurface([
+      tab('term-1', true),
+      tab('term-2', false),
+    ]);
+    const notifications = fakeNotifications(undefined);
+    const watch = createWatch(surface, { notifications });
+
+    watch.start();
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(notifications.showWarningMessage).toHaveBeenCalledOnce();
+
+    await vi.advanceTimersByTimeAsync(30_000);
+    surface.activate('term-2');
+    await vi.advanceTimersByTimeAsync(500);
+
+    expect(watch.isDisconnected('term-2')).toBe(true);
     expect(notifications.showWarningMessage).toHaveBeenCalledTimes(2);
   });
 
@@ -102,6 +164,22 @@ describe('DisconnectedTabWatch', () => {
     watch.start();
     await vi.advanceTimersByTimeAsync(1000);
     surface.close('term-1');
+
+    expect(watch.isDisconnected('term-1')).toBe(false);
+    expect(changed.at(-1)).toEqual([{ scheme: 'deck-terminal', path: '/repo/term-1' }]);
+  });
+
+  it('forgets a badged session observed with a live panel', async () => {
+    const surface = new FakeSurface([tab('term-1', true)]);
+    const panels = new Set<string>();
+    const watch = createWatch(surface, { panelFor: (sessionName) => panels.has(sessionName) ? {} : undefined });
+    const changed: unknown[][] = [];
+    watch.onDidChangeDisconnectedTabs((uris) => changed.push([...uris]));
+
+    watch.start();
+    await vi.advanceTimersByTimeAsync(1000);
+    panels.add('term-1');
+    surface.fireTabsChanged();
 
     expect(watch.isDisconnected('term-1')).toBe(false);
     expect(changed.at(-1)).toEqual([{ scheme: 'deck-terminal', path: '/repo/term-1' }]);
@@ -151,6 +229,11 @@ class FakeSurface implements DisconnectedTabWatchSurface {
 
   fireTabsChanged(): void {
     this.listener?.({ closedSessionNames: [] });
+  }
+
+  activate(sessionName: string): void {
+    for (const candidate of this.tabs) candidate.isActive = candidate.sessionName === sessionName;
+    this.fireTabsChanged();
   }
 
   close(sessionName: string): void {

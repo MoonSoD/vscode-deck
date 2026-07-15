@@ -87,7 +87,6 @@ export class DisconnectedTabWatch implements vscode.Disposable {
 
   async reopenUnwiredTabs(): Promise<void> {
     await this.reopen();
-    this.clearDisconnected();
   }
 
   dispose(): void {
@@ -104,10 +103,11 @@ export class DisconnectedTabWatch implements vscode.Disposable {
     for (const sessionName of event.closedSessionNames) this.forget(sessionName);
 
     for (const tab of this.surface.activeDeckTabs()) {
-      if (this.disconnected.has(tab.sessionName)) {
-        this.offerReopen();
+      if (this.panelFor(tab.sessionName)) {
+        this.forget(tab.sessionName);
         continue;
       }
+      if (this.disconnected.has(tab.sessionName)) continue;
       this.scheduleJudgment(tab.sessionName);
     }
   }
@@ -117,16 +117,29 @@ export class DisconnectedTabWatch implements vscode.Disposable {
     if (previous) this.timers.clearTimeout(previous);
     const handle = this.timers.setTimeout(() => {
       this.pendingJudgments.delete(sessionName);
-      this.judgeActiveDeckTabs();
+      this.judgeActiveDeckTab(sessionName);
     }, ACTIVATION_GRACE_MS);
     this.pendingJudgments.set(sessionName, handle);
   }
 
   private judgeActiveDeckTabs(): void {
     for (const tab of this.surface.activeDeckTabs()) {
-      if (this.panelFor(tab.sessionName)) continue;
-      this.markDisconnected(tab.sessionName, tab.uri);
+      this.judgeDeckTab(tab);
     }
+  }
+
+  private judgeActiveDeckTab(sessionName: string): void {
+    const tab = this.surface.activeDeckTabs().find((candidate) => candidate.sessionName === sessionName);
+    if (tab === undefined) return;
+    this.judgeDeckTab(tab);
+  }
+
+  private judgeDeckTab(tab: DisconnectedDeckTab): void {
+    if (this.panelFor(tab.sessionName)) {
+      this.forget(tab.sessionName);
+      return;
+    }
+    this.markDisconnected(tab.sessionName, tab.uri);
   }
 
   private markDisconnected(sessionName: string, uri: vscode.Uri): void {
@@ -142,12 +155,6 @@ export class DisconnectedTabWatch implements vscode.Disposable {
     if (uri === undefined) return;
     this.disconnected.delete(sessionName);
     this.fire([uri]);
-  }
-
-  private clearDisconnected(): void {
-    const uris = [...this.disconnected.values()];
-    this.disconnected.clear();
-    this.fire(uris);
   }
 
   private offerReopen(): void {

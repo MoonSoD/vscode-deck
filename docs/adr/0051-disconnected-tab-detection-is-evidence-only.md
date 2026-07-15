@@ -31,8 +31,9 @@ view the user cannot interact with would be misleading.
 The repair is consent-first. Deck raises a throttled notification with one
 action, **Reopen Terminals**, and contributes `deck.reopenTerminals` for command
 palette and keybinding use. Dismissing the notification performs no tab
-operation; badges stay. Activating a badged tab can re-offer the same action
-after the throttle.
+operation; badges stay. Deck prompts only when a DisconnectedTab is newly
+proven. After dismissal, the durable remedy surfaces are the badge tooltip, the
+`deck.reopenTerminals` command, and the notification center.
 
 When the user accepts, Deck reopens every currently unwired Deck Terminal tab in
 one batch. The reopen planner is pure and works from a tab-groups snapshot:
