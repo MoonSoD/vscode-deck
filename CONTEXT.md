@@ -137,10 +137,19 @@ _Avoid_: dead tab (the Terminal did not die), stale tab (the defect is lost inte
 Watches a Repository's git common dir for changes made **outside** Deck (e.g. a terminal `git checkout`, or `git worktree add/remove` from the CLI) and tells the tree to reconcile. One per Repository, keyed by common dir. Deck's own operations already refresh, so this exists solely to catch out-of-Deck drift.
 _Avoid_: file watcher, watcher controller (implementation); polling (it is event-driven, not polled)
 
+**ExternalTerminalWatch**:
+Watches the DeckSocket for Terminals created or killed **outside** Deck (e.g. an agent running `tmux new-session` from the CLI) and tells the tree to reconcile. Deck's own operations already refresh, so this exists solely to catch out-of-Deck drift. Realized by the TerminalPoll's session-set diff (≤2s while the window is focused) plus a refresh on window refocus — not tmux control-mode events, which would require a housekeeping session (ADR-0052). External creation is a supported contract: a session created on the DeckSocket with Deck's name grammar, `-e DECK_SESSION=<name>`, and `-c <worktree>` is a full Terminal — agent observation and snapshot resume included; a session missing the extra flags still appears, just without agent features.
+_Avoid_: tmux watcher (it watches for Terminals, the domain thing); session sync (it only triggers reconcile; tmux stays the source of truth)
+
+**TerminalPoll**:
+The one poll that observes Terminals on the DeckSocket — a 2s `list-sessions` tick, running only while the window is focused. It carries two facets: AgentTitle relabels for existing rows (targeted, ADR-0046) and the session-set diff that realizes ExternalTerminalWatch (whole-tree, structural). Formerly named AgentTitlePoll, when titles were its only job.
+_Avoid_: AgentTitlePoll (stale name — titles are now one facet); background sync (it is focus-gated and owns no state; tmux stays the source of truth)
+
 ## Relationships
 
 - A **Repository** has many **Worktrees**.
 - A **Repository** has one **ExternalGitWatch** keyed by its git common dir.
+- The **DeckSocket** has one **ExternalTerminalWatch**, realized by the **TerminalPoll**'s session-set diff.
 - A **Repository** has one **ActiveWorktree**; the mounted folder has one **ActiveRepository** (or none).
 - A **Worktree** hosts zero or more **Terminals**.
 - A **Terminal**'s AgentStatus change to NeedsInput/Completed raises one **AgentStatusNotification**.
