@@ -59,7 +59,7 @@ import { AgentPaneProbe } from './agent/agentPaneProbe';
 import { DeckDecorationProvider } from './tree/deckDecorationProvider';
 import { AgentStatusNotifier } from './agent/agentStatusNotifier';
 import { AgentStatusStore } from './agent/agentStatusStore';
-import { AgentTitlePoll } from './agent/agentTitlePoll';
+import { TerminalPoll } from './terminal/terminalPoll';
 import type { AgentName } from './agent/agentTypes';
 import { AgentDetection } from './agent/agentDetection';
 import { AgentSetupPrompt, type AgentConfigChange } from './agent/agentSetupPrompt';
@@ -104,7 +104,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     },
   };
   let agentExitSweep: AgentExitSweep | undefined;
-  let agentTitlePoll: AgentTitlePoll | undefined;
+  let terminalPoll: TerminalPoll | undefined;
   let agentExitSweepReady = false;
   const wakeAgentExitSweep = () => {
     if (!agentExitSweepReady) return;
@@ -232,7 +232,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   function refreshTree(): void {
     tree.refresh();
-    agentTitlePoll?.start();
+    terminalPoll?.start();
     wakeAgentExitSweep();
     syncExternalGitWatches();
   }
@@ -284,21 +284,22 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const disconnectedTabs = new DisconnectedTabWatch({
     panelFor: (sessionName) => terminalEditorProvider.panelFor(sessionName),
   });
-  agentTitlePoll = tmuxAvailability.available
-    ? new AgentTitlePoll({
+  terminalPoll = tmuxAvailability.available
+    ? new TerminalPoll({
         listSessions: () => tmux.listSessions(),
         isFocused: () => vscode.window.state.focused,
         onDidChangeFocus: (listener) =>
           vscode.window.onDidChangeWindowState((state) => listener(state.focused)),
-        onError: (error) => console.warn('Deck: agent title poll failed', error),
+        onError: (error) => console.warn('Deck: terminal poll failed', error),
         resolveAgentName,
       })
     : undefined;
-  const agentTitlePollWatch = agentTitlePoll?.onChange((changedSessions) => {
+  const terminalPollWatch = terminalPoll?.onChange((changedSessions) => {
     tree.refreshTerminalDisplays(changedSessions);
     terminalEditorProvider.refreshTitles(changedSessions.map((session) => session.sessionName));
   });
-  agentTitlePoll?.start();
+  const terminalPollSessionSetWatch = terminalPoll?.onDidChangeSessionSet(refreshTree);
+  terminalPoll?.start();
   const openTerminal = new OpenTerminalCommand({
     terminalPanels: terminalEditorProvider,
   });
@@ -450,8 +451,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     activeTerminalReadWatch,
     agentExitSweepWakeWatch,
     ...(agentExitSweep ? [agentExitSweep] : []),
-    ...(agentTitlePoll ? [agentTitlePoll] : []),
-    ...(agentTitlePollWatch ? [agentTitlePollWatch] : []),
+    ...(terminalPoll ? [terminalPoll] : []),
+    ...(terminalPollWatch ? [terminalPollWatch] : []),
+    ...(terminalPollSessionSetWatch ? [terminalPollSessionSetWatch] : []),
     deckDecorationProvider,
     deckDecorationWatch,
     disconnectedTabBadgeWatch,
@@ -518,7 +520,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // Focusing back with the agent's tab active is when you actually read it —
     // markActiveTerminalRead no-ops while unfocused, so re-run it on refocus.
     vscode.window.onDidChangeWindowState((state) => {
-      if (state.focused) void markActiveTerminalRead(agentStatuses);
+      if (!state.focused) return;
+      refreshTree();
+      void markActiveTerminalRead(agentStatuses);
     }),
     treeView.onDidChangeVisibility((event) => {
       if (event.visible) refreshTree();

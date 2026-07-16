@@ -40,8 +40,8 @@ const vscodeState = vi.hoisted(() => ({
     },
   ]>,
   agentStatusStorePrune: vi.fn(async () => undefined),
-  agentTitlePollArgs: undefined as unknown[] | undefined,
-  agentTitlePollInstances: [] as Array<{
+  terminalPollArgs: undefined as unknown[] | undefined,
+  terminalPollInstances: [] as Array<{
     start: ReturnType<typeof vi.fn>;
     dispose: ReturnType<typeof vi.fn>;
     onChange: ReturnType<typeof vi.fn>;
@@ -454,19 +454,24 @@ vi.mock('../src/agent/agentStatusStore', () => ({
   },
 }));
 
-vi.mock('../src/agent/agentTitlePoll', () => ({
-  AgentTitlePoll: class {
+vi.mock('../src/terminal/terminalPoll', () => ({
+  TerminalPoll: class {
     listener?: (changedSessions: ReadonlyArray<{ sessionName: string; windowName: string; paneTitle?: string }>) => void;
+    sessionSetListener?: () => void;
     start = vi.fn();
     dispose = vi.fn();
     onChange = vi.fn((listener: (changedSessions: ReadonlyArray<{ sessionName: string; windowName: string; paneTitle?: string }>) => void) => {
       this.listener = listener;
       return { dispose: vi.fn() };
     });
+    onDidChangeSessionSet = vi.fn((listener: () => void) => {
+      this.sessionSetListener = listener;
+      return { dispose: vi.fn() };
+    });
 
     constructor(...args: unknown[]) {
-      vscodeState.agentTitlePollArgs = args;
-      vscodeState.agentTitlePollInstances.push(this);
+      vscodeState.terminalPollArgs = args;
+      vscodeState.terminalPollInstances.push(this);
     }
   },
 }));
@@ -592,8 +597,8 @@ describe('activate', () => {
     vscodeState.agentStatusStoreChangeListeners = [];
     vscodeState.agentStatusStoreEntries = [];
     vscodeState.agentStatusStorePrune.mockResolvedValue(undefined);
-    vscodeState.agentTitlePollArgs = undefined;
-    vscodeState.agentTitlePollInstances = [];
+    vscodeState.terminalPollArgs = undefined;
+    vscodeState.terminalPollInstances = [];
     vscodeState.restoreOnActivationImpl = async () => undefined;
     vscodeState.agentStatusStoreStart.mockResolvedValue({ dispose: vi.fn() });
     vscodeState.hookInstallerArgs = undefined;
@@ -1035,11 +1040,11 @@ describe('activate', () => {
     expect(vscodeState.externalWatchDisposables[0].dispose).not.toHaveBeenCalled();
   });
 
-  it('wires AgentTitlePoll changes to row and tab title refresh', async () => {
+  it('wires TerminalPoll label changes to row and tab title refresh', async () => {
     const context = createContext();
     await activate(context as never);
     const tree = vscodeState.repositoryTreeInstances[0];
-    const poll = vscodeState.agentTitlePollInstances[0];
+    const poll = vscodeState.terminalPollInstances[0];
     const provider = vscodeState.registerCustomEditorProvider.mock.calls[0]?.[1] as {
       refreshTitles(changedSessionNames: readonly string[]): void;
     };
@@ -1059,6 +1064,38 @@ describe('activate', () => {
     expect(tree.refreshTerminalDisplays).toHaveBeenCalledWith(changedSessions);
     expect(refreshTitles).toHaveBeenCalledWith(['wt-_work_alpha-main__term-1']);
     expect(poll.start).not.toHaveBeenCalled();
+  });
+
+  it('wires TerminalPoll session-set changes to a tree refresh', async () => {
+    const context = createContext();
+    await activate(context as never);
+    const tree = vscodeState.repositoryTreeInstances[0];
+    const poll = vscodeState.terminalPollInstances[0];
+    tree.refresh.mockClear();
+    tree.refreshTerminalDisplays.mockClear();
+    poll.start.mockClear();
+
+    poll.sessionSetListener?.();
+
+    expect(tree.refresh).toHaveBeenCalledOnce();
+    expect(tree.refreshTerminalDisplays).not.toHaveBeenCalled();
+    expect(poll.start).toHaveBeenCalledOnce();
+  });
+
+  it('refreshes the tree when the window regains focus', async () => {
+    const context = createContext();
+    await activate(context as never);
+    const tree = vscodeState.repositoryTreeInstances[0];
+    const poll = vscodeState.terminalPollInstances[0];
+    tree.refresh.mockClear();
+    poll.start.mockClear();
+
+    const focusHandler = vscodeState.onDidChangeWindowState.mock.calls[0]?.[0];
+    if (!focusHandler) throw new Error('missing window-state listener');
+    await focusHandler({ focused: true });
+
+    expect(tree.refresh).toHaveBeenCalledOnce();
+    expect(poll.start).toHaveBeenCalledOnce();
   });
 
   it('shares pending WorktreeRemoval state between the command and tree', async () => {

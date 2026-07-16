@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import { AgentTitlePoll, type AgentTitlePollScheduler } from '../src/agent/agentTitlePoll';
+import { TerminalPoll, type TerminalPollScheduler } from '../src/terminal/terminalPoll';
 import type { TmuxSession } from '../src/terminal/tmuxCli';
 
-describe('AgentTitlePoll', () => {
+describe('TerminalPoll', () => {
   it('emits changed agent sessions when resolved labels change', async () => {
     const scheduler = new ManualScheduler();
     let sessions: TmuxSession[] = [
@@ -10,7 +10,7 @@ describe('AgentTitlePoll', () => {
       { sessionName: 'term-2', windowName: 'zsh', paneTitle: ':/work/alpha' },
     ];
     const listSessions = vi.fn(async () => sessions);
-    const poll = new AgentTitlePoll({
+    const poll = new TerminalPoll({
       listSessions,
       isFocused: () => true,
       onDidChangeFocus: () => ({ dispose: vi.fn() }),
@@ -35,6 +35,101 @@ describe('AgentTitlePoll', () => {
     expect(listSessions).toHaveBeenCalledTimes(2);
   });
 
+  it('emits a session-set change when a new session appears after the baseline', async () => {
+    const scheduler = new ManualScheduler();
+    let sessions: TmuxSession[] = [
+      { sessionName: 'term-1', windowName: 'zsh', paneTitle: ':/work/alpha' },
+    ];
+    const poll = new TerminalPoll({
+      listSessions: vi.fn(async () => sessions),
+      isFocused: () => true,
+      onDidChangeFocus: () => ({ dispose: vi.fn() }),
+      scheduler,
+    });
+    const sessionSetChanges = vi.fn();
+    poll.onDidChangeSessionSet(sessionSetChanges);
+
+    poll.start();
+    await flush();
+
+    sessions = [
+      { sessionName: 'term-1', windowName: 'zsh', paneTitle: ':/work/alpha' },
+      { sessionName: 'term-2', windowName: 'zsh', paneTitle: ':/work/beta' },
+    ];
+    await scheduler.runNext();
+
+    expect(sessionSetChanges).toHaveBeenCalledOnce();
+  });
+
+  it('emits a session-set change when a session disappears after the baseline', async () => {
+    const scheduler = new ManualScheduler();
+    let sessions: TmuxSession[] = [
+      { sessionName: 'term-1', windowName: 'zsh', paneTitle: ':/work/alpha' },
+      { sessionName: 'term-2', windowName: 'zsh', paneTitle: ':/work/beta' },
+    ];
+    const poll = new TerminalPoll({
+      listSessions: vi.fn(async () => sessions),
+      isFocused: () => true,
+      onDidChangeFocus: () => ({ dispose: vi.fn() }),
+      scheduler,
+    });
+    const sessionSetChanges = vi.fn();
+    poll.onDidChangeSessionSet(sessionSetChanges);
+
+    poll.start();
+    await flush();
+
+    sessions = [
+      { sessionName: 'term-1', windowName: 'zsh', paneTitle: ':/work/alpha' },
+    ];
+    await scheduler.runNext();
+
+    expect(sessionSetChanges).toHaveBeenCalledOnce();
+  });
+
+  it('does not emit a session-set change on the first tick', async () => {
+    const poll = new TerminalPoll({
+      listSessions: vi.fn(async () => [
+        { sessionName: 'term-1', windowName: 'zsh', paneTitle: ':/work/alpha' },
+      ]),
+      isFocused: () => true,
+      onDidChangeFocus: () => ({ dispose: vi.fn() }),
+      scheduler: new ManualScheduler(),
+    });
+    const sessionSetChanges = vi.fn();
+    poll.onDidChangeSessionSet(sessionSetChanges);
+
+    poll.start();
+    await flush();
+
+    expect(sessionSetChanges).not.toHaveBeenCalled();
+  });
+
+  it('does not emit a session-set change when the session names are unchanged', async () => {
+    const scheduler = new ManualScheduler();
+    let sessions: TmuxSession[] = [
+      { sessionName: 'term-1', windowName: 'zsh', paneTitle: ':/work/alpha' },
+    ];
+    const poll = new TerminalPoll({
+      listSessions: vi.fn(async () => sessions),
+      isFocused: () => true,
+      onDidChangeFocus: () => ({ dispose: vi.fn() }),
+      scheduler,
+    });
+    const sessionSetChanges = vi.fn();
+    poll.onDidChangeSessionSet(sessionSetChanges);
+
+    poll.start();
+    await flush();
+
+    sessions = [
+      { sessionName: 'term-1', windowName: 'zsh', paneTitle: ':/work/beta' },
+    ];
+    await scheduler.runNext();
+
+    expect(sessionSetChanges).not.toHaveBeenCalled();
+  });
+
   it('pauses while unfocused and catches up on refocus', async () => {
     const scheduler = new ManualScheduler();
     let focused = true;
@@ -42,7 +137,7 @@ describe('AgentTitlePoll', () => {
     let sessions: TmuxSession[] = [
       { sessionName: 'term-1', windowName: 'codex', paneTitle: '⠋ first task' },
     ];
-    const poll = new AgentTitlePoll({
+    const poll = new TerminalPoll({
       listSessions: vi.fn(async () => sessions),
       isFocused: () => focused,
       onDidChangeFocus: (handler) => {
@@ -71,13 +166,49 @@ describe('AgentTitlePoll', () => {
     expect(scheduler.hasTick()).toBe(true);
   });
 
+  it('baselines session-set changes on refocus after the timer was paused', async () => {
+    const scheduler = new ManualScheduler();
+    let focused = true;
+    let focusHandler: ((focused: boolean) => void) | undefined;
+    let sessions: TmuxSession[] = [
+      { sessionName: 'term-1', windowName: 'zsh', paneTitle: ':/work/alpha' },
+    ];
+    const poll = new TerminalPoll({
+      listSessions: vi.fn(async () => sessions),
+      isFocused: () => focused,
+      onDidChangeFocus: (handler) => {
+        focusHandler = handler;
+        return { dispose: vi.fn() };
+      },
+      scheduler,
+    });
+    const sessionSetChanges = vi.fn();
+    poll.onDidChangeSessionSet(sessionSetChanges);
+    poll.start();
+    await flush();
+
+    focused = false;
+    focusHandler?.(false);
+    sessions = [
+      { sessionName: 'term-1', windowName: 'zsh', paneTitle: ':/work/alpha' },
+      { sessionName: 'term-2', windowName: 'zsh', paneTitle: ':/work/beta' },
+    ];
+
+    focused = true;
+    focusHandler?.(true);
+    await flush();
+
+    expect(sessionSetChanges).not.toHaveBeenCalled();
+    expect(scheduler.hasTick()).toBe(true);
+  });
+
   it('does not fire when only a non-agent terminal changes its pane title', async () => {
     const scheduler = new ManualScheduler();
     let sessions: TmuxSession[] = [
       { sessionName: 'term-1', windowName: 'claude', paneTitle: '✳ steady task' },
       { sessionName: 'term-2', windowName: 'zsh', paneTitle: ':/work/alpha' },
     ];
-    const poll = new AgentTitlePoll({
+    const poll = new TerminalPoll({
       listSessions: vi.fn(async () => sessions),
       isFocused: () => true,
       onDidChangeFocus: () => ({ dispose: vi.fn() }),
@@ -106,7 +237,7 @@ describe('AgentTitlePoll', () => {
     let sessions: TmuxSession[] = [
       { sessionName: 'term-1', windowName: '2.1.172', paneTitle: '✳ first task' },
     ];
-    const poll = new AgentTitlePoll({
+    const poll = new TerminalPoll({
       listSessions: vi.fn(async () => sessions),
       isFocused: () => true,
       onDidChangeFocus: () => ({ dispose: vi.fn() }),
@@ -138,12 +269,12 @@ describe('AgentTitlePoll', () => {
     expect(scheduler.hasTick()).toBe(true);
   });
 
-  it('stops after a zero-agent tick and resumes on a later start', async () => {
+  it('keeps polling after a zero-agent tick', async () => {
     const scheduler = new ManualScheduler();
     let sessions: TmuxSession[] = [
       { sessionName: 'term-1', windowName: 'zsh', paneTitle: ':/work/alpha' },
     ];
-    const poll = new AgentTitlePoll({
+    const poll = new TerminalPoll({
       listSessions: vi.fn(async () => sessions),
       isFocused: () => true,
       onDidChangeFocus: () => ({ dispose: vi.fn() }),
@@ -154,12 +285,12 @@ describe('AgentTitlePoll', () => {
 
     poll.start();
     await flush();
-    expect(scheduler.hasTick()).toBe(false);
+    expect(scheduler.hasTick()).toBe(true);
 
     sessions = [
       { sessionName: 'term-1', windowName: 'claude', paneTitle: '✳ started agent' },
     ];
-    poll.start();
+    await scheduler.runNext();
     await flush();
 
     expect(changes).toHaveBeenCalledWith([
@@ -169,7 +300,7 @@ describe('AgentTitlePoll', () => {
   });
 });
 
-class ManualScheduler implements AgentTitlePollScheduler {
+class ManualScheduler implements TerminalPollScheduler {
   private next: (() => void) | undefined;
 
   setTimeout(callback: () => void, _ms: number): unknown {
