@@ -18,14 +18,14 @@ interface TerminalPollOptions {
   resolveAgentName?: (sessionName: string) => Promise<AgentName | undefined>;
 }
 
-type ChangeListener = (changedSessions: readonly TmuxSession[]) => void;
+type LabelChangeListener = (changedSessions: readonly TmuxSession[]) => void;
 type SessionSetChangeListener = () => void;
 
 export class TerminalPoll implements Disposable {
   private readonly scheduler: TerminalPollScheduler;
   private readonly intervalMs: number;
   private readonly onError: (error: unknown) => void;
-  private readonly listeners = new Set<ChangeListener>();
+  private readonly labelListeners = new Set<LabelChangeListener>();
   private readonly sessionSetListeners = new Set<SessionSetChangeListener>();
   private readonly labels = new Map<string, string>();
   private hasSessionSetBaseline = false;
@@ -43,11 +43,11 @@ export class TerminalPoll implements Disposable {
     this.onError = options.onError ?? (() => undefined);
   }
 
-  onChange(listener: ChangeListener): Disposable {
-    this.listeners.add(listener);
+  onChange(listener: LabelChangeListener): Disposable {
+    this.labelListeners.add(listener);
     return {
       dispose: () => {
-        this.listeners.delete(listener);
+        this.labelListeners.delete(listener);
       },
     };
   }
@@ -86,7 +86,7 @@ export class TerminalPoll implements Disposable {
     this.clearTimer();
     this.focusSubscription?.dispose();
     this.focusSubscription = undefined;
-    this.listeners.clear();
+    this.labelListeners.clear();
     this.sessionSetListeners.clear();
   }
 
@@ -127,19 +127,8 @@ export class TerminalPoll implements Disposable {
       }
     }
 
-    let sessionSetChanged = false;
-    if (this.hasSessionSetBaseline) {
-      if (previousSessionNames.size !== nextLabels.size) {
-        sessionSetChanged = true;
-      } else {
-        for (const sessionName of previousSessionNames) {
-          if (!nextLabels.has(sessionName)) {
-            sessionSetChanged = true;
-            break;
-          }
-        }
-      }
-    }
+    const sessionSetChanged = this.hasSessionSetBaseline
+      && !hasSameSessionNames(previousSessionNames, nextLabels);
 
     this.labels.clear();
     for (const [sessionName, label] of nextLabels) {
@@ -148,7 +137,7 @@ export class TerminalPoll implements Disposable {
     this.hasSessionSetBaseline = true;
 
     if (changedSessions.length > 0) {
-      for (const listener of this.listeners) listener(changedSessions);
+      for (const listener of this.labelListeners) listener(changedSessions);
     }
     if (sessionSetChanged) {
       for (const listener of this.sessionSetListeners) listener();
@@ -179,4 +168,15 @@ export class TerminalPoll implements Disposable {
     this.scheduler.clearTimeout(this.timer);
     this.timer = undefined;
   }
+}
+
+function hasSameSessionNames(
+  previousSessionNames: ReadonlySet<string>,
+  nextLabels: ReadonlyMap<string, string>,
+): boolean {
+  if (previousSessionNames.size !== nextLabels.size) return false;
+  for (const sessionName of previousSessionNames) {
+    if (!nextLabels.has(sessionName)) return false;
+  }
+  return true;
 }
