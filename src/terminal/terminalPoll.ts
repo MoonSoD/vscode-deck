@@ -96,17 +96,15 @@ export class TerminalPoll implements Disposable {
     this.clearTimer();
 
     void this.runOnce()
-      .then(() => {
+      .catch(this.onError)
+      .finally(() => {
+        this.running = false;
         if (!this.disposed && this.options.isFocused()) {
           this.timer = this.scheduler.setTimeout(() => {
             this.timer = undefined;
             this.runAndSchedule();
           }, this.intervalMs);
         }
-      })
-      .catch(this.onError)
-      .finally(() => {
-        this.running = false;
       });
   }
 

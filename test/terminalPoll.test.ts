@@ -298,6 +298,44 @@ describe('TerminalPoll', () => {
     ]);
     expect(scheduler.hasTick()).toBe(true);
   });
+
+  it('keeps polling after a transient list-sessions failure', async () => {
+    const scheduler = new ManualScheduler();
+    const error = new Error('tmux server restarting');
+    const listSessions = vi.fn()
+      .mockResolvedValueOnce([
+        { sessionName: 'term-1', windowName: 'zsh', paneTitle: ':/work/alpha' },
+      ])
+      .mockRejectedValueOnce(error)
+      .mockResolvedValueOnce([
+        { sessionName: 'term-1', windowName: 'zsh', paneTitle: ':/work/alpha' },
+        { sessionName: 'term-2', windowName: 'zsh', paneTitle: ':/work/beta' },
+      ]);
+    const onError = vi.fn();
+    const poll = new TerminalPoll({
+      listSessions,
+      isFocused: () => true,
+      onDidChangeFocus: () => ({ dispose: vi.fn() }),
+      scheduler,
+      onError,
+    });
+    const sessionSetChanges = vi.fn();
+    poll.onDidChangeSessionSet(sessionSetChanges);
+
+    poll.start();
+    await flush();
+
+    await scheduler.runNext();
+    await flush();
+
+    expect(onError).toHaveBeenCalledWith(error);
+    expect(scheduler.hasTick()).toBe(true);
+
+    await scheduler.runNext();
+    await flush();
+
+    expect(sessionSetChanges).toHaveBeenCalledOnce();
+  });
 });
 
 class ManualScheduler implements TerminalPollScheduler {

@@ -1,7 +1,7 @@
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { describe, expect, it } from 'vitest';
 import {
   allocateTermN,
@@ -13,10 +13,11 @@ describe('create-external-terminal.sh', () => {
     const dir = mkdtempSync(join(tmpdir(), 'deck-external-terminal-'));
     const callsPath = join(dir, 'tmux-calls');
     const tmuxPath = join(dir, 'tmux');
-    const worktreePath = '/work/repo:feature.branch';
+    const worktreePath = join(dir, 'repo with spaces\\branch:feature.name');
+    mkdirSync(worktreePath);
     const existingSessions = [
-      'wt-_work_repo_feature_branch__term-1',
-      'wt-_work_repo_feature_branch__term-3',
+      terminalSessionName(worktreePath, 1),
+      terminalSessionName(worktreePath, 3),
       'wt-_work_other__term-9',
     ];
     const expectedSession = terminalSessionName(
@@ -29,12 +30,12 @@ describe('create-external-terminal.sh', () => {
       `printf '%s\\n' "$*" >> ${JSON.stringify(callsPath)}`,
       'case "$*" in',
       '  *"list-sessions"*)',
-      "    printf 'wt-_work_repo_feature_branch__term-1\\nwt-_work_repo_feature_branch__term-3\\nwt-_work_other__term-9\\n'",
+      `    printf '%s\\n' ${existingSessions.map((session) => JSON.stringify(session)).join(' ')}`,
       '    ;;',
       'esac',
     ].join('\n'), { mode: 0o755 });
 
-    execFileSync('sh', ['scripts/create-external-terminal.sh', worktreePath], {
+    execFileSync('sh', ['scripts/create-external-terminal.sh', worktreePath, 'echo', 'hello'], {
       cwd: process.cwd(),
       env: { ...process.env, PATH: `${dir}${delimiter}${process.env.PATH ?? ''}` },
     });
@@ -43,6 +44,30 @@ describe('create-external-terminal.sh', () => {
     expect(calls).toEqual([
       '-L deck list-sessions -F #{session_name}',
       `-L deck new-session -d -s ${expectedSession} -e DECK_SESSION=${expectedSession} -c ${worktreePath}`,
+      `-L deck send-keys -t =${expectedSession} -l -- echo hello`,
+      `-L deck send-keys -t =${expectedSession} Enter`,
     ]);
+  });
+
+  it('rejects a missing worktree path before creating a tmux session', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'deck-external-terminal-'));
+    const callsPath = join(dir, 'tmux-calls');
+    const tmuxPath = join(dir, 'tmux');
+    const missingWorktreePath = join(dir, 'missing-worktree');
+
+    writeFileSync(tmuxPath, [
+      '#!/usr/bin/env sh',
+      `printf '%s\\n' "$*" >> ${JSON.stringify(callsPath)}`,
+    ].join('\n'), { mode: 0o755 });
+
+    const result = spawnSync('sh', ['scripts/create-external-terminal.sh', missingWorktreePath], {
+      cwd: process.cwd(),
+      env: { ...process.env, PATH: `${dir}${delimiter}${process.env.PATH ?? ''}` },
+      encoding: 'utf8',
+    });
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(`worktree path is not an existing directory: ${missingWorktreePath}`);
+    expect(existsSync(callsPath) ? readFileSync(callsPath, 'utf8') : '').not.toContain('new-session');
   });
 });
