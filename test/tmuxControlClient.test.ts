@@ -35,9 +35,27 @@ describe('TmuxControlClient', () => {
       '/work/repo',
     ], { cwd: '/work/repo', stdio: 'pipe' });
     expect(child.writes).toEqual([
-      'list-panes -s -t =wt-_work_repo__term-1 -F "#{pane_id} #{cursor_y} #{cursor_x} #{alternate_on}"\n',
+      'list-panes -s -t "=wt-_work_repo__term-1" -F "#{pane_id} #{cursor_y} #{cursor_x} #{alternate_on}"\n',
       'capture-pane -p -e -q -J -N -S -5000\n',
     ]);
+  });
+
+  it('quotes the pane-discovery target for session names with shell-significant characters', async () => {
+    const child = fakeChild();
+    const client = new TmuxControlClient('/ext/resources/deck.conf', vi.fn(() => child));
+
+    const started = client.start('wt-_work_my "repo"\\branch__term-1', '/work/my "repo"\\branch', 5000);
+
+    child.emitStdout('%begin 1 1 0\n%end 1 1 0\n');
+    await untilWrites(child, 1);
+    child.emitStdout('%begin 1 2 1\n%0\n%end 1 2 1\n');
+    await untilWrites(child, 2);
+    child.emitStdout('%begin 1 3 1\nhistory\n%end 1 3 1\n');
+    await started;
+
+    expect(child.writes[0]).toBe(
+      'list-panes -s -t "=wt-_work_my \\"repo\\"\\\\branch__term-1" -F "#{pane_id} #{cursor_y} #{cursor_x} #{alternate_on}"\n',
+    );
   });
 
   it('shares startup across overlapping start calls', async () => {

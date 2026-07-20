@@ -44,8 +44,8 @@ tmux -L deck new-session -d -s "$session" -e "DECK_SESSION=$session" -c "$worktr
 
 if [ "$#" -gt 0 ]; then
   command=$*
-  tmux -L deck send-keys -t "=$session" -l -- "$command"
-  tmux -L deck send-keys -t "=$session" Enter
+  tmux -L deck send-keys -t "=$session:" -l -- "$command"
+  tmux -L deck send-keys -t "=$session:" Enter
 fi
 
 printf '%s\n' "$session"

@@ -97,7 +97,7 @@ export class TmuxControlClient {
     // without this the cursor sits at end-of-content until the next redraw. The
     // canonical control-mode client (iTerm2) likewise reads cursor_x/cursor_y as
     // pane state apart from the content.
-    const fields = (await this.command(`list-panes -s -t =${sessionName} -F "#{pane_id} #{cursor_y} #{cursor_x} #{alternate_on}"`))
+    const fields = (await this.command(`list-panes -s -t ${controlModeTarget(sessionName)} -F "#{pane_id} #{cursor_y} #{cursor_x} #{alternate_on}"`))
       .trim()
       .split('\n')
       .filter(Boolean);
@@ -362,6 +362,10 @@ export class TmuxControlClient {
 }
 
 type TitleFilterState = 'text' | 'esc' | 'title' | 'title-esc';
+
+function controlModeTarget(sessionName: string): string {
+  return `"=${sessionName.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+}
 
 function replyToken(text: string, prefix: string): string | undefined {
   if (!text.startsWith(prefix)) return undefined;

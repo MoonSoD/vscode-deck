@@ -44,8 +44,8 @@ describe('create-external-terminal.sh', () => {
     expect(calls).toEqual([
       '-L deck list-sessions -F #{session_name}',
       `-L deck new-session -d -s ${expectedSession} -e DECK_SESSION=${expectedSession} -c ${worktreePath}`,
-      `-L deck send-keys -t =${expectedSession} -l -- echo hello`,
-      `-L deck send-keys -t =${expectedSession} Enter`,
+      `-L deck send-keys -t =${expectedSession}: -l -- echo hello`,
+      `-L deck send-keys -t =${expectedSession}: Enter`,
     ]);
   });
 
