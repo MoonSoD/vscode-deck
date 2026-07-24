@@ -8,6 +8,7 @@ import {
   resolveAgentIcon,
 } from '../agent/agentIconResolver';
 import { resolveTerminalLabel } from '../terminal/terminalLabelResolver';
+import type { ChatSession } from '../chat/scanChatSessions';
 
 export interface RepositoryTreeItemDescription {
   label: string;
@@ -138,6 +139,89 @@ function terminalTreeIconId(resolvedIcon: ResolvedAgentIcon<unknown, unknown>): 
 function agentNameFromStatus(status?: AgentStatus): AgentName | undefined {
   if (status === undefined) return undefined;
   return status.agent ?? 'claude';
+}
+
+export type ChatSessionTreeIconId = 'agent' | 'agent-working';
+
+export interface ChatSessionTreeItemDescription {
+  label: string;
+  description: string;
+  tooltip: string;
+  iconId: ChatSessionTreeIconId;
+  contextValue: 'deck.chatSession';
+}
+
+export interface ChatSessionTreeItemDescriptionWithIcon<TIconPath>
+  extends ChatSessionTreeItemDescription {
+  iconPath: TIconPath;
+}
+
+interface ChatSessionTreeItemOptions<TUri, TThemeIcon> {
+  status?: AgentStatus;
+  open?: boolean;
+  icon?: TerminalTreeIconOptions<TUri, TThemeIcon>;
+}
+
+// A ChatSession row: labelled by its evolving title (or branch, or a generic
+// fallback), described by how long ago it was last touched, and — like a
+// Terminal — carrying the Claude identity icon, which animates while the agent
+// is working. Its AgentStatus drives the same attention decoration Terminals use.
+export function describeChatSessionTreeItem(
+  session: ChatSession,
+  now: number,
+  options: ChatSessionTreeItemOptions<never, never> & { icon?: undefined },
+): ChatSessionTreeItemDescription;
+export function describeChatSessionTreeItem(
+  session: ChatSession,
+  now: number,
+): ChatSessionTreeItemDescription;
+export function describeChatSessionTreeItem<TUri, TThemeIcon>(
+  session: ChatSession,
+  now: number,
+  options: ChatSessionTreeItemOptions<TUri, TThemeIcon> & {
+    icon: TerminalTreeIconOptions<TUri, TThemeIcon>;
+  },
+): ChatSessionTreeItemDescriptionWithIcon<TUri | TThemeIcon>;
+export function describeChatSessionTreeItem<TUri, TThemeIcon>(
+  session: ChatSession,
+  now: number,
+  options: ChatSessionTreeItemOptions<TUri, TThemeIcon> = {},
+): ChatSessionTreeItemDescription | ChatSessionTreeItemDescriptionWithIcon<TUri | TThemeIcon> {
+  const label = session.title ?? session.gitBranch ?? 'Claude Code';
+  const age = formatRelativeAge(now - session.lastModified);
+  // A green dot marks a session whose window is open right now, so a live chat is
+  // distinguishable at a glance from the recent-but-closed ones below it.
+  const description = options.open ? `🟢 ${age}` : age;
+  const resolvedIcon = resolveAgentIcon(
+    { windowName: '', status: options.status, agentName: 'claude', resourcesDir: options.icon?.resourcesDir ?? '' },
+    options.icon?.factory,
+  );
+  const item: ChatSessionTreeItemDescription = {
+    label,
+    description,
+    tooltip: chatSessionTooltip(session, age),
+    iconId: resolvedIcon.isAgent && resolvedIcon.state === 'working' ? 'agent-working' : 'agent',
+    contextValue: 'deck.chatSession',
+  };
+  if (options.icon === undefined) return item;
+  return { ...item, iconPath: resolvedIcon.iconPath };
+}
+
+function chatSessionTooltip(session: ChatSession, age: string): string {
+  const lines = [session.title ?? 'Claude Code'];
+  if (session.gitBranch) lines.push(`on ${session.gitBranch}`);
+  lines.push(`Updated ${age} ago`, session.cwd);
+  return lines.join('\n');
+}
+
+function formatRelativeAge(deltaMs: number): string {
+  const seconds = Math.max(0, Math.floor(deltaMs / 1000));
+  if (seconds < 60) return 'now';
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h`;
+  return `${Math.floor(hours / 24)}d`;
 }
 
 export function describeTmuxUnavailableTreeItem(): TmuxUnavailableTreeItemDescription {

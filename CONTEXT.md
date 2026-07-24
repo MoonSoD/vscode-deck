@@ -2,8 +2,9 @@
 
 A VS Code extension that surfaces multiple git repositories' worktrees in one
 secondary sidebar view, switches between them by opening one folder at a time,
-and gives each Worktree persistent Terminals. (Per-worktree agent chat sessions
-are planned.)
+and gives each Worktree persistent Terminals. It also surfaces each Worktree's
+Claude ChatSessions — the windows the Claude VS Code extension opens — as rows
+under that Worktree.
 
 ## Language
 
@@ -108,8 +109,18 @@ back to the agent identity name.
 _Avoid_: window name / tab title (those are the surfaces it is shown on, not the observed summary), terminal name
 
 **AgentStatusNotification**:
-The toast Deck raises when a Terminal's AgentStatus changes to NeedsInput or Completed, naming the agent by the labels the user already reads in the tree — Repository, Worktree branch, AgentTitle — followed by the agent's own ask, with an Open Terminal action. Identity leads so the line stays legible when the toast collapses to one ellipsised line.
+The toast Deck raises when a Terminal's AgentStatus changes to NeedsInput or Completed, naming the agent by the labels the user already reads in the tree — Repository, Worktree branch, AgentTitle — followed by the agent's own ask, with an Open Terminal action. Identity leads so the line stays legible when the toast collapses to one ellipsised line. A ChatSession raises the same toast (with an Open action) on its ChatSessionStatus.
 _Avoid_: alert, popup; "agent needs input"/"agent done" alone (unactionable without identity)
+
+### Claude chat sessions
+
+**ChatSession**:
+A Claude Code conversation the Claude VS Code extension surfaces as its own editor **window** (a webview), belonging to a Worktree and shown as a row under it alongside Terminals. Deck discovers it from the on-disk Claude session store (the sessions whose entrypoint is the VS Code extension), lists the recent ones (touched within the last two days) plus any open right now — a green dot marks the live ones — and opens or reveals it by handing its id to the extension. Deck only observes and reveals it; it never owns the window's lifecycle. Unlike an AgentSession it has no Terminal and no tmux session, and it resumes only within its own Worktree, so Deck opens one that belongs to another Worktree by offering to open that Worktree in a new window rather than resuming it blank in the wrong folder.
+_Avoid_: AgentSession (that is an agent observed running *inside* a Terminal; a ChatSession is a standalone window with no Terminal), Terminal (no tmux session, not persisted by Deck), tab (the window is the durable thing Deck reveals, not a Deck-owned tab), Claude window (name the concept, not its surface)
+
+**ChatSessionStatus**:
+The observed status of a ChatSession — the same InProgress, NeedsInput, Completed (with unread metadata), and Failed vocabulary as AgentStatus, with absence meaning nothing to report. Observed through the same Claude Code hook, which keys it by the agent's own session id when it fires outside a Terminal (no DECK_SESSION) for a VS Code extension window. It drives the ChatSession row's working icon and attention decoration and raises the notification, mirroring what a Terminal's AgentStatus does.
+_Avoid_: AgentStatus (that is a Terminal's status; ChatSessionStatus is a window's — same shape, different subject), busy/done/agent state
 
 **TerminalLauncher**:
 A user-defined command that opens a new Terminal and runs in it. Sourced from three places merged in a Quick Pick behind a Worktree row's launch button: a per-repo committed file (`<worktree>/.deck/launchers.json`), the user-local RepositoryLaunchers for that Repository, and global user settings (`deck.terminalLaunchers`) — committed-repo entries shown first, then repository-local, then global. Deck types the command into a fresh Terminal exactly as the user would, so a launcher that runs an agent is observed and resumed by the existing AgentSession machinery — Deck still does not own the agent lifecycle. A launcher carries a single command; sequence steps with `&&` (which also fails fast); run several in parallel by defining several launchers.
@@ -154,6 +165,8 @@ _Avoid_: AgentTitlePoll (stale name — titles are now one facet); background sy
 - A **Worktree** hosts zero or more **Terminals**.
 - A **Terminal**'s AgentStatus change to NeedsInput/Completed raises one **AgentStatusNotification**.
 - A **Terminal** belongs to exactly one **Worktree** and lives on the one **DeckSocket**.
+- A **Worktree** hosts zero or more **ChatSessions** — its recent Claude VS Code extension windows — shown alongside its **Terminals**.
+- A **ChatSession**'s **ChatSessionStatus** change to NeedsInput/Completed raises one **AgentStatusNotification**.
 - A **Worktree** row offers its Repository's **TerminalLaunchers** from three sources: the worktree's committed `.deck/launchers.json`, the Repository's user-local **RepositoryLaunchers** (`deck.repositoryLaunchers`), and the user's global ones (`deck.terminalLaunchers`).
 - **RepositoryLaunchers** reference a **Repository** by path but never register one; the **RepositoryRegistry** remains the sole source of which Repositories exist.
 - Creating a **Worktree** through Deck's Add command fires every **RunOnWorktreeCreate** TerminalLauncher, each into its own headless **Terminal**.

@@ -722,6 +722,86 @@ describe('RepositoryTreeProvider', () => {
     expect(tmux.listSessions).toHaveBeenCalledWith('wt-_work_alpha-main__term-');
   });
 
+  it('lists Claude chat sessions under the worktree that contains their cwd, after the terminals', async () => {
+    const tmux = {
+      listSessions: vi.fn(async () => [
+        { sessionName: 'wt-_work_alpha-main__term-1', windowName: 'zsh' },
+      ]),
+    };
+    const chatSessions = {
+      all: () => [
+        { sessionId: 'c1', cwd: '/work/alpha-main/pkg', title: 'Fix the bug', gitBranch: 'main', lastModified: 300 },
+        { sessionId: 'c2', cwd: '/work/alpha-main', title: 'Older chat', lastModified: 100 },
+        { sessionId: 'c3', cwd: '/work/elsewhere', title: 'Not mine', lastModified: 400 },
+      ],
+      onDidChange: () => ({ dispose: () => undefined }),
+    };
+    const provider = new RepositoryTreeProvider(
+      registry(['/work/alpha-main']),
+      { get: vi.fn() } as unknown as ActiveWorktreeStore,
+      { get: vi.fn() } as unknown as WorktreeOrderStore,
+      { get: vi.fn(), set: vi.fn(async () => undefined) } as unknown as WorktreeListCacheStore,
+      { get: vi.fn(() => '/git/alpha'), set: vi.fn(async () => undefined) } as unknown as RepositoryCommonDirCache,
+      tmux,
+      true,
+      new Set(),
+      undefined,
+      undefined,
+      () => Promise.resolve(),
+      chatSessions,
+    );
+    const repositories = provider.getChildren();
+    if (!Array.isArray(repositories)) throw new Error('expected sync repository roots');
+    const worktrees = await provider.getChildren(repositories[0]);
+    if (!Array.isArray(worktrees)) throw new Error('expected worktree children');
+
+    const rows = await provider.getChildren(worktrees[0]);
+    if (!Array.isArray(rows)) throw new Error('expected worktree child rows');
+
+    expect(rows.map((row) => row.label)).toEqual(['zsh', 'Fix the bug', 'Older chat']);
+    const chatRow = rows.find((row) => row.contextValue === 'deck.chatSession');
+    expect(chatRow?.command).toEqual(
+      expect.objectContaining({
+        command: 'deck.openChatSession',
+        arguments: [{ sessionId: 'c1', worktreePath: '/work/alpha-main', worktreeLabel: 'main' }],
+      }),
+    );
+  });
+
+  it('badges a chat session whose window is open by title', async () => {
+    const chatSessions = {
+      all: () => [
+        { sessionId: 'c1', cwd: '/work/alpha-main', title: 'Fix the bug', lastModified: 300 },
+      ],
+      onDidChange: () => ({ dispose: () => undefined }),
+    };
+    const provider = new RepositoryTreeProvider(
+      registry(['/work/alpha-main']),
+      { get: vi.fn() } as unknown as ActiveWorktreeStore,
+      { get: vi.fn() } as unknown as WorktreeOrderStore,
+      { get: vi.fn(), set: vi.fn(async () => undefined) } as unknown as WorktreeListCacheStore,
+      { get: vi.fn(() => '/git/alpha'), set: vi.fn(async () => undefined) } as unknown as RepositoryCommonDirCache,
+      { listSessions: vi.fn(async () => []) },
+      true,
+      new Set(),
+      undefined,
+      undefined,
+      () => Promise.resolve(),
+      chatSessions,
+    );
+    provider.setOpenChatSessionWindows(new Set(['Fix the bug']));
+    const repositories = provider.getChildren();
+    if (!Array.isArray(repositories)) throw new Error('expected sync repository roots');
+    const worktrees = await provider.getChildren(repositories[0]);
+    if (!Array.isArray(worktrees)) throw new Error('expected worktree children');
+
+    const rows = await provider.getChildren(worktrees[0]);
+    if (!Array.isArray(rows)) throw new Error('expected worktree child rows');
+    const chatRow = rows.find((row) => row.contextValue === 'deck.chatSession');
+
+    expect(chatRow?.description).toContain('🟢');
+  });
+
   it('renders Terminals in stored order with unknown live Terminals appended by term-N', async () => {
     const tmux = {
       listSessions: vi.fn(async () => [

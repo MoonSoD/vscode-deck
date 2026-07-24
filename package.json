@@ -253,6 +253,10 @@
         "title": "Open Terminal"
       },
       {
+        "command": "deck.openChatSession",
+        "title": "Open Claude Chat Session"
+      },
+      {
         "command": "deck.openTerminalInNewWindow",
         "title": "Open Terminal in New Window"
       },
@@ -409,6 +413,10 @@
         },
         {
           "command": "deck.openTerminal",
+          "when": "false"
+        },
+        {
+          "command": "deck.openChatSession",
           "when": "false"
         },
         {

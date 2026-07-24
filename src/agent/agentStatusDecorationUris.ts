@@ -12,7 +12,7 @@ export interface AgentStatusDecorationResourceUri {
   query: string;
 }
 
-export type AgentStatusDecorationNodeKind = 'repository' | 'worktree' | 'terminal';
+export type AgentStatusDecorationNodeKind = 'repository' | 'worktree' | 'terminal' | 'chat';
 
 export function agentStatusDecorationUri(
   kindOrSessionName: AgentStatusDecorationNodeKind | string,

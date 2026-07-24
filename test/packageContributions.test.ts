@@ -379,6 +379,19 @@ describe('package contributions', () => {
     });
   });
 
+  it('contributes open Claude chat session as a click-only command hidden from the palette', () => {
+    expect(pkg.contributes.commands).toContainEqual({
+      command: 'deck.openChatSession',
+      title: 'Open Claude Chat Session',
+    });
+    // Invoked only by a ChatSession row click, which passes the session id — it
+    // cannot run standalone from the palette.
+    expect(pkg.contributes.menus.commandPalette).toContainEqual({
+      command: 'deck.openChatSession',
+      when: 'false',
+    });
+  });
+
   it('contributes open Terminal in new window as a Terminal context-only action', () => {
     expect(pkg.contributes.commands).toContainEqual({
       command: 'deck.openTerminalInNewWindow',

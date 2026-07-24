@@ -28,13 +28,22 @@ import { reconcileWorktreeOrder } from './reconcileWorktreeOrder';
 import { reconcileTerminalOrder } from './reconcileTerminalOrder';
 import { pruneOrder } from './pruneOrder';
 import {
+  describeChatSessionTreeItem,
   describeRepositoryTreeItem,
   describeTmuxUnavailableTreeItem,
   describeTerminalTreeItem,
   describeWorktreeTreeItem,
 } from './worktreeTreeItem';
+import type { ChatSession } from '../chat/scanChatSessions';
+import { worktreeForCwd } from '../chat/chatSessionWorktree';
+import { chatWindowTitleMatches } from '../chat/openChatWindows';
 
-export type RepositoryTreeNode = RepositoryNode | WorktreeNode | TerminalNode | TmuxUnavailableNode;
+export type RepositoryTreeNode =
+  | RepositoryNode
+  | WorktreeNode
+  | TerminalNode
+  | ChatSessionNode
+  | TmuxUnavailableNode;
 
 const resourcesDir = path.join(__dirname, '..', '..', 'resources');
 
@@ -61,6 +70,11 @@ interface TerminalSessionLister {
 interface AgentStatusLookup {
   get(sessionName: string): AgentStatus | undefined;
   entries(): IterableIterator<[string, AgentStatus]>;
+  onDidChange(listener: () => void): { dispose(): void };
+}
+
+interface ChatSessionLookup {
+  all(): readonly ChatSession[];
   onDidChange(listener: () => void): { dispose(): void };
 }
 
@@ -157,6 +171,65 @@ class TerminalNode extends vscode.TreeItem {
   }
 }
 
+// A ChatSession row lives under a Worktree alongside Terminals, but is not a
+// Terminal: it has no tmux session and Deck does not own its lifecycle. Clicking
+// it hands off to the Claude VS Code extension to open/reveal the window.
+class ChatSessionNode extends vscode.TreeItem {
+  private renderSignature = '';
+
+  constructor(
+    public session: ChatSession,
+    public worktreeNode: WorktreeNode,
+    now: number,
+    status?: AgentStatus,
+    open?: boolean,
+  ) {
+    super('', vscode.TreeItemCollapsibleState.None);
+    this.id = `chat::${session.sessionId}`;
+    this.resourceUri = toDecorationUri('chat', session.sessionId);
+    this.command = {
+      command: 'deck.openChatSession',
+      title: 'Open Claude Chat',
+      arguments: [{
+        sessionId: session.sessionId,
+        worktreePath: worktreeNode.worktree.path,
+        worktreeLabel: worktreeNode.worktree.branch ?? path.basename(worktreeNode.worktree.path),
+      }],
+    };
+    this.update(session, worktreeNode, now, status, open);
+  }
+
+  update(
+    session: ChatSession,
+    worktreeNode: WorktreeNode,
+    now: number,
+    status?: AgentStatus,
+    open?: boolean,
+  ): boolean {
+    const item = describeChatSessionTreeItem(session, now, { status, open, icon: terminalTreeIcon });
+    const nextSignature = JSON.stringify([item.label, item.description, item.contextValue, item.iconId]);
+    const changed = this.renderSignature !== '' && this.renderSignature !== nextSignature;
+
+    this.session = session;
+    this.worktreeNode = worktreeNode;
+    this.label = item.label;
+    this.description = item.description;
+    this.tooltip = item.tooltip;
+    this.contextValue = item.contextValue;
+    this.iconPath = item.iconPath;
+    this.renderSignature = nextSignature;
+    return changed;
+  }
+
+  get repositoryPath(): string {
+    return this.worktreeNode.repositoryPath;
+  }
+
+  get worktreePath(): string {
+    return this.worktreeNode.worktree.path;
+  }
+}
+
 class TmuxUnavailableNode extends vscode.TreeItem {
   constructor(public readonly worktreeNode: WorktreeNode) {
     const item = describeTmuxUnavailableTreeItem();
@@ -183,6 +256,8 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
   private readonly knownWorktreeRepositories = new Map<string, string>();
   private readonly knownTerminals = new Map<string, AgentStatusDecorationTerminal>();
   private readonly renderedTerminals = new Map<string, TerminalNode>();
+  private readonly renderedChatSessions = new Map<string, ChatSessionNode>();
+  private openChatWindowTitles: ReadonlySet<string> = new Set();
   private readonly tmux: TerminalSessionLister;
   private readonly tmuxAvailable: boolean;
 
@@ -204,12 +279,22 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
     private readonly agentStatuses?: AgentStatusLookup,
     private readonly terminalOrders?: Pick<TerminalOrderStore, 'get' | 'set'>,
     private readonly ensureSnapshotRestored: () => Promise<void> = () => Promise.resolve(),
+    private readonly chatSessions?: ChatSessionLookup,
+    private readonly chatStatuses?: AgentStatusLookup,
   ) {
     this.syncAgentStatusDecorations();
     this.agentStatuses?.onDidChange(() => {
       this.syncAgentStatusDecorations();
       this.refreshRenderedTerminals();
     });
+    // The set of ChatSessions changes structurally (a new window, an aged-out
+    // session), so a whole-subtree refresh is the right grain — unlike a status
+    // change, which only re-renders existing rows.
+    this.chatSessions?.onDidChange(() => this._onDidChangeTreeData.fire(undefined));
+    // A ChatSessionStatus change (working, needs input, finished) only re-renders
+    // the rows that already exist — the working icon flips on the affected chat
+    // rows. The attention dot rides its own FileDecoration path.
+    this.chatStatuses?.onDidChange(() => this.refreshRenderedChatSessions());
 
     if (typeof tmuxOrAvailable === 'boolean') {
       this.tmux = { listSessions: async () => [] };
@@ -291,6 +376,9 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
     if (element instanceof TerminalNode) {
       return this.toParentWorktreeNode(element.worktreeNode);
     }
+    if (element instanceof ChatSessionNode) {
+      return this.toParentWorktreeNode(element.worktreeNode);
+    }
     if (element instanceof TmuxUnavailableNode) {
       return this.toParentWorktreeNode(element.worktreeNode);
     }
@@ -315,8 +403,12 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
       return this.getWorktreeChildren(element);
     }
     if (element instanceof WorktreeNode) {
-      if (!this.tmuxAvailable) return [new TmuxUnavailableNode(element)];
-      return this.getTerminalChildren(element);
+      // The tmux-unavailable notice and ChatSessions both render without awaiting
+      // tmux, so keep that path synchronous; only the live Terminal query is async.
+      if (!this.tmuxAvailable) {
+        return [new TmuxUnavailableNode(element), ...this.getChatSessionChildren(element)];
+      }
+      return this.getWorktreeChildRows(element);
     }
     return [];
   }
@@ -341,6 +433,28 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
     return {
       repo: path.basename(worktree.repositoryPath),
       branch: worktree.worktree.branch ?? path.basename(worktree.worktree.path),
+    };
+  }
+
+  // Resolves a ChatSession id to what the open command and notifier need: its
+  // worktree (so opening can stay worktree-aware) and its labels for the toast.
+  chatSessionContext(sessionId: string): {
+    target: { sessionId: string; worktreePath: string; worktreeLabel: string };
+    title?: string;
+    location?: { repo: string; branch: string };
+  } | undefined {
+    const session = this.chatSessions?.all().find((candidate) => candidate.sessionId === sessionId);
+    if (session === undefined) return undefined;
+    const worktreePaths = [...this.knownWorktreeRepositories.keys()];
+    const worktreePath = worktreeForCwd(session.cwd, worktreePaths) ?? session.cwd;
+    const repositoryPath = this.knownWorktreeRepositories.get(worktreePath);
+    const worktreeLabel = session.gitBranch ?? path.basename(worktreePath);
+    return {
+      target: { sessionId, worktreePath, worktreeLabel },
+      ...(session.title !== undefined ? { title: session.title } : {}),
+      ...(repositoryPath !== undefined
+        ? { location: { repo: path.basename(repositoryPath), branch: worktreeLabel } }
+        : {}),
     };
   }
 
@@ -527,6 +641,76 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
     await this.pruneWorktreeOrder(commonDir, gitWorktrees);
     if (commonDir !== undefined) await this.worktreeListCache.set(commonDir, visibleWorktrees);
     return this.toWorktreeNodes(repositoryPath, visibleWorktrees, commonDir);
+  }
+
+  // A Worktree's rows are its live Terminals followed by its Claude ChatSessions.
+  // The tmux-unavailable variant is handled synchronously in getChildren.
+  private async getWorktreeChildRows(element: WorktreeNode): Promise<RepositoryTreeNode[]> {
+    const terminals = await this.getTerminalChildren(element);
+    return [...terminals, ...this.getChatSessionChildren(element)];
+  }
+
+  private getChatSessionChildren(element: WorktreeNode): ChatSessionNode[] {
+    const sessions = this.chatSessions?.all();
+    if (sessions === undefined || sessions.length === 0) return [];
+
+    const worktreePath = element.worktree.path;
+    const worktreePaths = [...new Set([worktreePath, ...this.knownWorktreeRepositories.keys()])];
+    const now = Date.now();
+    const mine = sessions
+      .filter((session) => worktreeForCwd(session.cwd, worktreePaths) === worktreePath)
+      .sort((left, right) => right.lastModified - left.lastModified);
+
+    const liveIds = new Set(mine.map((session) => session.sessionId));
+    const nodes = mine.map((session) => {
+      const status = this.chatStatuses?.get(session.sessionId);
+      const open = this.isChatSessionOpen(session);
+      const existing = this.renderedChatSessions.get(session.sessionId);
+      if (existing) {
+        existing.update(session, element, now, status, open);
+        return existing;
+      }
+      const node = new ChatSessionNode(session, element, now, status, open);
+      this.renderedChatSessions.set(session.sessionId, node);
+      return node;
+    });
+
+    for (const [sessionId, node] of this.renderedChatSessions) {
+      if (node.worktreePath === worktreePath && !liveIds.has(sessionId)) {
+        this.renderedChatSessions.delete(sessionId);
+      }
+    }
+    return nodes;
+  }
+
+  // The set of ChatSession windows open in this VS Code window. A ChatSession is
+  // matched to an open window by title — a tab exposes nothing else Deck can key
+  // on — so this only badges rows whose title is currently showing on a tab here.
+  setOpenChatSessionWindows(titles: ReadonlySet<string>): void {
+    this.openChatWindowTitles = titles;
+    this.refreshRenderedChatSessions();
+  }
+
+  private refreshRenderedChatSessions(): void {
+    const now = Date.now();
+    for (const node of this.renderedChatSessions.values()) {
+      const status = this.chatStatuses?.get(node.session.sessionId);
+      if (node.update(node.session, node.worktreeNode, now, status, this.isChatSessionOpen(node.session))) {
+        this._onDidChangeTreeData.fire(node);
+      }
+    }
+  }
+
+  private isChatSessionOpen(session: ChatSession): boolean {
+    // A running session is unambiguously live, so mark it even when no open tab
+    // matched (its window may be in another VS Code window, invisible here).
+    const status = this.chatStatuses?.get(session.sessionId);
+    if (status?.status === 'inProgress' || status?.status === 'needsInput') return true;
+    if (session.title === undefined) return false;
+    for (const openTitle of this.openChatWindowTitles) {
+      if (chatWindowTitleMatches(openTitle, session.title)) return true;
+    }
+    return false;
   }
 
   private async getTerminalChildren(element: WorktreeNode): Promise<RepositoryTreeNode[]> {

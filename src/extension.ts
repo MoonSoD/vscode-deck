@@ -59,6 +59,11 @@ import { AgentPaneProbe } from './agent/agentPaneProbe';
 import { DeckDecorationProvider } from './tree/deckDecorationProvider';
 import { AgentStatusNotifier } from './agent/agentStatusNotifier';
 import { AgentStatusStore } from './agent/agentStatusStore';
+import { createChatSessionStore } from './chat/chatSessionStore';
+import { openChatSession, type OpenChatSessionTarget } from './chat/openChatSessionCommand';
+import { chatWindowTitleMatches, collectOpenChatWindowTitles } from './chat/openChatWindows';
+import { PendingChatOpenStore } from './chat/pendingChatOpenStore';
+import type { ChatSession } from './chat/scanChatSessions';
 import { TerminalPoll } from './terminal/terminalPoll';
 import type { AgentName } from './agent/agentTypes';
 import { AgentDetection } from './agent/agentDetection';
@@ -83,6 +88,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const agentSidecars = new AgentSidecarStore(join(deckDir, 'hooks'));
   const agentStatuses = new AgentStatusStore(join(deckDir, 'status'), 100);
   const agentStatusWatch = await agentStatuses.start();
+  const chatSessions = createChatSessionStore();
+  const chatSessionWatch = await chatSessions.start();
+  // ChatSessionStatus mirrors AgentStatus but is keyed by the Claude agent
+  // session id (the hook writes it here when a claude-vscode window fires with no
+  // DECK_SESSION), so the same status machinery drives chat rows' dots and toasts.
+  const chatStatuses = new AgentStatusStore(join(deckDir, 'chat-status'), 100);
+  const chatStatusWatch = await chatStatuses.start();
   const resolveAgentName = async (sessionName: string): Promise<AgentName | undefined> => {
     const status = agentStatuses.get(sessionName);
     if (status !== undefined) return status.agent ?? 'claude';
@@ -117,10 +129,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const activeTerminalReadWatch = agentStatuses.onDidChange(() => {
     void markActiveTerminalRead(agentStatuses);
   });
+  const activeChatReadWatch = chatStatuses.onDidChange(() => {
+    void markActiveChatSessionRead(chatStatuses, chatSessions);
+  });
   const agentExitSweepWakeWatch = agentStatuses.onDidChange(() => {
     wakeAgentExitSweep();
   });
   void markActiveTerminalRead(agentStatuses);
+  void markActiveChatSessionRead(chatStatuses, chatSessions);
   const hookInstaller = new HookInstaller({
     claudeSettingsPath: join(process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude'), 'settings.json'),
     codexHooksPath: join(process.env.CODEX_HOME || join(homedir(), '.codex'), 'hooks.json'),
@@ -198,6 +214,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const terminalOrders = new TerminalOrderStore(context.globalState);
   const worktreeListCache = new WorktreeListCacheStore(context.globalState);
   const pendingTerminalOpens = new PendingTerminalOpenStore(context.globalState);
+  // File-backed (not globalState) so an already-running window's watcher sees a
+  // queued open the moment another window writes it — globalState is cached in
+  // memory per window and would never reach a running one.
+  const pendingChatOpens = new PendingChatOpenStore(join(deckDir, 'pending-chat'));
+  const pendingChatWatch = await pendingChatOpens.start();
+  void pendingChatOpens.prune();
   const pendingWorktreeRemovals = new Set<string>();
   const repositoryCommonDirCache = new RepositoryCommonDirCache(context.globalState);
   const branchDeletionPreferences = new BranchDeletionPreferenceStore(context.globalState);
@@ -215,6 +237,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     agentStatuses,
     terminalOrders,
     ensureSnapshotRestored,
+    chatSessions,
+    chatStatuses,
   );
   agentExitSweep = tmuxAvailability.available
     ? new AgentExitSweep({
@@ -381,6 +405,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       onDidChange: (listener) => tree.onDidChangeDeckDecorations(listener),
     },
     disconnectedTabs,
+    chatStatuses,
   );
   const deckDecorationWatch = vscode.window.registerFileDecorationProvider(deckDecorationProvider);
   const disconnectedTabBadgeWatch = disconnectedTabs.onDidChangeDisconnectedTabs((uris) => {
@@ -423,6 +448,49 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     resolveTerminalSession: (sessionName) => tmux.terminalSession(sessionName),
     describeSession: (sessionName) => tree.describeSession(sessionName),
   }).start();
+  const chatSessionOpenDeps = {
+    isExtensionInstalled: (extensionId: string) => vscode.extensions.getExtension(extensionId) !== undefined,
+    showExtensionMissing: () =>
+      void vscode.window.showWarningMessage('Install the Claude Code extension to open this chat session.'),
+    currentWorkspacePath: () => vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
+    reveal: (sessionId: string) =>
+      void vscode.commands.executeCommand('claude-vscode.editor.open', sessionId, undefined, vscode.ViewColumn.Active),
+    openInWorktreeWindow: async (target: OpenChatSessionTarget) => {
+      // Queue the reveal keyed by worktree, then bring up that worktree's window.
+      // The target window resumes the session on activation (a fresh window) or
+      // when it next gains focus (VS Code focuses an already-open folder window),
+      // where the session's own folder is mounted so it resumes with history.
+      await pendingChatOpens.set(target.worktreePath, target.sessionId);
+      await vscode.commands.executeCommand('vscode.openFolder', vscode.Uri.file(target.worktreePath), {
+        forceNewWindow: true,
+      });
+    },
+  };
+  // ChatSessions get the same needs-input / finished toasts as Terminals. There
+  // is no active-tab suppression: a webview tab exposes no session id, so Deck
+  // cannot tell which ChatSession is in front — it always notifies.
+  const chatStatusNotifierWatch = new AgentStatusNotifier({
+    store: chatStatuses,
+    settings: {
+      notifyOnNeedsInput: () => agentStatusNotificationEnabled('notifyOnNeedsInput'),
+      notifyOnCompleted: () => agentStatusNotificationEnabled('notifyOnCompleted'),
+    },
+    windowState: {
+      isFocused: () => vscode.window.state.focused,
+      activeTerminalSessionName: () => undefined,
+    },
+    notifications: {
+      showWarningMessage: (message, ...items) => vscode.window.showWarningMessage(message, ...items),
+      showInformationMessage: (message, ...items) => vscode.window.showInformationMessage(message, ...items),
+    },
+    actionLabel: 'Open',
+    openTerminal: (sessionId) => {
+      const context = tree.chatSessionContext(sessionId);
+      if (context) void openChatSession(context.target, chatSessionOpenDeps);
+    },
+    resolveLabel: async (sessionId) => tree.chatSessionContext(sessionId)?.title,
+    describeSession: async (sessionId) => tree.chatSessionContext(sessionId)?.location,
+  }).start();
   const addRepository = new AddRepositoryCommand(
     new VsCodeRepositoryFolderPicker(),
     repositoryRegistry,
@@ -433,6 +501,23 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     revealRepository,
     repositoryCommonDirCache,
   );
+
+  const syncOpenChatSessionWindows = (): void => {
+    // Read tab.input structurally by its viewType, matching findTerminalTabColumn
+    // — a webview panel's TabInputWebview exposes viewType, and the Claude panel's
+    // is namespaced (e.g. mainThreadWebview-claudeVSCodePanel), matched by substring.
+    const tabs = vscode.window.tabGroups.all.flatMap((group) =>
+      group.tabs.map((tab) => {
+        const input = tab.input as { viewType?: unknown } | undefined;
+        return {
+          label: tab.label,
+          viewType: typeof input?.viewType === 'string' ? input.viewType : undefined,
+        };
+      }),
+    );
+    tree.setOpenChatSessionWindows(collectOpenChatWindowTitles(tabs));
+  };
+  syncOpenChatSessionWindows();
 
   let lastRevealedActiveTerminalSessionName: string | undefined;
   const revealActiveTerminalAfterNavigation = async () => {
@@ -448,6 +533,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   context.subscriptions.push(
     treeView,
     agentStatusWatch,
+    chatSessionWatch,
+    chatStatusWatch,
+    activeChatReadWatch,
+    pendingChatWatch,
+    // An already-open worktree window resumes a queued ChatSession the instant
+    // another window writes it (the file watcher fires), not only when focused.
+    pendingChatOpens.onDidChange(() => {
+      void openPendingChatSessionForCurrentWorktree(pendingChatOpens);
+    }),
     activeTerminalReadWatch,
     agentExitSweepWakeWatch,
     ...(agentExitSweep ? [agentExitSweep] : []),
@@ -460,6 +554,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     agentStatusCollapseWatch,
     agentStatusExpandWatch,
     agentStatusNotifierWatch,
+    chatStatusNotifierWatch,
     externalGitWatch,
     vscode.window.registerCustomEditorProvider(terminalEditorViewType, terminalEditorProvider, {
       webviewOptions: {
@@ -477,6 +572,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand('deck.addTerminal', (node) => addTerminal.run(node)),
     vscode.commands.registerCommand('deck.runLauncher', (node) => runLauncher.run(node)),
     vscode.commands.registerCommand('deck.openTerminal', (node) => openTerminal.run(node)),
+    vscode.commands.registerCommand('deck.openChatSession', async (target: OpenChatSessionTarget) => {
+      await openChatSession(target, chatSessionOpenDeps);
+      // Opening a session is reading it — clear its unread "finished" mark.
+      void chatStatuses.markRead(target.sessionId);
+    }),
     vscode.commands.registerCommand('deck.openTerminalInNewWindow', (node) =>
       openTerminalInNewWindow.run(node),
     ),
@@ -510,25 +610,36 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       await applyDeckTmuxOptionsIfServerRunning(tmux, tmuxOptions, tmuxAvailability.available);
     }),
     vscode.window.tabGroups.onDidChangeTabs(async () => {
+      syncOpenChatSessionWindows();
       await markActiveTerminalRead(agentStatuses);
+      await markActiveChatSessionRead(chatStatuses, chatSessions);
       await revealActiveTerminalAfterNavigation();
     }),
     vscode.window.tabGroups.onDidChangeTabGroups(async () => {
+      syncOpenChatSessionWindows();
       await markActiveTerminalRead(agentStatuses);
+      await markActiveChatSessionRead(chatStatuses, chatSessions);
       await revealActiveTerminalAfterNavigation();
     }),
     // Focusing back with the agent's tab active is when you actually read it —
-    // markActiveTerminalRead no-ops while unfocused, so re-run it on refocus.
+    // markActive*Read no-op while unfocused, so re-run them on refocus.
     vscode.window.onDidChangeWindowState((state) => {
       if (!state.focused) return;
       refreshTree();
       void markActiveTerminalRead(agentStatuses);
+      void markActiveChatSessionRead(chatStatuses, chatSessions);
+      // An already-open worktree window that VS Code just focused (instead of
+      // duplicating) resumes any ChatSession queued for it by another window.
+      void openPendingChatSessionForCurrentWorktree(pendingChatOpens);
     }),
     treeView.onDidChangeVisibility((event) => {
       if (event.visible) refreshTree();
     }),
   );
   disconnectedTabs.start();
+  // ChatSession opens need no tmux, so resume a queued one regardless of whether
+  // the terminal snapshot machinery is available.
+  await openPendingChatSessionForCurrentWorktree(pendingChatOpens);
   if (terminalSnapshotRuntime) {
     context.subscriptions.push(terminalSnapshotRuntime.startPeriodicSave(5 * 60 * 1000));
     await openPendingTerminalForCurrentWorktree(pendingTerminalOpens, tmux);
@@ -820,8 +931,73 @@ async function markActiveTerminalRead(
   }
 }
 
+// Clears a ChatSession's unread (blue "finished") mark once you're looking at it:
+// the window is focused and the active editor tab is that session's Claude webview.
+// The tab exposes only its (possibly truncated) title, so the session is matched
+// by title — the same way its open state is detected.
+async function markActiveChatSessionRead(
+  chatStatuses: Pick<AgentStatusStore, 'markRead'>,
+  chatSessions: { all(): readonly ChatSession[] },
+): Promise<void> {
+  if (!vscode.window.state.focused) return;
+  const activeTab = vscode.window.tabGroups.activeTabGroup?.activeTab;
+  const input = activeTab?.input as { viewType?: unknown } | undefined;
+  if (activeTab === undefined || typeof input?.viewType !== 'string') return;
+  if (!input.viewType.includes('claudeVSCodePanel')) return;
+
+  const session = chatSessions
+    .all()
+    .find((candidate) => candidate.title !== undefined && chatWindowTitleMatches(activeTab.label, candidate.title));
+  if (session === undefined) return;
+
+  try {
+    await chatStatuses.markRead(session.sessionId);
+  } catch (error) {
+    console.warn('Deck: marking active Claude chat session read failed', error);
+  }
+}
+
 interface PendingTerminalOpenConsumer {
   consume(worktreePath: string): Promise<string | undefined>;
+}
+
+interface PendingChatOpenQueue {
+  consume(worktreePath: string): Promise<string | undefined>;
+  set(worktreePath: string, sessionId: string): Promise<void>;
+}
+
+// Resumes a ChatSession queued by another window's cross-worktree open. Runs when
+// this window mounts its worktree (fresh window) and whenever it regains focus (an
+// already-open folder window VS Code focused instead of duplicating). The session
+// resumes with history because this window's folder is its own worktree.
+//
+// The Claude extension activates in parallel on a fresh window, so its
+// `editor.open` command may not be registered yet — Deck awaits its activation
+// first, and if the reveal still fails, re-queues the open so the next activation
+// or focus retries instead of dropping it.
+export async function openPendingChatSessionForCurrentWorktree(
+  pendingChatOpens: PendingChatOpenQueue,
+): Promise<void> {
+  const worktreePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  if (!worktreePath) return;
+  const extension = vscode.extensions.getExtension('anthropic.claude-code');
+  if (extension === undefined) return;
+
+  const sessionId = await pendingChatOpens.consume(worktreePath);
+  if (!sessionId) return;
+
+  try {
+    if (!extension.isActive) await extension.activate();
+    await vscode.commands.executeCommand(
+      'claude-vscode.editor.open',
+      sessionId,
+      undefined,
+      vscode.ViewColumn.Active,
+    );
+  } catch (error) {
+    await pendingChatOpens.set(worktreePath, sessionId);
+    console.warn('Deck: opening pending Claude chat session failed; will retry', error);
+  }
 }
 
 interface TerminalSessionLister {
