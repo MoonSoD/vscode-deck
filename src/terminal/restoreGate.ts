@@ -27,6 +27,13 @@ export interface RestoreCoordinator {
 
 export function createRestoreCoordinator(deps: RestoreCoordinatorDeps): RestoreCoordinator {
   let inFlight: Promise<void> | undefined;
+  // Sticks once a restore attempt finishes and the DeckSocket is still
+  // down/bare afterward — an empty snapshot legitimately restores nothing,
+  // and without this a caller that re-invokes ensureRestored() on every tick
+  // (e.g. a tree refresh across many worktree rows) would re-run the full
+  // anchor/restore/kill-anchor cycle forever. Cleared the moment real
+  // sessions are observed, so a later DeckSocket death still restores again.
+  let attemptedWithoutRestoring = false;
 
   const inspect = async (): Promise<DeckSocketState> => {
     const sessions = await deps.listSessions();
@@ -61,19 +68,24 @@ export function createRestoreCoordinator(deps: RestoreCoordinatorDeps): RestoreC
     const state = await classify();
     switch (state.kind) {
       case 'restored':
+        attemptedWithoutRestoring = false;
         return state;
       case 'restoring':
         await state.done;
         return classify();
       case 'down':
       case 'bare':
-        if (!inFlight) {
-          inFlight = guardedRestore()
-            .then(() => undefined)
-            .finally(() => {
-              inFlight = undefined;
-            });
+        if (inFlight) {
+          await inFlight;
+          return classify();
         }
+        if (attemptedWithoutRestoring) return state;
+        attemptedWithoutRestoring = true;
+        inFlight = guardedRestore()
+          .then(() => undefined)
+          .finally(() => {
+            inFlight = undefined;
+          });
         await inFlight;
         return classify();
     }

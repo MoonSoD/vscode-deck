@@ -107,6 +107,7 @@ const vscodeState = vi.hoisted(() => ({
   settingsDeckTmux: {} as {
     automaticRenameFormat?: string;
   },
+  settingsShowClosedChatSessions: undefined as boolean | undefined,
   tmuxServerRunning: false,
   tmuxSessions: [{ sessionName: 'wt-_work_alpha-main__term-1', windowName: 'zsh', paneTitle: undefined as string | undefined }],
   tmuxInstances: [] as Array<{
@@ -185,6 +186,10 @@ vi.mock('vscode', () => ({
   extensions: {
     getExtension: vi.fn(() => undefined),
   },
+  env: {
+    sessionId: 'test-session',
+    clipboard: { writeText: vi.fn() },
+  },
   Uri: {
     file: (path: string) => ({ fsPath: path }),
     joinPath: (base: unknown, ...paths: string[]) => ({ base, paths }),
@@ -237,6 +242,9 @@ vi.mock('vscode', () => ({
         }
         if (key === 'notifyOnCompleted') {
           return (vscodeState.settingsAgentStatusNotifications.notifyOnCompleted as T | undefined) ?? defaultValue;
+        }
+        if (key === 'showClosedChatSessions') {
+          return (vscodeState.settingsShowClosedChatSessions as T | undefined) ?? defaultValue;
         }
         return defaultValue;
       },
@@ -335,6 +343,7 @@ vi.mock('../src/tree/repositoryTree', () => ({
     refresh = vi.fn();
     refreshTerminalDisplays = vi.fn();
     setOpenChatSessionWindows = vi.fn();
+    setShowClosedChatSessions = vi.fn();
     setCollapsed = vi.fn();
     isActiveRepositoryDecorationTarget = vi.fn();
     isActiveWorktreeDecorationTarget = vi.fn();
@@ -356,6 +365,16 @@ vi.mock('../src/chat/chatSessionStore', () => ({
   createChatSessionStore: () => ({
     all: () => [],
     onDidChange: () => ({ dispose: vi.fn() }),
+    start: async () => ({ dispose: vi.fn() }),
+  }),
+}));
+
+vi.mock('../src/chat/openChatWindowStore', () => ({
+  createOpenChatWindowStore: () => ({
+    union: () => new Set<string>(),
+    onDidChange: () => ({ dispose: vi.fn() }),
+    publish: async () => undefined,
+    heartbeat: async () => undefined,
     start: async () => ({ dispose: vi.fn() }),
   }),
 }));
@@ -636,6 +655,7 @@ describe('activate', () => {
     vscodeState.settingsAgentResumeTemplates = {};
     vscodeState.settingsAgentStatusNotifications = {};
     vscodeState.settingsDeckTmux = {};
+    vscodeState.settingsShowClosedChatSessions = undefined;
     vscodeState.tmuxServerRunning = false;
     vscodeState.tmuxSessions = [{ sessionName: 'wt-_work_alpha-main__term-1', windowName: 'zsh' }];
     vscodeState.tmuxInstances = [];
@@ -779,6 +799,57 @@ describe('activate', () => {
     );
     expect(vscodeState.repositoryTreeArgs?.[6]).toBe(false);
     expect(vscodeState.terminalSnapshotRuntimeInstances).toEqual([]);
+  });
+
+  it('seeds the hide-closed-chat-sessions preference into the tree and context key', async () => {
+    const context = createContext();
+
+    await activate(context as never);
+
+    const tree = vscodeState.repositoryTreeInstances[0];
+    expect(tree.setShowClosedChatSessions).toHaveBeenCalledWith(false);
+    expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
+      'setContext',
+      'deck.showClosedChatSessions',
+      false,
+    );
+  });
+
+  it('title-bar toggles write the inverted preference to global settings', async () => {
+    const context = createContext();
+
+    await activate(context as never);
+    const show = vscodeState.registerCommand.mock.calls.find(
+      ([command]) => command === 'deck.showClosedChatSessions',
+    );
+    const hide = vscodeState.registerCommand.mock.calls.find(
+      ([command]) => command === 'deck.hideClosedChatSessions',
+    );
+    if (!show || !hide) throw new Error('missing show/hide chat session registrations');
+    await show[1]();
+    await hide[1]();
+
+    expect(vscodeState.configUpdate).toHaveBeenCalledWith('showClosedChatSessions', true, 1);
+    expect(vscodeState.configUpdate).toHaveBeenCalledWith('showClosedChatSessions', false, 1);
+  });
+
+  it('re-applies the preference to the tree and context key when the setting changes', async () => {
+    const context = createContext();
+
+    await activate(context as never);
+    const tree = vscodeState.repositoryTreeInstances[0];
+    tree.setShowClosedChatSessions.mockClear();
+    vscodeState.settingsShowClosedChatSessions = true;
+    await Promise.all(vscodeState.configListeners.map((listener) => listener({
+      affectsConfiguration: (section) => section === 'deck.showClosedChatSessions',
+    })));
+
+    expect(tree.setShowClosedChatSessions).toHaveBeenCalledWith(true);
+    expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
+      'setContext',
+      'deck.showClosedChatSessions',
+      true,
+    );
   });
 
   it('writes generated deck.conf to the machine-global Deck dir and gives tmux that path', async () => {

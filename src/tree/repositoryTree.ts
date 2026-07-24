@@ -258,6 +258,10 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
   private readonly renderedTerminals = new Map<string, TerminalNode>();
   private readonly renderedChatSessions = new Map<string, ChatSessionNode>();
   private openChatWindowTitles: ReadonlySet<string> = new Set();
+  // Whether recent-but-closed ChatSessions are listed. Defaults to true here so
+  // the tree is backward-compatible on its own; the extension seeds the user's
+  // `deck.showClosedChatSessions` preference (hidden by default) via the setter.
+  private showClosedChatSessions = true;
   private readonly tmux: TerminalSessionLister;
   private readonly tmuxAvailable: boolean;
 
@@ -291,10 +295,11 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
     // session), so a whole-subtree refresh is the right grain — unlike a status
     // change, which only re-renders existing rows.
     this.chatSessions?.onDidChange(() => this._onDidChangeTreeData.fire(undefined));
-    // A ChatSessionStatus change (working, needs input, finished) only re-renders
-    // the rows that already exist — the working icon flips on the affected chat
-    // rows. The attention dot rides its own FileDecoration path.
-    this.chatStatuses?.onDidChange(() => this.refreshRenderedChatSessions());
+    // A ChatSessionStatus change (working, needs input, finished) re-renders the
+    // working icon on existing chat rows — but it can also flip a session's
+    // open/closed state (a run starting or ending), which changes tree membership
+    // while closed sessions are hidden. So route it through the open-state helper.
+    this.chatStatuses?.onDidChange(() => this.refreshChatSessionsAfterOpenStateChange());
 
     if (typeof tmuxOrAvailable === 'boolean') {
       this.tmux = { listSessions: async () => [] };
@@ -659,6 +664,10 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
     const now = Date.now();
     const mine = sessions
       .filter((session) => worktreeForCwd(session.cwd, worktreePaths) === worktreePath)
+      // When closed sessions are hidden, keep only the live ones (a running agent
+      // or a window open in some VS Code window) — the same signal that badges the
+      // green dot, so the visible rows are exactly the dotted ones.
+      .filter((session) => this.showClosedChatSessions || this.isChatSessionOpen(session))
       .sort((left, right) => right.lastModified - left.lastModified);
 
     const liveIds = new Set(mine.map((session) => session.sessionId));
@@ -683,11 +692,32 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
     return nodes;
   }
 
-  // The set of ChatSession windows open in this VS Code window. A ChatSession is
-  // matched to an open window by title — a tab exposes nothing else Deck can key
-  // on — so this only badges rows whose title is currently showing on a tab here.
+  // The set of ChatSession windows currently open, matched to sessions by title
+  // (a tab exposes nothing else Deck can key on). The extension feeds the union
+  // across every VS Code window (via OpenChatWindowStore), so a session open in
+  // another window is recognised here too — not just one open in this window.
   setOpenChatSessionWindows(titles: ReadonlySet<string>): void {
     this.openChatWindowTitles = titles;
+    this.refreshChatSessionsAfterOpenStateChange();
+  }
+
+  // Shows or hides recent-but-closed ChatSessions (the ones without a green dot).
+  // A structural refresh, since rows appear and disappear.
+  setShowClosedChatSessions(show: boolean): void {
+    if (this.showClosedChatSessions === show) return;
+    this.showClosedChatSessions = show;
+    this._onDidChangeTreeData.fire(undefined);
+  }
+
+  // An open↔closed transition only flips the green dot when every session is
+  // listed, so update the affected rows in place. But while closed sessions are
+  // hidden it changes which rows exist, so re-run the filter with a structural
+  // refresh instead.
+  private refreshChatSessionsAfterOpenStateChange(): void {
+    if (!this.showClosedChatSessions) {
+      this._onDidChangeTreeData.fire(undefined);
+      return;
+    }
     this.refreshRenderedChatSessions();
   }
 
@@ -870,6 +900,7 @@ function toDecorationUri(
 ): vscode.Uri {
   return vscode.Uri.from(agentStatusDecorationResourceUri(kind, id));
 }
+
 
 function sameWorktrees(left: readonly Worktree[], right: readonly Worktree[]): boolean {
   if (left.length !== right.length) return false;

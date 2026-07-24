@@ -61,13 +61,30 @@ an `entrypoint` (`claude-vscode` for the extension, `cli` for terminal/CLI runs)
    clears when the session's tab is the focused window's active tab, matched by
    title — the same signal used to badge an open session with a green dot.
 
+6. **Open state is cross-window via a shared registry; closed sessions are
+   hidden by default behind a toggle.** Because a window sees only its own tabs,
+   each window publishes the Claude chat titles it has open to
+   `<deckDir>/open-chat/<windowId>.json` and every window reads the union
+   (`OpenChatWindowStore`) — the same watched-directory pattern as `pending-chat`
+   and `chat-status`. So a session open in another window is recognised as open,
+   not only one running (via ChatSessionStatus) or open in this window. An entry
+   is kept fresh by a heartbeat and removed on the window's dispose, so a stale
+   file (a crashed window) expires by TTL rather than pinning a session open. The
+   list then defaults to the live sessions only: the `deck.showClosedChatSessions`
+   setting (off by default) hides recent-but-closed rows, toggled from the view's
+   title bar (an eye / eye-closed button swapped by a context key that mirrors the
+   setting). The tree filters on the same open signal that badges the green dot.
+
 ## Consequences / known limits
 
-- **Open state and read-clearing are title-matched and current-window only.** A
-  tab exposes only its (truncated) label, so the green "open" dot and read
-  clearing match by title prefix and cannot see sessions open in other windows;
-  identical titles could cross over. A running session (via ChatSessionStatus) is
-  marked live regardless, since that signal is cross-window.
+- **Open state is title-matched; read-clearing stays current-window only.** A
+  tab exposes only its (truncated) label, so open state matches by title prefix
+  and identical titles could still cross over — the residual limit the shared
+  registry can't remove, since no session id is available off a tab. The
+  registry does make open state cross-window (decision 6), so a session open in
+  another window is no longer missed; a running session (via ChatSessionStatus)
+  is marked live regardless. Read-clearing still keys off the focused window's
+  active tab, so it remains current-window.
 - **ChatSession attention does not roll up to a collapsed ancestor.** The leaf
   row shows its dot; unlike Terminals it does not yet bubble to a collapsed
   Worktree/Repository.

@@ -114,6 +114,7 @@ A launcher with `"runOnWorktreeCreate": true` runs when you create a worktree th
 | Setting | Default | Description |
 | --- | --- | --- |
 | `deck.confirmTerminalDelete` | `true` | Ask for confirmation before deleting a terminal. |
+| `deck.showClosedChatSessions` | `false` | Show recent Claude chat sessions whose windows are closed (only live ones show when off). Toggle from the view's title bar. |
 | `deck.notifyOnNeedsInput` | `true` | Notify when an agent needs input (suppressed while you're viewing that terminal). |
 | `deck.notifyOnCompleted` | `true` | Notify when an agent completes a turn (suppressed while you're viewing that terminal). |
 | `deck.agentResumeTemplates.claude` | — | Claude Code command template Deck uses to resume a session. Include `{id}` for the session id. |
