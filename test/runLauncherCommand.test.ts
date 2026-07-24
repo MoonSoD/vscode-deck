@@ -81,7 +81,7 @@ describe('RunLauncherCommand', () => {
       ],
       { placeHolder: 'Run Terminal Launcher' },
     );
-    expect(tmux.ensureSession).toHaveBeenCalledWith('wt-_work_repo__term-1', '/work/repo');
+    expect(tmux.ensureSession).toHaveBeenCalledWith('wt-_work_repo__term-1', '/work/repo', {});
     expect(vscodeState.executeCommand).toHaveBeenCalledWith(
       'vscode.openWith',
       {

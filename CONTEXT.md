@@ -142,6 +142,28 @@ _Avoid_: tmux session, tmux window, pane (the backing mechanism); tab (a disposa
 A Terminal tab whose view outlived the extension host that wired it. This happens when the extension host restarts without a full window reload, such as an extension update or Developer: Restart Extension Host. The Terminal itself is still healthy on the DeckSocket, but the tab keeps showing its last scrollback while keystrokes and output no longer cross the dead webview bridge. VS Code does not re-resolve that surviving custom-editor input, so Deck can only repair it by closing and reopening the tab. Deck marks a tab as a DisconnectedTab only after evidence: the tab is active in its group and still has no registered panel after a grace period. The mark is a grey `!` FileDecoration on the `deck-terminal:` URI and a Reopen Terminals action; Deck never reopens tabs without user consent.
 _Avoid_: dead tab (the Terminal did not die), stale tab (the defect is lost interactivity, not just old content), broken terminal (the Terminal is healthy)
 
+### Previews
+
+**DeckBrowser**:
+Deck's own set of isolated Chrome instances — one `--user-data-dir` and `--remote-debugging-port` per Worktree — the browser analog of the DeckSocket. Deck lists, reveals, and closes windows over the Chrome DevTools Protocol's HTTP endpoints.
+_Avoid_: the user's own Chrome (a distinct thing; DeckBrowser profiles are Deck-managed and isolated), integrated browser (VS Code's Simple Browser — DeckBrowser opens real Chrome windows).
+
+**PreviewWindow**:
+A real Chrome window Deck owns, bound to one Worktree + PreviewDefinition, showing that preview's deterministic URL as a chromeless `--app` window. Shown as a row under a Worktree beside Terminals and ChatSessions; clicking opens it, or reveals it if already open. Like a Terminal it is the durable thing (its Chrome profile persists on disk), but unlike a Terminal, Chrome — not Deck — keeps it alive across reloads.
+_Avoid_: tab, webview, integrated browser (it is an OS Chrome window, not a VS Code panel); Simple Browser.
+
+**PreviewDefinition**:
+A user-declared named preview (name, base port, optional env var and URL path) — the data behind a PreviewWindow row. Sourced exactly like a TerminalLauncher and merged from three places (committed `<worktree>/.deck/previews.json`, per-Repository `deck.repositoryPreviews`, global `deck.previews`), deduped by name.
+_Avoid_: launcher (it declares a browsable surface, not a command to run), preset.
+
+**PreviewPort**:
+The deterministic port Deck derives per Worktree + PreviewDefinition — the definition's base plus a stable per-Worktree slot (a hash of the Worktree path, mirroring the tmux session-name derivation). Used both to form the PreviewWindow URL and, injected as an env var into the Worktree's Terminals, to make the dev server bind the same port — so browser and server agree with no handshake.
+_Avoid_: dev server port (the server binds it because Deck told it to; the port is Deck's, derived from the Worktree), random port.
+
+**BrowserPoll**:
+The focus-gated ~2s poll that observes which PreviewWindows are live — listing each Worktree instance's CDP targets and matching them to PreviewDefinitions by PreviewPort — and drives the "open" badge. The DeckBrowser's counterpart to the TerminalPoll; a poll, not a CDP event client (ADR-0052, ADR-0054).
+_Avoid_: CDP event client (Deck polls, not subscribes), browser watcher.
+
 ### External changes
 
 **ExternalGitWatch**:

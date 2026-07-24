@@ -1180,7 +1180,9 @@ describe('activate', () => {
     tree.refresh.mockClear();
     poll.start.mockClear();
 
-    const focusHandler = vscodeState.onDidChangeWindowState.mock.calls[0]?.[0];
+    // The main focus handler is registered last; earlier registrations belong to
+    // the focus-gated polls (e.g. BrowserPoll) and don't refresh the tree.
+    const focusHandler = vscodeState.onDidChangeWindowState.mock.calls.at(-1)?.[0];
     if (!focusHandler) throw new Error('missing window-state listener');
     await focusHandler({ focused: true });
 
@@ -1566,7 +1568,9 @@ describe('activate', () => {
 
     // Focusing back marks it read via the window-state listener.
     vscodeState.windowFocused = true;
-    const focusHandler = vscodeState.onDidChangeWindowState.mock.calls[0]?.[0];
+    // The main focus handler is registered last; earlier registrations belong to
+    // the focus-gated polls (e.g. BrowserPoll) and don't refresh the tree.
+    const focusHandler = vscodeState.onDidChangeWindowState.mock.calls.at(-1)?.[0];
     if (!focusHandler) throw new Error('missing window-state listener');
     await focusHandler({ focused: true });
     await Promise.resolve();

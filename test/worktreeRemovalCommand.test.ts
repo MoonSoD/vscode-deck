@@ -127,6 +127,38 @@ describe('WorktreeRemovalCommand', () => {
     );
   });
 
+  it('closes the worktree preview windows before removing the worktree', async () => {
+    const activeWorktrees = {
+      get: vi.fn(() => undefined),
+      clear: vi.fn(async () => undefined),
+    };
+    const previewCascade = {
+      closeWorktree: vi.fn(async () => undefined),
+    };
+    const command = new WorktreeRemovalCommand(
+      activeWorktrees,
+      vi.fn(),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      previewCascade,
+    );
+
+    vi.mocked(vscode.window.showWarningMessage).mockResolvedValue(
+      'Remove (keep branch)' as never,
+    );
+
+    await command.run(node);
+    await waitUntil(() => removeWorktree.mock.calls.length > 0);
+
+    expect(previewCascade.closeWorktree).toHaveBeenCalledWith('/repo/feature');
+    expect(previewCascade.closeWorktree.mock.invocationCallOrder[0]).toBeLessThan(
+      removeWorktree.mock.invocationCallOrder[0],
+    );
+  });
+
   it('continues removing the worktree when terminal cascade fails', async () => {
     const activeWorktrees = {
       get: vi.fn(() => undefined),

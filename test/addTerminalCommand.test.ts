@@ -56,6 +56,7 @@ describe('AddTerminalCommand', () => {
     expect(tmux.ensureSession).toHaveBeenCalledWith(
       'wt-_work_repo__term-4',
       '/work/repo',
+      {},
     );
     expect(vscodeState.executeCommand).toHaveBeenCalledWith(
       'vscode.openWith',
@@ -68,6 +69,23 @@ describe('AddTerminalCommand', () => {
     );
     expect(vscodeState.createTerminal).not.toHaveBeenCalled();
     expect(refresh).toHaveBeenCalledOnce();
+  });
+
+  it('injects the resolved PreviewPort env into the new session', async () => {
+    const tmux = {
+      listSessions: vi.fn().mockResolvedValueOnce([]),
+      ensureSession: vi.fn(async () => undefined),
+    };
+
+    await new AddTerminalCommand(
+      tmux,
+      vi.fn(),
+      undefined,
+      undefined,
+      async () => ({ PORT: '3042' }),
+    ).run({ worktree: { path: '/work/repo' } });
+
+    expect(tmux.ensureSession).toHaveBeenCalledWith('wt-_work_repo__term-1', '/work/repo', { PORT: '3042' });
   });
 
   it('restores the TerminalSnapshot before creating, so a + right after a server death does not clobber it', async () => {
@@ -109,6 +127,7 @@ describe('AddTerminalCommand', () => {
     expect(tmux.ensureSession).toHaveBeenCalledWith(
       'wt-_work_beta-main__term-1',
       '/work/beta-main',
+      {},
     );
     expect(vscodeState.executeCommand).toHaveBeenCalledWith(
       'vscode.openWith',
@@ -139,7 +158,7 @@ describe('AddTerminalCommand', () => {
       term: 2,
     });
 
-    expect(tmux.ensureSession).toHaveBeenCalledWith('wt-_work_repo__term-2', '/work/repo');
+    expect(tmux.ensureSession).toHaveBeenCalledWith('wt-_work_repo__term-2', '/work/repo', {});
     expect(vscodeState.executeCommand).not.toHaveBeenCalled();
   });
 });

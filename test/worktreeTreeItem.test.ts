@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+  describePreviewWindowTreeItem,
   describeRepositoryTreeItem,
   describeTerminalTreeItem,
   describeWorktreeTreeItem,
 } from '../src/tree/worktreeTreeItem';
+import { previewPort } from '../src/browser/previewPort';
 
 describe('describeRepositoryTreeItem', () => {
   it('marks the repository matching the open workspace folder common dir as active', () => {
@@ -211,5 +213,28 @@ describe('describeTerminalTreeItem', () => {
       iconId: 'terminal',
       contextValue: 'deck.terminal.foreign',
     });
+  });
+});
+
+describe('describePreviewWindowTreeItem', () => {
+  const worktree = '/work/alpha-main';
+  const def = { name: 'app', portBase: 3000 };
+
+  it('labels by name and describes the port when closed', () => {
+    const port = previewPort(worktree, def);
+    expect(describePreviewWindowTreeItem(def, worktree)).toEqual({
+      label: 'app',
+      description: `:${port}`,
+      tooltip: `app\nhttp://localhost:${port}/`,
+      iconId: 'globe',
+      contextValue: 'deck.previewWindow',
+    });
+  });
+
+  it('flips the contextValue and marks the description when open', () => {
+    const item = describePreviewWindowTreeItem(def, worktree, { open: true });
+    expect(item.contextValue).toBe('deck.previewWindow.open');
+    expect(item.description).toContain('open');
+    expect(item.tooltip).toContain('Open');
   });
 });

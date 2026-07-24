@@ -7,6 +7,7 @@ import {
 import {
   createHeadlessTerminal,
   type AddTerminalTmuxCli,
+  type ResolvePreviewEnv,
   type WorktreeNodeLike,
 } from './addTerminalCommand';
 
@@ -23,6 +24,7 @@ interface WorktreeCreateLauncherRunnerOptions {
   ) => Promise<LauncherGroups>;
   resolveCommonDir?: (repositoryPath: string) => Promise<string | null>;
   beforeCreate?: () => Promise<void>;
+  resolvePreviewEnv?: ResolvePreviewEnv;
 }
 
 export class WorktreeCreateLauncherRunner {
@@ -33,6 +35,7 @@ export class WorktreeCreateLauncherRunner {
     repositoryLauncherConfig: unknown,
   ) => Promise<LauncherGroups>;
   private readonly beforeCreate: () => Promise<void>;
+  private readonly resolvePreviewEnv: ResolvePreviewEnv;
 
   constructor(
     private readonly tmux: WorktreeCreateLauncherTmuxCli,
@@ -44,6 +47,7 @@ export class WorktreeCreateLauncherRunner {
         resolveCommonDir: options.resolveCommonDir,
       }));
     this.beforeCreate = options.beforeCreate ?? (() => Promise.resolve());
+    this.resolvePreviewEnv = options.resolvePreviewEnv ?? (async () => ({}));
   }
 
   async run(node: WorktreeNodeLike | undefined): Promise<void> {
@@ -56,8 +60,9 @@ export class WorktreeCreateLauncherRunner {
     if (launchers.length === 0) return;
 
     await this.beforeCreate();
+    const env = await this.resolvePreviewEnv(node.worktree.path);
     for (const launcher of launchers) {
-      const { session } = await createHeadlessTerminal(this.tmux, node);
+      const { session } = await createHeadlessTerminal(this.tmux, node, env);
       await this.tmux.sendCommandLine(session, launcher.command);
     }
     this.refresh();

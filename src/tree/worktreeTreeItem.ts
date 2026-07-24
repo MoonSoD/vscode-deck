@@ -9,6 +9,8 @@ import {
 } from '../agent/agentIconResolver';
 import { resolveTerminalLabel } from '../terminal/terminalLabelResolver';
 import type { ChatSession } from '../chat/scanChatSessions';
+import type { PreviewDefinition } from '../browser/previewDefinition';
+import { previewPort, previewUrl } from '../browser/previewPort';
 
 export interface RepositoryTreeItemDescription {
   label: string;
@@ -231,4 +233,39 @@ export function describeTmuxUnavailableTreeItem(): TmuxUnavailableTreeItemDescri
     contextValue: 'deck.tmux.unavailable',
     tooltip: 'Install tmux 3.1 or newer to use Deck-managed Terminals.',
   };
+}
+
+export type PreviewWindowTreeIconId = 'globe';
+
+export interface PreviewWindowTreeItemDescription {
+  label: string;
+  description: string;
+  tooltip: string;
+  iconId: PreviewWindowTreeIconId;
+  contextValue: 'deck.previewWindow' | 'deck.previewWindow.open';
+}
+
+// A PreviewWindow row: labelled by the preview's name, described by its
+// PreviewPort (with an "open" marker once its Chrome window is live), carrying a
+// globe glyph. contextValue flips to `.open` so a Close action shows only while
+// the window is open — mirroring how a foreign Terminal exposes different actions.
+export function describePreviewWindowTreeItem(
+  def: PreviewDefinition,
+  worktreePath: string,
+  options: { open?: boolean } = {},
+): PreviewWindowTreeItemDescription {
+  const port = previewPort(worktreePath, def);
+  return {
+    label: def.name,
+    description: options.open ? `:${port} · open` : `:${port}`,
+    tooltip: previewWindowTooltip(def, worktreePath, options.open === true),
+    iconId: 'globe',
+    contextValue: options.open ? 'deck.previewWindow.open' : 'deck.previewWindow',
+  };
+}
+
+function previewWindowTooltip(def: PreviewDefinition, worktreePath: string, open: boolean): string {
+  const lines = [def.name, previewUrl(worktreePath, def)];
+  if (open) lines.push('Open');
+  return lines.join('\n');
 }

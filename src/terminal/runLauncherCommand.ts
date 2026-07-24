@@ -8,6 +8,7 @@ import type { TerminalLauncher } from '../launchers/terminalLaunchers';
 import {
   createAndOpenTerminal,
   type AddTerminalTmuxCli,
+  type ResolvePreviewEnv,
   type WorktreeNodeLike,
 } from './addTerminalCommand';
 import { SessionUriCodec } from './sessionUriCodec';
@@ -31,6 +32,7 @@ interface RunLauncherCommandOptions {
   ) => Promise<LauncherGroups>;
   resolveCommonDir?: (repositoryPath: string) => Promise<string | null>;
   beforeCreate?: () => Promise<void>;
+  resolvePreviewEnv?: ResolvePreviewEnv;
 }
 
 export class RunLauncherCommand {
@@ -42,6 +44,7 @@ export class RunLauncherCommand {
     repositoryLauncherConfig: unknown,
   ) => Promise<LauncherGroups>;
   private readonly beforeCreate: () => Promise<void>;
+  private readonly resolvePreviewEnv: ResolvePreviewEnv;
 
   constructor(
     private readonly tmux: RunLauncherTmuxCli,
@@ -54,6 +57,7 @@ export class RunLauncherCommand {
         resolveCommonDir: options.resolveCommonDir,
       }));
     this.beforeCreate = options.beforeCreate ?? (() => Promise.resolve());
+    this.resolvePreviewEnv = options.resolvePreviewEnv ?? (async () => ({}));
   }
 
   async run(node: WorktreeNodeLike | undefined): Promise<void> {
@@ -73,7 +77,8 @@ export class RunLauncherCommand {
     if (!picked.launcher) return;
 
     await this.beforeCreate();
-    const session = await createAndOpenTerminal(this.tmux, node, this.sessionUriCodec);
+    const env = await this.resolvePreviewEnv(node.worktree.path);
+    const session = await createAndOpenTerminal(this.tmux, node, this.sessionUriCodec, env);
     await this.tmux.sendCommandLine(session, picked.launcher.command);
     this.refresh();
   }

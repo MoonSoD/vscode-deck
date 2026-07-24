@@ -157,6 +157,92 @@
               "launchers"
             ]
           }
+        },
+        "deck.previews": {
+          "type": "array",
+          "default": [],
+          "markdownDescription": "PreviewWindows available in every repository. Each is a named Chrome window Deck opens for a Worktree's dev server. `portBase` anchors the deterministic PreviewPort (this base plus a stable per-Worktree slot); `portEnv`, if set, is the env var Deck injects into the Worktree's Terminals so the dev server binds that port.\n\nExample:\n```json\n[{ \"name\": \"app\", \"portBase\": 3000, \"portEnv\": \"PORT\" }]\n```",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Row label and identity of the preview (unique per Worktree)."
+              },
+              "portBase": {
+                "type": "number",
+                "description": "Base port; the PreviewPort is this plus a stable per-Worktree slot."
+              },
+              "portEnv": {
+                "type": "string",
+                "description": "Env var Deck sets on the Worktree's Terminals to the PreviewPort (e.g. PORT)."
+              },
+              "path": {
+                "type": "string",
+                "description": "URL path the window loads. Defaults to /."
+              }
+            },
+            "required": [
+              "name",
+              "portBase"
+            ]
+          }
+        },
+        "deck.repositoryPreviews": {
+          "type": "array",
+          "default": [],
+          "markdownDescription": "PreviewWindows for a single Repository, kept in your user settings instead of committed to the repo (`.deck/previews.json`). `repository` is any path inside the repo — a leading `~` is expanded, and it is matched by git common dir, so it applies to every Worktree.\n\nExample:\n```json\n[{ \"repository\": \"~/code/myapp\", \"previews\": [\n  { \"name\": \"app\", \"portBase\": 3000, \"portEnv\": \"PORT\" },\n  { \"name\": \"storybook\", \"portBase\": 6006, \"portEnv\": \"STORYBOOK_PORT\" }\n] }]\n```",
+          "items": {
+            "type": "object",
+            "properties": {
+              "repository": {
+                "type": "string",
+                "markdownDescription": "Any path inside the Repository (a leading `~` is expanded). Matched by git common dir, so it applies to every Worktree."
+              },
+              "previews": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "description": "Row label and identity of the preview (unique per Worktree)."
+                    },
+                    "portBase": {
+                      "type": "number",
+                      "description": "Base port; the PreviewPort is this plus a stable per-Worktree slot."
+                    },
+                    "portEnv": {
+                      "type": "string",
+                      "description": "Env var Deck sets on the Worktree's Terminals to the PreviewPort (e.g. PORT)."
+                    },
+                    "path": {
+                      "type": "string",
+                      "description": "URL path the window loads. Defaults to /."
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "portBase"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "repository",
+              "previews"
+            ]
+          }
+        },
+        "deck.chromeProfileTemplate": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Path to a Chrome profile directory Deck copies to seed each Worktree's isolated PreviewWindow profile on its first launch — set it up once with the extensions you want available in preview windows. Empty uses a fresh profile."
+        },
+        "deck.chromePath": {
+          "type": "string",
+          "default": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+          "description": "Path to the Google Chrome binary Deck launches for PreviewWindows."
         }
       }
     },
@@ -260,6 +346,22 @@
       {
         "command": "deck.openChatSession",
         "title": "Open Claude Chat Session"
+      },
+      {
+        "command": "deck.openPreview",
+        "title": "Open Preview Window"
+      },
+      {
+        "command": "deck.closePreview",
+        "title": "Close Preview Window"
+      },
+      {
+        "command": "deck.reloadPreview",
+        "title": "Reload Preview Window"
+      },
+      {
+        "command": "deck.copyPreviewUrl",
+        "title": "Copy Preview URL"
       },
       {
         "command": "deck.openTerminalInNewWindow",
@@ -388,6 +490,26 @@
           "command": "deck.openTerminalInNewWindow",
           "when": "view == deck.repositories && viewItem == deck.terminal.foreign && deck.tmuxAvailable",
           "group": "navigation"
+        },
+        {
+          "command": "deck.openPreview",
+          "when": "view == deck.repositories && viewItem == deck.previewWindow",
+          "group": "navigation@1"
+        },
+        {
+          "command": "deck.closePreview",
+          "when": "view == deck.repositories && viewItem == deck.previewWindow.open",
+          "group": "navigation@1"
+        },
+        {
+          "command": "deck.reloadPreview",
+          "when": "view == deck.repositories && viewItem == deck.previewWindow.open",
+          "group": "navigation@2"
+        },
+        {
+          "command": "deck.copyPreviewUrl",
+          "when": "view == deck.repositories && (viewItem == deck.previewWindow || viewItem == deck.previewWindow.open)",
+          "group": "navigation@3"
         }
       ],
       "commandPalette": [
@@ -450,6 +572,22 @@
         },
         {
           "command": "deck.hideClosedChatSessions",
+          "when": "false"
+        },
+        {
+          "command": "deck.openPreview",
+          "when": "false"
+        },
+        {
+          "command": "deck.closePreview",
+          "when": "false"
+        },
+        {
+          "command": "deck.reloadPreview",
+          "when": "false"
+        },
+        {
+          "command": "deck.copyPreviewUrl",
           "when": "false"
         },
         {

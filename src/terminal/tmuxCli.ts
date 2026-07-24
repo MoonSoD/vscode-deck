@@ -62,7 +62,7 @@ export class TmuxCli {
     return result.code === 0;
   }
 
-  async ensureSession(session: string, cwd: string): Promise<void> {
+  async ensureSession(session: string, cwd: string, env: Record<string, string> = {}): Promise<void> {
     if (await this.hasSession(session)) return;
 
     // Deliberately omit `-n`: passing it marks the window as "manually named"
@@ -78,6 +78,9 @@ export class TmuxCli {
       session,
       '-e',
       `DECK_SESSION=${session}`,
+      // PreviewPort env (e.g. PORT=3042) so dev servers in this Terminal bind the
+      // port its PreviewWindow URL points at.
+      ...Object.entries(env).flatMap(([key, value]) => ['-e', `${key}=${value}`]),
       '-c',
       cwd,
     ]);

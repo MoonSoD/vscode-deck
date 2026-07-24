@@ -882,6 +882,71 @@ describe('RepositoryTreeProvider', () => {
     expect(chatLabels).toEqual(['Open elsewhere']);
   });
 
+  it('lists Chrome preview windows under the worktree, after terminals and chat sessions', async () => {
+    const tmux = {
+      listSessions: vi.fn(async () => [
+        { sessionName: 'wt-_work_alpha-main__term-1', windowName: 'zsh' },
+      ]),
+    };
+    const chatSessions = {
+      all: () => [
+        { sessionId: 'c1', cwd: '/work/alpha-main', title: 'Fix the bug', lastModified: 300 },
+      ],
+      onDidChange: () => ({ dispose: () => undefined }),
+    };
+    const previews = {
+      forWorktree: (worktreePath: string) =>
+        worktreePath === '/work/alpha-main'
+          ? [{ name: 'app', portBase: 3000 }, { name: 'storybook', portBase: 6006 }]
+          : [],
+      onDidChange: () => ({ dispose: () => undefined }),
+    };
+    const previewOpen = {
+      isOpen: (_worktreePath: string, name: string) => name === 'app',
+      onDidChange: () => ({ dispose: () => undefined }),
+    };
+    const provider = new RepositoryTreeProvider(
+      registry(['/work/alpha-main']),
+      { get: vi.fn() } as unknown as ActiveWorktreeStore,
+      { get: vi.fn() } as unknown as WorktreeOrderStore,
+      { get: vi.fn(), set: vi.fn(async () => undefined) } as unknown as WorktreeListCacheStore,
+      { get: vi.fn(() => '/git/alpha'), set: vi.fn(async () => undefined) } as unknown as RepositoryCommonDirCache,
+      tmux,
+      true,
+      new Set(),
+      undefined,
+      undefined,
+      () => Promise.resolve(),
+      chatSessions,
+      undefined,
+      previews,
+      previewOpen,
+    );
+    const repositories = provider.getChildren();
+    if (!Array.isArray(repositories)) throw new Error('expected sync repository roots');
+    const worktrees = await provider.getChildren(repositories[0]);
+    if (!Array.isArray(worktrees)) throw new Error('expected worktree children');
+
+    const rows = await provider.getChildren(worktrees[0]);
+    if (!Array.isArray(rows)) throw new Error('expected worktree child rows');
+
+    expect(rows.map((row) => row.label)).toEqual(['zsh', 'Fix the bug', 'app', 'storybook']);
+
+    const openRow = rows.find((row) => row.label === 'app');
+    expect(openRow?.contextValue).toBe('deck.previewWindow.open');
+    expect(openRow?.description).toContain('open');
+    expect(openRow?.command).toEqual(
+      expect.objectContaining({
+        command: 'deck.openPreview',
+        arguments: [{ worktreePath: '/work/alpha-main', previewName: 'app' }],
+      }),
+    );
+
+    const closedRow = rows.find((row) => row.label === 'storybook');
+    expect(closedRow?.contextValue).toBe('deck.previewWindow');
+    expect(closedRow?.description).not.toContain('open');
+  });
+
   it('renders Terminals in stored order with unknown live Terminals appended by term-N', async () => {
     const tmux = {
       listSessions: vi.fn(async () => [
