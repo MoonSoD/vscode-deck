@@ -36,6 +36,12 @@ interface AgentStatusNotifierOptions {
   openTerminal(sessionName: string): void | PromiseLike<void>;
   resolveTerminalSession?(sessionName: string): Promise<TmuxSession | undefined>;
   describeSession?(sessionName: string): Promise<AgentStatusNotificationLocation | undefined>;
+  // The reveal action's button text. Defaults to Open Terminal; a ChatSession
+  // notifier passes Open, since it reveals a window, not a Terminal.
+  actionLabel?: string;
+  // Overrides the row label (the AgentTitle for Terminals). A ChatSession has no
+  // Terminal to derive one from, so it resolves the session's own title here.
+  resolveLabel?(sessionName: string): Promise<string | undefined>;
 }
 
 export class AgentStatusNotifier {
@@ -79,14 +85,15 @@ export class AgentStatusNotifier {
     status: AgentStatus,
     notificationStatus: 'needsInput' | 'completed',
   ): Promise<void> {
-    const [terminal, location] = await Promise.all([
+    const [terminal, location, resolvedLabel] = await Promise.all([
       this.resolveTerminalSession(sessionName),
       this.describeSession(sessionName),
+      this.resolveLabel(sessionName),
     ]);
     const agentName = status.agent ?? 'claude';
-    const label = terminal === undefined
+    const label = resolvedLabel ?? (terminal === undefined
       ? agentName
-      : resolveTerminalLabel(terminal.windowName, terminal.paneTitle, agentName);
+      : resolveTerminalLabel(terminal.windowName, terminal.paneTitle, agentName));
     const line = composeAgentStatusNotificationLine({
       status: notificationStatus,
       agentName,
@@ -94,10 +101,11 @@ export class AgentStatusNotifier {
       message: status.message,
       location,
     });
+    const actionLabel = this.options.actionLabel ?? OPEN_TERMINAL;
     const choice = line.severity === 'warning'
-      ? this.options.notifications.showWarningMessage(line.text, OPEN_TERMINAL)
-      : this.options.notifications.showInformationMessage(line.text, OPEN_TERMINAL);
-    this.show(choice, sessionName);
+      ? this.options.notifications.showWarningMessage(line.text, actionLabel)
+      : this.options.notifications.showInformationMessage(line.text, actionLabel);
+    this.show(choice, sessionName, actionLabel);
   }
 
   private async resolveTerminalSession(sessionName: string): Promise<TmuxSession | undefined> {
@@ -116,6 +124,14 @@ export class AgentStatusNotifier {
     }
   }
 
+  private async resolveLabel(sessionName: string): Promise<string | undefined> {
+    try {
+      return await this.options.resolveLabel?.(sessionName);
+    } catch {
+      return undefined;
+    }
+  }
+
   private shouldNotify(sessionName: string, enabled: boolean): boolean {
     if (!enabled) return false;
     // Suppress only when you're actually looking at that terminal: its tab is
@@ -128,9 +144,9 @@ export class AgentStatusNotifier {
     return !looking;
   }
 
-  private show(choice: Thenable<string | undefined>, sessionName: string): void {
+  private show(choice: Thenable<string | undefined>, sessionName: string, actionLabel: string): void {
     void choice.then((selected) => {
-      if (selected !== OPEN_TERMINAL) return;
+      if (selected !== actionLabel) return;
       return this.options.openTerminal(sessionName);
     });
   }

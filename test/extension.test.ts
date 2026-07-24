@@ -182,6 +182,9 @@ vi.mock('vscode', () => ({
     executeCommand: vscodeState.executeCommand,
     registerCommand: vscodeState.registerCommand,
   },
+  extensions: {
+    getExtension: vi.fn(() => undefined),
+  },
   Uri: {
     file: (path: string) => ({ fsPath: path }),
     joinPath: (base: unknown, ...paths: string[]) => ({ base, paths }),
@@ -323,12 +326,15 @@ vi.mock('../src/tree/repositoryTree', () => ({
       setStatuses: vi.fn(),
       setTerminals: vi.fn(),
       getDecorationStatus: vi.fn(),
+      invalidationUrisForSessions: vi.fn(() => []),
     };
     findTerminal = vi.fn();
     findTerminalBySessionName = vi.fn();
     describeSession = vi.fn();
+    chatSessionContext = vi.fn();
     refresh = vi.fn();
     refreshTerminalDisplays = vi.fn();
+    setOpenChatSessionWindows = vi.fn();
     setCollapsed = vi.fn();
     isActiveRepositoryDecorationTarget = vi.fn();
     isActiveWorktreeDecorationTarget = vi.fn();
@@ -344,6 +350,14 @@ vi.mock('../src/tree/repositoryTree', () => ({
 
 vi.mock('../src/tree/deckTreeDragAndDropController', () => ({
   DeckTreeDragAndDropController: class {},
+}));
+
+vi.mock('../src/chat/chatSessionStore', () => ({
+  createChatSessionStore: () => ({
+    all: () => [],
+    onDidChange: () => ({ dispose: vi.fn() }),
+    start: async () => ({ dispose: vi.fn() }),
+  }),
 }));
 
 vi.mock('../src/terminal/tmuxPreflight', () => ({
@@ -566,7 +580,12 @@ vi.mock('../src/terminal/killTerminalCommand', () => ({
 }));
 
 import * as vscode from 'vscode';
-import { activate, deactivate, openPendingTerminalForCurrentWorktree } from '../src/extension';
+import {
+  activate,
+  deactivate,
+  openPendingChatSessionForCurrentWorktree,
+  openPendingTerminalForCurrentWorktree,
+} from '../src/extension';
 import { resolveCommonDirSafe } from '../src/repository/repositoryCommonDirCache';
 import { PendingTerminalOpenStore } from '../src/terminal/pendingTerminalOpenStore';
 import { SessionUriCodec } from '../src/terminal/sessionUriCodec';
@@ -1294,7 +1313,9 @@ describe('activate', () => {
         message: 'Allow Bash(ls)?',
       }],
     ];
-    vscodeState.agentStatusStoreChangeListeners.at(-1)?.();
+    for (const listener of vscodeState.agentStatusStoreChangeListeners) {
+      (listener as (change: { sessionNames: string[] }) => void)({ sessionNames: [] });
+    }
 
     await vi.waitFor(() => {
       expect(vscodeState.showWarningMessage).toHaveBeenCalledWith(
@@ -1323,7 +1344,9 @@ describe('activate', () => {
     vscodeState.agentStatusStoreEntries = [
       ['wt-_elsewhere_repo__term-1', { status: 'needsInput', statusAt: 1710000000 }],
     ];
-    vscodeState.agentStatusStoreChangeListeners.at(-1)?.();
+    for (const listener of vscodeState.agentStatusStoreChangeListeners) {
+      (listener as (change: { sessionNames: string[] }) => void)({ sessionNames: [] });
+    }
     await Promise.resolve();
 
     await vi.waitFor(() => {
@@ -1626,6 +1649,49 @@ describe('activate', () => {
       'deck.terminal',
       { viewColumn: -1 },
     );
+  });
+
+  it('resumes a pending chat session once the Claude extension is active', async () => {
+    vscodeState.workspaceFolders = [{ uri: { fsPath: '/work/alpha-main' } }];
+    const activateExtension = vi.fn(async () => undefined);
+    (vscode.extensions.getExtension as ReturnType<typeof vi.fn>).mockReturnValueOnce({
+      isActive: false,
+      activate: activateExtension,
+    });
+    vscodeState.executeCommand.mockClear();
+    const pendingChatOpens = {
+      consume: vi.fn(async () => 'sess-1'),
+      set: vi.fn(async () => undefined),
+    };
+
+    await openPendingChatSessionForCurrentWorktree(pendingChatOpens);
+
+    expect(pendingChatOpens.consume).toHaveBeenCalledWith('/work/alpha-main');
+    expect(activateExtension).toHaveBeenCalled();
+    expect(vscodeState.executeCommand).toHaveBeenCalledWith(
+      'claude-vscode.editor.open',
+      'sess-1',
+      undefined,
+      -1,
+    );
+    expect(pendingChatOpens.set).not.toHaveBeenCalled();
+  });
+
+  it('re-queues the pending chat session when the reveal fails', async () => {
+    vscodeState.workspaceFolders = [{ uri: { fsPath: '/work/alpha-main' } }];
+    (vscode.extensions.getExtension as ReturnType<typeof vi.fn>).mockReturnValueOnce({
+      isActive: true,
+      activate: vi.fn(async () => undefined),
+    });
+    vscodeState.executeCommand.mockRejectedValueOnce(new Error('command not found'));
+    const pendingChatOpens = {
+      consume: vi.fn(async () => 'sess-1'),
+      set: vi.fn(async () => undefined),
+    };
+
+    await openPendingChatSessionForCurrentWorktree(pendingChatOpens);
+
+    expect(pendingChatOpens.set).toHaveBeenCalledWith('/work/alpha-main', 'sess-1');
   });
 
   it('reveals an already-restored pending terminal in its own group, not the active one', async () => {

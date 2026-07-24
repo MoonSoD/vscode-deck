@@ -18,9 +18,13 @@ interface PendingTerminalOpenStored {
 }
 
 export class PendingTerminalOpenStore {
+  // The globalState key is a constructor parameter so the same machinery backs a
+  // second, independent queue for ChatSession opens (`deck.pendingChatOpen`)
+  // without the two colliding on a worktree key.
   constructor(
     private readonly memento: MementoLike,
     private readonly now: () => number = Date.now,
+    private readonly storageKey: string = PENDING_TERMINAL_OPEN_KEY,
   ) {}
 
   async set(worktreePath: string, sessionName: string): Promise<void> {
@@ -64,7 +68,7 @@ export class PendingTerminalOpenStore {
 
   private read(): { stored: PendingTerminalOpenStored; wasReset: boolean } {
     const raw = this.memento.get<PendingTerminalOpenStored | undefined>(
-      PENDING_TERMINAL_OPEN_KEY,
+      this.storageKey,
       undefined,
     );
     if (raw?.schemaVersion !== PENDING_TERMINAL_OPEN_SCHEMA_VERSION) {
@@ -77,7 +81,7 @@ export class PendingTerminalOpenStore {
   }
 
   private async write(value: PendingTerminalOpenStored): Promise<void> {
-    await (this.memento.update(PENDING_TERMINAL_OPEN_KEY, value) as MaybePromise<void>);
+    await (this.memento.update(this.storageKey, value) as MaybePromise<void>);
   }
 }
 

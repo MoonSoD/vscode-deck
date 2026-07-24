@@ -5,6 +5,7 @@ export function renderAgentHookScript(
   sidecarDir: string,
   agent: AgentName = 'claude',
   statusDir = join(dirname(sidecarDir), 'status'),
+  chatStatusDir = join(dirname(sidecarDir), 'chat-status'),
 ): string {
   return [
     '#!/bin/sh',
@@ -21,9 +22,6 @@ export function renderAgentHookScript(
     'esac',
     '',
     'payload=$(cat)',
-    'if [ -z "${DECK_SESSION:-}" ]; then',
-    '  exit 0',
-    'fi',
     '',
     // First-occurrence, escape-aware JSON string extraction. sed-style
     // last-occurrence matching let nested tool_input text shadow top-level
@@ -63,11 +61,30 @@ export function renderAgentHookScript(
     '',
     `status_dir='${quoteForSingleQuotedShell(statusDir)}'`,
     `sidecar_dir='${quoteForSingleQuotedShell(sidecarDir)}'`,
+    `chat_status_dir='${quoteForSingleQuotedShell(chatStatusDir)}'`,
     'agent_pid=$PPID',
     'agent_start_time=$(ps -o lstart= -p "$agent_pid" 2>/dev/null | awk \'{$1=$1; print}\' || true)',
     'hook_event_name=$(json_field hook_event_name)',
     'session_id=$(json_field session_id)',
     'if [ -z "$session_id" ]; then',
+    '  exit 0',
+    'fi',
+    '',
+    // Two modes share one hook. A Deck Terminal (DECK_SESSION injected on the
+    // tmux session) keys AgentStatus by that session name and maintains the
+    // resume sidecar + the tmux window name. A Claude VS Code extension window
+    // (no DECK_SESSION, CLAUDE_CODE_ENTRYPOINT=claude-vscode) is a ChatSession:
+    // its ChatSessionStatus is keyed by the agent session id and it owns no tmux
+    // session or sidecar, so neither is touched. Any other no-DECK_SESSION run
+    // (a plain CLI claude outside Deck) is ignored.
+    'if [ -n "${DECK_SESSION:-}" ]; then',
+    '  deck_mode=terminal',
+    '  status_file="$status_dir/$DECK_SESSION.json"',
+    "elif [ \"${CLAUDE_CODE_ENTRYPOINT:-}\" = 'claude-vscode' ]; then",
+    '  deck_mode=chat',
+    '  status_dir="$chat_status_dir"',
+    '  status_file="$status_dir/$session_id.json"',
+    'else',
     '  exit 0',
     'fi',
     '',
@@ -85,7 +102,7 @@ export function renderAgentHookScript(
     '}',
     'write_status_json() {',
     '  mkdir -p "$status_dir" || return 0',
-    '  tmp=$(mktemp "$status_dir/$DECK_SESSION.XXXXXX") || return 0',
+    '  tmp=$(mktemp "$status_dir/deck-status.XXXXXX") || return 0',
     '  status_at=$(date +%s 2>/dev/null || printf 0)',
     '  if [ "$#" -gt 1 ]; then',
     '    escaped_message=$(json_escape "$2") || { rm -f "$tmp"; return 0; }',
@@ -93,7 +110,7 @@ export function renderAgentHookScript(
     '  else',
     '    printf \'{"status":"%s","statusAt":%s,"agent":"%s"}\\n\' "$1" "$status_at" "$agent" > "$tmp" || { rm -f "$tmp"; return 0; }',
     '  fi',
-    '  mv "$tmp" "$status_dir/$DECK_SESSION.json" || { rm -f "$tmp"; return 0; }',
+    '  mv "$tmp" "$status_file" || { rm -f "$tmp"; return 0; }',
     '}',
     'write_status() {',
     '  write_status_json "$1"',
@@ -111,9 +128,11 @@ export function renderAgentHookScript(
     '',
     // Rename last: the identity sidecar write is what AgentSession resume depends on,
     // so a naming failure must never pre-empt it.
+    // Sidecar and tmux window naming are terminal-only: a ChatSession has neither,
+    // so those steps are gated on deck_mode while the status writes run in both.
     'case "$hook_event_name" in',
-    '  SessionStart) write_sidecar || true; tmux -L deck rename-window -t "$DECK_SESSION" "$agent" || true ;;',
-    '  UserPromptSubmit) write_sidecar || true; write_status inProgress || true; tmux -L deck rename-window -t "$DECK_SESSION" "$agent" || true ;;',
+    '  SessionStart) [ "$deck_mode" = terminal ] && write_sidecar || true; [ "$deck_mode" = terminal ] && tmux -L deck rename-window -t "$DECK_SESSION" "$agent" || true ;;',
+    '  UserPromptSubmit) [ "$deck_mode" = terminal ] && write_sidecar || true; write_status inProgress || true; [ "$deck_mode" = terminal ] && tmux -L deck rename-window -t "$DECK_SESSION" "$agent" || true ;;',
     '  PreToolUse) write_status inProgress || true ;;',
     '  PostToolUse|PostToolUseFailure) [ "$agent" = "claude" ] && write_status inProgress || true ;;',
     '  PermissionRequest)',
@@ -127,7 +146,7 @@ export function renderAgentHookScript(
     '      permission_prompt|elicitation_dialog) write_status_maybe_message needsInput "$message" || true ;;',
     // idle_prompt confirms an existing completion (it trails Stop by ~a minute);
     // minting a fresh statusAt here would re-arm unread on turns already read.
-    '      idle_prompt) grep -q \'"status":"completed"\' "$status_dir/$DECK_SESSION.json" 2>/dev/null || write_status completed || true ;;',
+    '      idle_prompt) grep -q \'"status":"completed"\' "$status_file" 2>/dev/null || write_status completed || true ;;',
     '    esac',
     '    ;;',
     'esac',

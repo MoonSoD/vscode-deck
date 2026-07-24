@@ -41,7 +41,7 @@ export function parseAgentStatusDecorationUri(
   uri: AgentStatusDecorationUri,
 ): { kind: AgentStatusDecorationNodeKind; id: string } | undefined {
   if (uri.scheme !== agentStatusDecorationScheme) return undefined;
-  const match = uri.path.match(/^\/(repository|worktree|terminal)\/(.+)$/);
+  const match = uri.path.match(/^\/(repository|worktree|terminal|chat)\/(.+)$/);
   if (!match) return undefined;
   return {
     kind: match[1] as AgentStatusDecorationNodeKind,

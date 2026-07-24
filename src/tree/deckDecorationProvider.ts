@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import type { AgentStatus, Disposable } from '../agent/agentStatusStore';
 import {
   AgentStatusDecorationRollups,
+  agentStatusDecorationResourceUri,
   agentStatusDecorationUri,
   parseAgentStatusDecorationUri,
   provideAgentStatusDecoration,
@@ -34,6 +35,7 @@ export class DeckDecorationProvider implements vscode.FileDecorationProvider, Di
   private readonly _onDidChangeFileDecorations = new vscode.EventEmitter<vscode.Uri | vscode.Uri[] | undefined>();
   readonly onDidChangeFileDecorations = this._onDidChangeFileDecorations.event;
   private readonly statusWatch: Disposable;
+  private readonly chatStatusWatch: Disposable | undefined;
   private readonly activeWatch: Disposable | undefined;
   private readonly codec = new SessionUriCodec();
   private statuses: Map<string, AgentStatus>;
@@ -43,6 +45,7 @@ export class DeckDecorationProvider implements vscode.FileDecorationProvider, Di
     private readonly rollups: AgentStatusDecorationRollups,
     private readonly activeTargets?: ActiveDecorationTargets,
     private readonly disconnectedTabs?: DisconnectedTabSource,
+    private readonly chatStore?: AgentStatusStoreLike,
   ) {
     this.statuses = this.syncStatuses();
     this.statusWatch = this.store.onDidChange((change) => {
@@ -53,6 +56,12 @@ export class DeckDecorationProvider implements vscode.FileDecorationProvider, Di
       );
       this.fire(this.rollups.invalidationUrisForSessions(decoratedSessionNames));
     });
+    // ChatSession attention dots are keyed by the agent session id under the
+    // `chat` decoration kind and resolved straight from the chat status store —
+    // they are leaf rows, so no ancestor rollup is involved.
+    this.chatStatusWatch = this.chatStore?.onDidChange((change) => {
+      this.fire(change.sessionNames.map((id) => agentStatusDecorationResourceUri('chat', id)));
+    });
     this.activeWatch = this.activeTargets?.onDidChange?.((uris) => this.fire(uris));
   }
 
@@ -60,10 +69,10 @@ export class DeckDecorationProvider implements vscode.FileDecorationProvider, Di
     if (uri.scheme === terminalUriScheme) return this.terminalTabDecoration(uri);
     const target = parseAgentStatusDecorationUri(uri);
     if (target === undefined) return undefined;
-    const decoration = provideAgentStatusDecoration(
-      uri,
-      this.rollups.getDecorationStatus(target.kind, target.id),
-    );
+    const status = target.kind === 'chat'
+      ? this.chatStore?.get(target.id)
+      : this.rollups.getDecorationStatus(target.kind, target.id);
+    const decoration = provideAgentStatusDecoration(uri, status);
     if (decoration === undefined) return this.activeDecoration(target);
     return this.toFileDecoration(
       decoration.badge,
@@ -125,6 +134,7 @@ export class DeckDecorationProvider implements vscode.FileDecorationProvider, Di
 
   dispose(): void {
     this.statusWatch.dispose();
+    this.chatStatusWatch?.dispose();
     this.activeWatch?.dispose();
     this._onDidChangeFileDecorations.dispose();
   }

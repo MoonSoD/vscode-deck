@@ -548,6 +548,75 @@ describe('renderAgentHookScript', () => {
     expect(existsSync(statusDir)).toBe(false);
   });
 
+  it('writes a chat session status keyed by session id for a claude-vscode window without DECK_SESSION', async () => {
+    const root = tempRoot();
+    const sidecarDir = join(root, 'hooks');
+    const chatStatusDir = join(root, 'chat-status');
+    const scriptPath = writeScript(root, renderAgentHookScript(sidecarDir));
+
+    await runScript(scriptPath, {
+      env: { ...process.env, DECK_SESSION: undefined, CLAUDE_CODE_ENTRYPOINT: 'claude-vscode' },
+      input: '{"session_id":"vsc-1","hook_event_name":"Stop"}',
+    });
+
+    const status = JSON.parse(readFileSync(join(chatStatusDir, 'vsc-1.json'), 'utf8'));
+    expect(status.status).toBe('completed');
+    expect(typeof status.statusAt).toBe('number');
+    expect(existsSync(sidecarDir)).toBe(false);
+    expect(existsSync(join(root, 'status'))).toBe(false);
+  });
+
+  it('maps a claude-vscode PermissionRequest to needsInput with its message', async () => {
+    const root = tempRoot();
+    const sidecarDir = join(root, 'hooks');
+    const chatStatusDir = join(root, 'chat-status');
+    const scriptPath = writeScript(root, renderAgentHookScript(sidecarDir));
+
+    await runScript(scriptPath, {
+      env: { ...process.env, DECK_SESSION: undefined, CLAUDE_CODE_ENTRYPOINT: 'claude-vscode' },
+      input: '{"session_id":"vsc-1","hook_event_name":"PermissionRequest","message":"Allow Bash?"}',
+    });
+
+    expect(JSON.parse(readFileSync(join(chatStatusDir, 'vsc-1.json'), 'utf8'))).toMatchObject({
+      status: 'needsInput',
+      message: 'Allow Bash?',
+    });
+  });
+
+  it('does not write a sidecar or rename tmux for a claude-vscode window', async () => {
+    const root = tempRoot();
+    const sidecarDir = join(root, 'hooks');
+    const scriptPath = writeScript(root, renderAgentHookScript(sidecarDir));
+    const tmuxLogPath = writeTmuxStub(root);
+
+    await runScript(scriptPath, {
+      env: {
+        ...process.env,
+        DECK_SESSION: undefined,
+        CLAUDE_CODE_ENTRYPOINT: 'claude-vscode',
+        PATH: `${join(root, 'bin')}:${process.env.PATH ?? ''}`,
+      },
+      input: '{"session_id":"vsc-1","hook_event_name":"UserPromptSubmit"}',
+    });
+
+    expect(existsSync(sidecarDir)).toBe(false);
+    expect(existsSync(tmuxLogPath)).toBe(false);
+    expect(JSON.parse(readFileSync(join(root, 'chat-status', 'vsc-1.json'), 'utf8')).status).toBe('inProgress');
+  });
+
+  it('no-ops for a non-vscode entrypoint without DECK_SESSION', async () => {
+    const root = tempRoot();
+    const sidecarDir = join(root, 'hooks');
+    const scriptPath = writeScript(root, renderAgentHookScript(sidecarDir));
+
+    await runScript(scriptPath, {
+      env: { ...process.env, DECK_SESSION: undefined, CLAUDE_CODE_ENTRYPOINT: 'cli' },
+      input: '{"session_id":"cli-1","hook_event_name":"Stop"}',
+    });
+
+    expect(existsSync(join(root, 'chat-status'))).toBe(false);
+  });
+
   it('no-ops outside Deck when DECK_SESSION is absent', async () => {
     const root = tempRoot();
     const sidecarDir = join(root, 'hooks');
@@ -558,6 +627,7 @@ describe('renderAgentHookScript', () => {
       env: {
         ...process.env,
         DECK_SESSION: undefined,
+        CLAUDE_CODE_ENTRYPOINT: undefined,
         PATH: `${join(root, 'bin')}:${process.env.PATH ?? ''}`,
       },
       input: '{"session_id":"abc-123","hook_event_name":"SessionStart"}',
