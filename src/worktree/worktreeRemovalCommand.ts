@@ -39,6 +39,10 @@ interface TerminalCascadeLike {
   killWorktree(worktreePath: string): Promise<void>;
 }
 
+interface PreviewCascadeLike {
+  closeWorktree(worktreePath: string): Promise<void>;
+}
+
 const REMOVE_LABEL = 'Remove';
 const FORCE_REMOVE_LABEL = 'Force Remove';
 
@@ -65,6 +69,9 @@ export class WorktreeRemovalCommand {
       killWorktree: async () => undefined,
     },
     private readonly pendingWorktreeRemovals: Set<string> = new Set(),
+    private readonly previewCascade: PreviewCascadeLike = {
+      closeWorktree: async () => undefined,
+    },
   ) {}
 
   async run(node: WorktreeNodeLike | undefined): Promise<void> {
@@ -152,6 +159,7 @@ export class WorktreeRemovalCommand {
   ): Promise<void> {
     try {
       await bestEffort(() => this.terminalCascade.killWorktree(node.worktree.path));
+      await bestEffort(() => this.previewCascade.closeWorktree(node.worktree.path));
       await removeWorktree(node.repositoryPath, node.worktree.path, { force });
     } catch (error) {
       this.pendingWorktreeRemovals.delete(node.worktree.path);

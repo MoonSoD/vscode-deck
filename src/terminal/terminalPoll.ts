@@ -1,5 +1,6 @@
 import { agentNameFromWindowName, resolveTerminalLabel } from './terminalLabelResolver';
 import type { TmuxSession } from './tmuxCli';
+import { TERMINAL_SNAPSHOT_ANCHOR_SESSION } from './terminalSnapshotRuntime';
 import type { AgentName } from '../agent/agentTypes';
 import type { Disposable } from '../agent/agentStatusStore';
 
@@ -109,7 +110,12 @@ export class TerminalPoll implements Disposable {
   }
 
   private async runOnce(): Promise<void> {
-    const sessions = await this.options.listSessions();
+    // __deck_anchor is created and killed as a side effect of every restore
+    // attempt (ADR-0019, ADR-0032) — it must not read as a "real" session
+    // change, or the restore mechanism's own churn would keep re-triggering
+    // tree refreshes via onDidChangeSessionSet.
+    const sessions = (await this.options.listSessions())
+      .filter((session) => session.sessionName !== TERMINAL_SNAPSHOT_ANCHOR_SESSION);
     const agentIdentities = await this.resolveAgentNames(sessions);
     const previousSessionNames = new Set(this.labels.keys());
     const nextLabels = new Map<string, string>();

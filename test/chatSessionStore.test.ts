@@ -41,6 +41,33 @@ describe('ChatSessionStore', () => {
     expect(listener).toHaveBeenCalled();
   });
 
+  it('does not notify when a rescan finds the same sessions', async () => {
+    // The projects dir is watched recursively, so a write anywhere under it
+    // (e.g. an unrelated CLI session's own transcript, filtered out of the
+    // scan result) triggers a rescan. That must not fire onDidChange unless
+    // the actually-relevant session list changed, or every worktree row
+    // recomputes on every unrelated Claude Code write.
+    const sessions = [session({ sessionId: 's1' })];
+    let trigger = () => undefined as void;
+    const scan = vi.fn(async () => sessions);
+    const store = new ChatSessionStore({
+      scan,
+      watch: (onChange) => {
+        trigger = onChange;
+        return { dispose: () => undefined };
+      },
+      debounceMs: 0,
+    });
+    const listener = vi.fn();
+    store.onDidChange(listener);
+
+    await store.start();
+    trigger();
+    await vi.waitFor(() => expect(scan).toHaveBeenCalledTimes(2));
+
+    expect(listener).not.toHaveBeenCalled();
+  });
+
   it('stops watching when disposed', async () => {
     const dispose = vi.fn();
     const store = new ChatSessionStore({

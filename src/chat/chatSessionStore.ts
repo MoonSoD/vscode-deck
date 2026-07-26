@@ -65,9 +65,32 @@ export class ChatSessionStore {
   }
 
   private async rescan(fire: boolean): Promise<void> {
+    const previous = this.sessions;
     this.sessions = await this.deps.scan();
-    if (fire) for (const listener of this.listeners) listener();
+    if (fire && !sameSessions(previous, this.sessions)) {
+      for (const listener of this.listeners) listener();
+    }
   }
+}
+
+// The watch is recursive over the whole projects dir, so a write to any
+// session file triggers a rescan — including one filtered out of the result
+// entirely (a CLI session's own transcript, entrypoint `cli` not
+// `claude-vscode`). Comparing before firing keeps onDidChange (a whole-tree
+// refresh) limited to rescans that actually change what would render.
+function sameSessions(a: readonly ChatSession[], b: readonly ChatSession[]): boolean {
+  if (a.length !== b.length) return false;
+  const byId = new Map(a.map((session) => [session.sessionId, session]));
+  return b.every((session) => {
+    const previous = byId.get(session.sessionId);
+    return (
+      previous !== undefined
+      && previous.cwd === session.cwd
+      && previous.title === session.title
+      && previous.gitBranch === session.gitBranch
+      && previous.lastModified === session.lastModified
+    );
+  });
 }
 
 // Wires a ChatSessionStore to the real `~/.claude/projects` directory. The

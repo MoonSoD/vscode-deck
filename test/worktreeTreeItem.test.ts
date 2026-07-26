@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+  describePreviewWindowTreeItem,
   describeRepositoryTreeItem,
   describeTerminalTreeItem,
   describeWorktreeTreeItem,
 } from '../src/tree/worktreeTreeItem';
+import { previewPort } from '../src/browser/previewPort';
 
 describe('describeRepositoryTreeItem', () => {
   it('marks the repository matching the open workspace folder common dir as active', () => {
@@ -210,6 +212,22 @@ describe('describeTerminalTreeItem', () => {
       label: 'zsh',
       iconId: 'terminal',
       contextValue: 'deck.terminal.foreign',
+    });
+  });
+});
+
+describe('describePreviewWindowTreeItem', () => {
+  const worktree = '/work/alpha-main';
+  const def = { name: 'app', portBase: 3000 };
+
+  it('labels by name, describes the port, and links to the URL', () => {
+    const port = previewPort(worktree, def);
+    expect(describePreviewWindowTreeItem(def, worktree)).toEqual({
+      label: 'app',
+      description: `:${port}`,
+      tooltip: `app\nhttp://localhost:${port}/\nDev server running · click to open`,
+      iconId: 'globe',
+      contextValue: 'deck.previewWindow',
     });
   });
 });

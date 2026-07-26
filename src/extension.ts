@@ -1,4 +1,4 @@
-import { access, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { access, cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import * as vscode from 'vscode';
@@ -62,7 +62,20 @@ import { AgentStatusStore } from './agent/agentStatusStore';
 import { createChatSessionStore } from './chat/chatSessionStore';
 import { openChatSession, type OpenChatSessionTarget } from './chat/openChatSessionCommand';
 import { chatWindowTitleMatches, collectOpenChatWindowTitles } from './chat/openChatWindows';
+import { resolvePreviews } from './browser/resolvePreviews';
+import { PreviewStore } from './browser/previewStore';
+import { BrowserStateStore } from './browser/browserStateStore';
+import { ChromeLauncher } from './browser/chromeLauncher';
+import { CdpClient } from './browser/cdpClient';
+import { DeckBrowserController } from './browser/deckBrowserController';
+import { BrowserPoll } from './browser/browserPoll';
+import { findFreePort } from './browser/freePort';
+import { isPortListening } from './browser/portProbe';
+import { RunPreviewCommand } from './browser/runPreviewCommand';
+import { previewEnv, previewUrl } from './browser/previewPort';
+import type { PreviewDefinition } from './browser/previewDefinition';
 import { PendingChatOpenStore } from './chat/pendingChatOpenStore';
+import { createOpenChatWindowStore } from './chat/openChatWindowStore';
 import type { ChatSession } from './chat/scanChatSessions';
 import { TerminalPoll } from './terminal/terminalPoll';
 import type { AgentName } from './agent/agentTypes';
@@ -95,6 +108,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   // DECK_SESSION), so the same status machinery drives chat rows' dots and toasts.
   const chatStatuses = new AgentStatusStore(join(deckDir, 'chat-status'), 100);
   const chatStatusWatch = await chatStatuses.start();
+  // Each VS Code window sees only its own tabs, so it publishes the Claude chat
+  // titles it has open here and reads the union across all windows — that is how
+  // a session open in another window is recognised as open (see ADR-0053). Keyed
+  // by a per-window id (env.sessionId is per window; the ext-host pid hardens it).
+  const openChatWindows = createOpenChatWindowStore({
+    dir: join(deckDir, 'open-chat'),
+    windowKey: `${vscode.env.sessionId}-${process.pid}`,
+  });
+  const openChatWindowWatch = await openChatWindows.start();
   const resolveAgentName = async (sessionName: string): Promise<AgentName | undefined> => {
     const status = agentStatuses.get(sessionName);
     if (status !== undefined) return status.agent ?? 'claude';
@@ -225,6 +247,49 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const branchDeletionPreferences = new BranchDeletionPreferenceStore(context.globalState);
   const switcher = new WorktreeSwitcher(activeWorktrees);
   const detachedOpener = new DetachedOpener();
+
+  // DeckBrowser: per-Worktree isolated Chrome instances shown as PreviewWindow
+  // rows. PreviewStore resolves the rows from config; BrowserStateStore persists
+  // each Worktree's debug port and profile-seeding under deckDir; BrowserPoll
+  // observes which windows are live to drive the open badge.
+  const deckConfig = () => vscode.workspace.getConfiguration('deck');
+  const resolvePreviewDefs = (worktreePath: string) =>
+    resolvePreviews(
+      worktreePath,
+      deckConfig().get('previews'),
+      deckConfig().get('repositoryPreviews'),
+      { resolveCommonDir: (repositoryPath) => resolveCommonDirSafe(repositoryCommonDirCache, repositoryPath) },
+    );
+  const previewStore = new PreviewStore(resolvePreviewDefs);
+  const browserState = new BrowserStateStore(join(deckDir, 'browser', 'state.json'));
+  const deckBrowser = new DeckBrowserController({
+    launcher: new ChromeLauncher(
+      deckConfig().get<string>('chromePath') || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+    ),
+    cdp: new CdpClient(),
+    state: browserState,
+    deckDir,
+    allocatePort: findFreePort,
+    profileTemplate: () => deckConfig().get<string>('chromeProfileTemplate'),
+    copyDir: (from, to) => cp(from, to, { recursive: true }),
+    removeDir: (dir) => rm(dir, { recursive: true, force: true }),
+    killPid: (pid) => process.kill(pid),
+  });
+  // A preview is ON when its dev server is serving its PreviewPort — a focus-gated
+  // TCP probe of the previews the tree has resolved so far.
+  const browserPoll = new BrowserPoll({
+    previewEntries: () => previewStore.entries(),
+    isPortListening: (port) => isPortListening(port),
+    isFocused: () => vscode.window.state.focused,
+    onDidChangeFocus: (listener) =>
+      vscode.window.onDidChangeWindowState((state) => listener(state.focused)),
+    onError: (error) => console.warn('Deck: browser poll failed', error),
+  });
+  // The PreviewPort env (e.g. PORT=3042) injected into every Terminal Deck creates
+  // for a Worktree, so dev servers bind the port their PreviewWindow points at.
+  const resolvePreviewEnv = async (worktreePath: string): Promise<Record<string, string>> =>
+    previewEnv(worktreePath, await resolvePreviewDefs(worktreePath));
+
   const tree = new RepositoryTreeProvider(
     repositoryRegistry,
     activeWorktrees,
@@ -239,7 +304,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     ensureSnapshotRestored,
     chatSessions,
     chatStatuses,
+    previewStore,
+    browserPoll,
   );
+  // Applies the show/hide-closed-ChatSessions preference (hidden by default) to
+  // both the tree filter and the context key that swaps the title-bar toggle
+  // button — so a Settings edit and the button take the same path.
+  const applyShowClosedChatSessions = async (): Promise<void> => {
+    const show = deckConfig().get<boolean>('showClosedChatSessions', false);
+    tree.setShowClosedChatSessions(show);
+    await vscode.commands.executeCommand('setContext', 'deck.showClosedChatSessions', show);
+  };
+  void applyShowClosedChatSessions();
   agentExitSweep = tmuxAvailability.available
     ? new AgentExitSweep({
         sidecars: agentSidecars,
@@ -257,6 +333,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   function refreshTree(): void {
     tree.refresh();
     terminalPoll?.start();
+    browserPoll.start();
     wakeAgentExitSweep();
     syncExternalGitWatches();
   }
@@ -276,18 +353,27 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     refreshTree,
     undefined,
     ensureSnapshotRestored,
+    resolvePreviewEnv,
   );
   const runLauncher = new RunLauncherCommand(tmux, {
     refresh: refreshTree,
     beforeCreate: ensureSnapshotRestored,
     resolveCommonDir: (repositoryPath) =>
       resolveCommonDirSafe(repositoryCommonDirCache, repositoryPath),
+    resolvePreviewEnv,
   });
   const worktreeCreateLaunchers = new WorktreeCreateLauncherRunner(tmux, {
     refresh: refreshTree,
     beforeCreate: ensureSnapshotRestored,
     resolveCommonDir: (repositoryPath) =>
       resolveCommonDirSafe(repositoryCommonDirCache, repositoryPath),
+    resolvePreviewEnv,
+  });
+  const runPreview = new RunPreviewCommand(tmux, {
+    resolvePreviews: resolvePreviewDefs,
+    resolvePreviewEnv,
+    refresh: refreshTree,
+    beforeCreate: ensureSnapshotRestored,
   });
   const terminalEditorProvider = new TerminalEditorProvider(
     context.extensionUri,
@@ -324,6 +410,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   });
   const terminalPollSessionSetWatch = terminalPoll?.onDidChangeSessionSet(refreshTree);
   terminalPoll?.start();
+  browserPoll.start();
   const openTerminal = new OpenTerminalCommand({
     terminalPanels: terminalEditorProvider,
   });
@@ -380,6 +467,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     repositoryCommonDirCache,
     terminalCascade,
     pendingWorktreeRemovals,
+    deckBrowser,
   );
   const removeRepository = new RepositoryRemovalCommand(
     repositoryRegistry,
@@ -389,6 +477,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     refreshTree,
     terminalCascade,
     worktreeListCache,
+    deckBrowser,
   );
 
   treeView = vscode.window.createTreeView('deck.repositories', {
@@ -502,6 +591,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     repositoryCommonDirCache,
   );
 
+  // This window's own open Claude chat titles, kept so the store's union (which
+  // arrives from other windows via the watch) can be merged with them on demand.
+  let localOpenChatTitles: ReadonlySet<string> = new Set();
+  // The tree sees this window's tabs unioned with every other window's — the
+  // local set immediately, the rest as their watch fires. So a session open here
+  // is badged at once, and one open elsewhere as soon as that window publishes.
+  const pushOpenChatSessionWindows = (): void => {
+    tree.setOpenChatSessionWindows(new Set([...localOpenChatTitles, ...openChatWindows.union()]));
+  };
   const syncOpenChatSessionWindows = (): void => {
     // Read tab.input structurally by its viewType, matching findTerminalTabColumn
     // — a webview panel's TabInputWebview exposes viewType, and the Claude panel's
@@ -515,8 +613,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         };
       }),
     );
-    tree.setOpenChatSessionWindows(collectOpenChatWindowTitles(tabs));
+    localOpenChatTitles = collectOpenChatWindowTitles(tabs);
+    // Publish this window's set so other windows see it; ignore write failures —
+    // the union still reflects the local set through pushOpenChatSessionWindows.
+    void openChatWindows.publish([...localOpenChatTitles]).catch(() => undefined);
+    pushOpenChatSessionWindows();
   };
+  const openChatWindowsChangeWatch = openChatWindows.onDidChange(pushOpenChatSessionWindows);
+  // Rewrite this window's entry periodically so an open-but-idle window (no tab
+  // changes) stays fresh and its sessions don't age past the store's TTL.
+  const openChatHeartbeat = setInterval(() => {
+    void openChatWindows.heartbeat().catch(() => undefined);
+  }, 60_000);
   syncOpenChatSessionWindows();
 
   let lastRevealedActiveTerminalSessionName: string | undefined;
@@ -535,6 +643,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     agentStatusWatch,
     chatSessionWatch,
     chatStatusWatch,
+    openChatWindowWatch,
+    openChatWindowsChangeWatch,
+    { dispose: () => clearInterval(openChatHeartbeat) },
     activeChatReadWatch,
     pendingChatWatch,
     // An already-open worktree window resumes a queued ChatSession the instant
@@ -548,6 +659,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     ...(terminalPoll ? [terminalPoll] : []),
     ...(terminalPollWatch ? [terminalPollWatch] : []),
     ...(terminalPollSessionSetWatch ? [terminalPollSessionSetWatch] : []),
+    browserPoll,
     deckDecorationProvider,
     deckDecorationWatch,
     disconnectedTabBadgeWatch,
@@ -567,6 +679,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand('deck.refresh', () => {
       refreshTree();
     }),
+    // The title-bar toggle writes the preference; onDidChangeConfiguration applies
+    // it, so the button and a Settings edit converge on one path.
+    vscode.commands.registerCommand('deck.showClosedChatSessions', () =>
+      deckConfig().update('showClosedChatSessions', true, vscode.ConfigurationTarget.Global),
+    ),
+    vscode.commands.registerCommand('deck.hideClosedChatSessions', () =>
+      deckConfig().update('showClosedChatSessions', false, vscode.ConfigurationTarget.Global),
+    ),
     vscode.commands.registerCommand('deck.addRepository', () => addRepository.run()),
     vscode.commands.registerCommand('deck.addWorktree', (node) => addWorktree.run(node)),
     vscode.commands.registerCommand('deck.addTerminal', (node) => addTerminal.run(node)),
@@ -577,6 +697,26 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       // Opening a session is reading it — clear its unread "finished" mark.
       void chatStatuses.markRead(target.sessionId);
     }),
+    // Row click passes {worktreePath, previewName}; the definition is resolved
+    // from the (already-cached, since the row is showing) PreviewStore.
+    vscode.commands.registerCommand('deck.openPreview', async (target: { worktreePath: string; previewName: string }) => {
+      const def = previewStore.forWorktree(target.worktreePath).find((preview) => preview.name === target.previewName);
+      if (def === undefined) return;
+      await deckBrowser.openOrReveal(target.worktreePath, def);
+      browserPoll.start();
+    }),
+    // Context-menu commands receive the PreviewWindowNode (worktreePath + def).
+    vscode.commands.registerCommand('deck.closePreview', async (node: { worktreePath: string; def: PreviewDefinition }) => {
+      await deckBrowser.close(node.worktreePath, node.def);
+      browserPoll.start();
+    }),
+    vscode.commands.registerCommand('deck.reloadPreview', (node: { worktreePath: string; def: PreviewDefinition }) =>
+      deckBrowser.reload(node.worktreePath, node.def),
+    ),
+    vscode.commands.registerCommand('deck.copyPreviewUrl', (node: { worktreePath: string; def: PreviewDefinition }) =>
+      vscode.env.clipboard.writeText(previewUrl(node.worktreePath, node.def)),
+    ),
+    vscode.commands.registerCommand('deck.runPreview', (node) => runPreview.run(node)),
     vscode.commands.registerCommand('deck.openTerminalInNewWindow', (node) =>
       openTerminalInNewWindow.run(node),
     ),
@@ -603,6 +743,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }),
     vscode.workspace.onDidChangeWorkspaceFolders(refreshTree),
     vscode.workspace.onDidChangeConfiguration(async (event) => {
+      // PreviewDefinitions live in settings — re-resolve rows when they change.
+      if (event.affectsConfiguration('deck.previews') || event.affectsConfiguration('deck.repositoryPreviews')) {
+        previewStore.invalidate();
+      }
+      if (event.affectsConfiguration('deck.showClosedChatSessions')) {
+        await applyShowClosedChatSessions();
+      }
       if (!event.affectsConfiguration('deck.tmux')) return;
       const tmuxOptions = deckTmuxOptionsFromSettings();
       showDeckTmuxOptionWarnings(tmuxOptions);
@@ -631,6 +778,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       // An already-open worktree window that VS Code just focused (instead of
       // duplicating) resumes any ChatSession queued for it by another window.
       void openPendingChatSessionForCurrentWorktree(pendingChatOpens);
+      // Re-resolve PreviewDefinitions so committed `.deck/previews.json` edits
+      // made outside this window are picked up on refocus.
+      previewStore.invalidate();
     }),
     treeView.onDidChangeVisibility((event) => {
       if (event.visible) refreshTree();

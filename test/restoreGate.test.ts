@@ -252,6 +252,23 @@ describe('createRestoreCoordinator', () => {
     });
   });
 
+  it('does not repeat a mechanical restore across separate calls while the DeckSocket stays bare', async () => {
+    // Simulates a caller (e.g. a tree refresh) invoking ensureRestored() on
+    // every tick against a snapshot that legitimately restores no sessions —
+    // it must attempt the restore once, not on every call.
+    const restore = vi.fn(async () => undefined);
+    const coordinator = createRestoreCoordinator({
+      listSessions: async () => [{ sessionName: '__deck_anchor' }],
+      restore,
+    });
+
+    await coordinator.ensureRestored();
+    await coordinator.ensureRestored();
+    await coordinator.ensureRestored();
+
+    expect(restore).toHaveBeenCalledOnce();
+  });
+
   it('restores again after a later DeckSocket death', async () => {
     const restore = vi.fn(async () => undefined);
     let sessions: Array<{ sessionName: string }> = [];

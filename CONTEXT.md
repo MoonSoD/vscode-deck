@@ -115,7 +115,7 @@ _Avoid_: alert, popup; "agent needs input"/"agent done" alone (unactionable with
 ### Claude chat sessions
 
 **ChatSession**:
-A Claude Code conversation the Claude VS Code extension surfaces as its own editor **window** (a webview), belonging to a Worktree and shown as a row under it alongside Terminals. Deck discovers it from the on-disk Claude session store (the sessions whose entrypoint is the VS Code extension), lists the recent ones (touched within the last two days) plus any open right now — a green dot marks the live ones — and opens or reveals it by handing its id to the extension. Deck only observes and reveals it; it never owns the window's lifecycle. Unlike an AgentSession it has no Terminal and no tmux session, and it resumes only within its own Worktree, so Deck opens one that belongs to another Worktree by offering to open that Worktree in a new window rather than resuming it blank in the wrong folder.
+A Claude Code conversation the Claude VS Code extension surfaces as its own editor **window** (a webview), belonging to a Worktree and shown as a row under it alongside Terminals. Deck discovers it from the on-disk Claude session store (the sessions whose entrypoint is the VS Code extension), lists the recent ones (touched within the last two days) plus any open right now — a green dot marks the live ones — and opens or reveals it by handing its id to the extension. A session is **live** when its window is open in any VS Code window (each window publishes its open titles to a shared registry, so open state is cross-window, not just this window's tabs) or its agent is running; the recent-but-**closed** ones are hidden by default and revealed by the `deck.showClosedChatSessions` toggle in the view's title bar. Deck only observes and reveals it; it never owns the window's lifecycle. Unlike an AgentSession it has no Terminal and no tmux session, and it resumes only within its own Worktree, so Deck opens one that belongs to another Worktree by offering to open that Worktree in a new window rather than resuming it blank in the wrong folder.
 _Avoid_: AgentSession (that is an agent observed running *inside* a Terminal; a ChatSession is a standalone window with no Terminal), Terminal (no tmux session, not persisted by Deck), tab (the window is the durable thing Deck reveals, not a Deck-owned tab), Claude window (name the concept, not its surface)
 
 **ChatSessionStatus**:
@@ -141,6 +141,28 @@ _Avoid_: tmux session, tmux window, pane (the backing mechanism); tab (a disposa
 **DisconnectedTab**:
 A Terminal tab whose view outlived the extension host that wired it. This happens when the extension host restarts without a full window reload, such as an extension update or Developer: Restart Extension Host. The Terminal itself is still healthy on the DeckSocket, but the tab keeps showing its last scrollback while keystrokes and output no longer cross the dead webview bridge. VS Code does not re-resolve that surviving custom-editor input, so Deck can only repair it by closing and reopening the tab. Deck marks a tab as a DisconnectedTab only after evidence: the tab is active in its group and still has no registered panel after a grace period. The mark is a grey `!` FileDecoration on the `deck-terminal:` URI and a Reopen Terminals action; Deck never reopens tabs without user consent.
 _Avoid_: dead tab (the Terminal did not die), stale tab (the defect is lost interactivity, not just old content), broken terminal (the Terminal is healthy)
+
+### Previews
+
+**DeckBrowser**:
+Deck's own set of isolated Chrome instances — one `--user-data-dir` and `--remote-debugging-port` per Worktree — the browser analog of the DeckSocket. Deck lists, reveals, and closes windows over the Chrome DevTools Protocol's HTTP endpoints.
+_Avoid_: the user's own Chrome (a distinct thing; DeckBrowser profiles are Deck-managed and isolated), integrated browser (VS Code's Simple Browser — DeckBrowser opens real Chrome windows).
+
+**PreviewWindow**:
+A real Chrome window Deck owns, bound to one Worktree + PreviewDefinition, showing that preview's deterministic URL as a chromeless `--app` window. Shown as a row under a Worktree beside Terminals and ChatSessions; clicking opens it, or reveals it if already open. Like a Terminal it is the durable thing (its Chrome profile persists on disk), but unlike a Terminal, Chrome — not Deck — keeps it alive across reloads.
+_Avoid_: tab, webview, integrated browser (it is an OS Chrome window, not a VS Code panel); Simple Browser.
+
+**PreviewDefinition**:
+A user-declared named preview (name, base port, optional env var and URL path) — the data behind a PreviewWindow row. Sourced exactly like a TerminalLauncher and merged from three places (committed `<worktree>/.deck/previews.json`, per-Repository `deck.repositoryPreviews`, global `deck.previews`), deduped by name.
+_Avoid_: launcher (it declares a browsable surface, not a command to run), preset.
+
+**PreviewPort**:
+The deterministic port Deck derives per Worktree + PreviewDefinition — the definition's base plus a stable per-Worktree slot (a hash of the Worktree path, mirroring the tmux session-name derivation). Used both to form the PreviewWindow URL and, injected as an env var into the Worktree's Terminals, to make the dev server bind the same port — so browser and server agree with no handshake.
+_Avoid_: dev server port (the server binds it because Deck told it to; the port is Deck's, derived from the Worktree), random port.
+
+**BrowserPoll**:
+The focus-gated ~2s poll that observes which PreviewWindows are live — listing each Worktree instance's CDP targets and matching them to PreviewDefinitions by PreviewPort — and drives the "open" badge. The DeckBrowser's counterpart to the TerminalPoll; a poll, not a CDP event client (ADR-0052, ADR-0054).
+_Avoid_: CDP event client (Deck polls, not subscribes), browser watcher.
 
 ### External changes
 

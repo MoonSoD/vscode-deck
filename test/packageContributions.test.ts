@@ -101,6 +101,43 @@ describe('package contributions', () => {
     });
   });
 
+  it('contributes the show-closed-chat-sessions toggle (setting, commands, title-bar menu)', () => {
+    expect(pkg.contributes.configuration?.properties?.['deck.showClosedChatSessions']).toMatchObject({
+      type: 'boolean',
+      default: false,
+    });
+    expect(pkg.contributes.commands).toContainEqual({
+      command: 'deck.showClosedChatSessions',
+      title: 'Deck: Show Closed Chat Sessions',
+      icon: '$(eye-closed)',
+    });
+    expect(pkg.contributes.commands).toContainEqual({
+      command: 'deck.hideClosedChatSessions',
+      title: 'Deck: Hide Closed Chat Sessions',
+      icon: '$(eye)',
+    });
+    // Only one button shows at a time, swapped by the context key the setting mirrors.
+    expect(pkg.contributes.menus['view/title']).toContainEqual({
+      command: 'deck.showClosedChatSessions',
+      when: 'view == deck.repositories && !deck.showClosedChatSessions',
+      group: 'navigation',
+    });
+    expect(pkg.contributes.menus['view/title']).toContainEqual({
+      command: 'deck.hideClosedChatSessions',
+      when: 'view == deck.repositories && deck.showClosedChatSessions',
+      group: 'navigation',
+    });
+    // Title-bar-only, like the other view commands — hidden from the palette.
+    expect(pkg.contributes.menus.commandPalette).toContainEqual({
+      command: 'deck.showClosedChatSessions',
+      when: 'false',
+    });
+    expect(pkg.contributes.menus.commandPalette).toContainEqual({
+      command: 'deck.hideClosedChatSessions',
+      when: 'false',
+    });
+  });
+
   it('contributes the curated safe automatic-rename-format setting only', () => {
     expect(pkg.contributes.configuration?.properties?.['deck.tmux.automaticRenameFormat']).toMatchObject({
       type: 'string',

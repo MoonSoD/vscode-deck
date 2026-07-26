@@ -17,6 +17,10 @@ interface TerminalCascadeLike {
   killWorktree(worktreePath: string): Promise<void>;
 }
 
+interface PreviewCascadeLike {
+  closeWorktree(worktreePath: string): Promise<void>;
+}
+
 interface WorktreeListCacheLike {
   get(commonDir: string): ReadonlyArray<{ path: string }> | undefined;
 }
@@ -37,6 +41,9 @@ export class RepositoryRemovalCommand {
       killWorktree: async () => undefined,
     },
     private readonly worktreeListCache: WorktreeListCacheLike | undefined = undefined,
+    private readonly previewCascade: PreviewCascadeLike = {
+      closeWorktree: async () => undefined,
+    },
   ) {}
 
   async run(node: RepositoryNodeLike | undefined): Promise<void> {
@@ -93,6 +100,11 @@ export class RepositoryRemovalCommand {
         await this.terminalCascade.killWorktree(worktreePath);
       } catch {
         // Tmux cleanup must not block RepositoryRemoval.
+      }
+      try {
+        await this.previewCascade.closeWorktree(worktreePath);
+      } catch {
+        // Chrome cleanup must not block RepositoryRemoval.
       }
     }
   }

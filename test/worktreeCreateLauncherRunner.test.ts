@@ -70,9 +70,9 @@ describe('WorktreeCreateLauncherRunner', () => {
       vscodeState.userLaunchers,
       vscodeState.repositoryLaunchers,
     );
-    expect(tmux.ensureSession).toHaveBeenNthCalledWith(1, 'wt-_work_repo__term-1', '/work/repo');
-    expect(tmux.ensureSession).toHaveBeenNthCalledWith(2, 'wt-_work_repo__term-2', '/work/repo');
-    expect(tmux.ensureSession).toHaveBeenNthCalledWith(3, 'wt-_work_repo__term-3', '/work/repo');
+    expect(tmux.ensureSession).toHaveBeenNthCalledWith(1, 'wt-_work_repo__term-1', '/work/repo', {});
+    expect(tmux.ensureSession).toHaveBeenNthCalledWith(2, 'wt-_work_repo__term-2', '/work/repo', {});
+    expect(tmux.ensureSession).toHaveBeenNthCalledWith(3, 'wt-_work_repo__term-3', '/work/repo', {});
     expect(tmux.sendCommandLine).toHaveBeenNthCalledWith(
       1,
       'wt-_work_repo__term-1',

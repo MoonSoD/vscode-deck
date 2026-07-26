@@ -105,6 +105,36 @@ describe('TerminalPoll', () => {
     expect(sessionSetChanges).not.toHaveBeenCalled();
   });
 
+  it('ignores the restore anchor session when detecting a session-set change', async () => {
+    // The reboot-restore anchor (__deck_anchor) is created and killed as a
+    // side effect of every restore attempt (ADR-0019). It must not count as a
+    // "real" session change, or the restore mechanism's own churn would keep
+    // re-triggering tree refreshes.
+    const scheduler = new ManualScheduler();
+    let sessions: TmuxSession[] = [
+      { sessionName: 'term-1', windowName: 'zsh', paneTitle: ':/work/alpha' },
+    ];
+    const poll = new TerminalPoll({
+      listSessions: vi.fn(async () => sessions),
+      isFocused: () => true,
+      onDidChangeFocus: () => ({ dispose: vi.fn() }),
+      scheduler,
+    });
+    const sessionSetChanges = vi.fn();
+    poll.onDidChangeSessionSet(sessionSetChanges);
+
+    poll.start();
+    await flush();
+
+    sessions = [
+      { sessionName: 'term-1', windowName: 'zsh', paneTitle: ':/work/alpha' },
+      { sessionName: '__deck_anchor', windowName: 'bash', paneTitle: '' },
+    ];
+    await scheduler.runNext();
+
+    expect(sessionSetChanges).not.toHaveBeenCalled();
+  });
+
   it('does not emit a session-set change when the session names are unchanged', async () => {
     const scheduler = new ManualScheduler();
     let sessions: TmuxSession[] = [

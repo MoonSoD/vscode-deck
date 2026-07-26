@@ -802,6 +802,148 @@ describe('RepositoryTreeProvider', () => {
     expect(chatRow?.description).toContain('🟢');
   });
 
+  it('hides recent-but-closed chat sessions until they are toggled back on', async () => {
+    const chatSessions = {
+      all: () => [
+        { sessionId: 'live', cwd: '/work/alpha-main', title: 'Live chat', lastModified: 300 },
+        { sessionId: 'closed', cwd: '/work/alpha-main', title: 'Closed chat', lastModified: 200 },
+      ],
+      onDidChange: () => ({ dispose: () => undefined }),
+    };
+    const provider = new RepositoryTreeProvider(
+      registry(['/work/alpha-main']),
+      { get: vi.fn() } as unknown as ActiveWorktreeStore,
+      { get: vi.fn() } as unknown as WorktreeOrderStore,
+      { get: vi.fn(), set: vi.fn(async () => undefined) } as unknown as WorktreeListCacheStore,
+      { get: vi.fn(() => '/git/alpha'), set: vi.fn(async () => undefined) } as unknown as RepositoryCommonDirCache,
+      { listSessions: vi.fn(async () => []) },
+      true,
+      new Set(),
+      undefined,
+      undefined,
+      () => Promise.resolve(),
+      chatSessions,
+    );
+    // Only the open window's title is live — the other is a recent-but-closed one.
+    provider.setOpenChatSessionWindows(new Set(['Live chat']));
+    provider.setShowClosedChatSessions(false);
+
+    const chatLabels = async () => {
+      const repositories = provider.getChildren();
+      if (!Array.isArray(repositories)) throw new Error('expected sync repository roots');
+      const worktrees = await provider.getChildren(repositories[0]);
+      if (!Array.isArray(worktrees)) throw new Error('expected worktree children');
+      const rows = await provider.getChildren(worktrees[0]);
+      if (!Array.isArray(rows)) throw new Error('expected worktree child rows');
+      return rows.filter((row) => row.contextValue === 'deck.chatSession').map((row) => row.label);
+    };
+
+    expect(await chatLabels()).toEqual(['Live chat']);
+
+    provider.setShowClosedChatSessions(true);
+    expect(await chatLabels()).toEqual(['Live chat', 'Closed chat']);
+  });
+
+  it('reveals a session opened in another window while closed ones stay hidden', async () => {
+    const chatSessions = {
+      all: () => [
+        { sessionId: 'elsewhere', cwd: '/work/alpha-main', title: 'Open elsewhere', lastModified: 300 },
+        { sessionId: 'closed', cwd: '/work/alpha-main', title: 'Closed chat', lastModified: 200 },
+      ],
+      onDidChange: () => ({ dispose: () => undefined }),
+    };
+    const provider = new RepositoryTreeProvider(
+      registry(['/work/alpha-main']),
+      { get: vi.fn() } as unknown as ActiveWorktreeStore,
+      { get: vi.fn() } as unknown as WorktreeOrderStore,
+      { get: vi.fn(), set: vi.fn(async () => undefined) } as unknown as WorktreeListCacheStore,
+      { get: vi.fn(() => '/git/alpha'), set: vi.fn(async () => undefined) } as unknown as RepositoryCommonDirCache,
+      { listSessions: vi.fn(async () => []) },
+      true,
+      new Set(),
+      undefined,
+      undefined,
+      () => Promise.resolve(),
+      chatSessions,
+    );
+    provider.setShowClosedChatSessions(false);
+    // The extension feeds the cross-window union here — a title open in another
+    // window, not on any tab of this one — and it must count as live.
+    provider.setOpenChatSessionWindows(new Set(['Open elsewhere']));
+
+    const repositories = provider.getChildren();
+    if (!Array.isArray(repositories)) throw new Error('expected sync repository roots');
+    const worktrees = await provider.getChildren(repositories[0]);
+    if (!Array.isArray(worktrees)) throw new Error('expected worktree children');
+    const rows = await provider.getChildren(worktrees[0]);
+    if (!Array.isArray(rows)) throw new Error('expected worktree child rows');
+
+    const chatLabels = rows.filter((row) => row.contextValue === 'deck.chatSession').map((row) => row.label);
+    expect(chatLabels).toEqual(['Open elsewhere']);
+  });
+
+  it('shows a preview row only for a preview whose port is listening, after terminals and chat sessions', async () => {
+    const tmux = {
+      listSessions: vi.fn(async () => [
+        { sessionName: 'wt-_work_alpha-main__term-1', windowName: 'zsh' },
+      ]),
+    };
+    const chatSessions = {
+      all: () => [
+        { sessionId: 'c1', cwd: '/work/alpha-main', title: 'Fix the bug', lastModified: 300 },
+      ],
+      onDidChange: () => ({ dispose: () => undefined }),
+    };
+    const previews = {
+      forWorktree: (worktreePath: string) =>
+        worktreePath === '/work/alpha-main'
+          ? [{ name: 'app', portBase: 3000 }, { name: 'storybook', portBase: 6006 }]
+          : [],
+      onDidChange: () => ({ dispose: () => undefined }),
+    };
+    // Only 'app' is ON (its dev server is serving); 'storybook' is off → no row.
+    const previewOn = {
+      isOn: (_worktreePath: string, name: string) => name === 'app',
+      onDidChange: () => ({ dispose: () => undefined }),
+    };
+    const provider = new RepositoryTreeProvider(
+      registry(['/work/alpha-main']),
+      { get: vi.fn() } as unknown as ActiveWorktreeStore,
+      { get: vi.fn() } as unknown as WorktreeOrderStore,
+      { get: vi.fn(), set: vi.fn(async () => undefined) } as unknown as WorktreeListCacheStore,
+      { get: vi.fn(() => '/git/alpha'), set: vi.fn(async () => undefined) } as unknown as RepositoryCommonDirCache,
+      tmux,
+      true,
+      new Set(),
+      undefined,
+      undefined,
+      () => Promise.resolve(),
+      chatSessions,
+      undefined,
+      previews,
+      previewOn,
+    );
+    const repositories = provider.getChildren();
+    if (!Array.isArray(repositories)) throw new Error('expected sync repository roots');
+    const worktrees = await provider.getChildren(repositories[0]);
+    if (!Array.isArray(worktrees)) throw new Error('expected worktree children');
+
+    const rows = await provider.getChildren(worktrees[0]);
+    if (!Array.isArray(rows)) throw new Error('expected worktree child rows');
+
+    // storybook is off → only the running 'app' preview has a row.
+    expect(rows.map((row) => row.label)).toEqual(['zsh', 'Fix the bug', 'app']);
+
+    const appRow = rows.find((row) => row.label === 'app');
+    expect(appRow?.contextValue).toBe('deck.previewWindow');
+    expect(appRow?.command).toEqual(
+      expect.objectContaining({
+        command: 'deck.openPreview',
+        arguments: [{ worktreePath: '/work/alpha-main', previewName: 'app' }],
+      }),
+    );
+  });
+
   it('renders Terminals in stored order with unknown live Terminals appended by term-N', async () => {
     const tmux = {
       listSessions: vi.fn(async () => [
