@@ -4,10 +4,10 @@ import { parsePreviewDefinitions } from '../src/browser/previewDefinition';
 describe('parsePreviewDefinitions', () => {
   it('parses named previews with their base port and optional fields', () => {
     expect(parsePreviewDefinitions([
-      { name: 'app', portBase: 3000, portEnv: 'PORT' },
+      { name: 'app', portBase: 3000, portEnv: 'PORT', command: 'pnpm dev' },
       { name: 'storybook', portBase: 6006, path: '/?path=/story' },
     ])).toEqual([
-      { name: 'app', portBase: 3000, portEnv: 'PORT' },
+      { name: 'app', portBase: 3000, portEnv: 'PORT', command: 'pnpm dev' },
       { name: 'storybook', portBase: 6006, path: '/?path=/story' },
     ]);
   });

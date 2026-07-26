@@ -220,21 +220,14 @@ describe('describePreviewWindowTreeItem', () => {
   const worktree = '/work/alpha-main';
   const def = { name: 'app', portBase: 3000 };
 
-  it('labels by name and describes the port when closed', () => {
+  it('labels by name, describes the port, and links to the URL', () => {
     const port = previewPort(worktree, def);
     expect(describePreviewWindowTreeItem(def, worktree)).toEqual({
       label: 'app',
       description: `:${port}`,
-      tooltip: `app\nhttp://localhost:${port}/`,
+      tooltip: `app\nhttp://localhost:${port}/\nDev server running · click to open`,
       iconId: 'globe',
       contextValue: 'deck.previewWindow',
     });
-  });
-
-  it('flips the contextValue and marks the description when open', () => {
-    const item = describePreviewWindowTreeItem(def, worktree, { open: true });
-    expect(item.contextValue).toBe('deck.previewWindow.open');
-    expect(item.description).toContain('open');
-    expect(item.tooltip).toContain('Open');
   });
 });

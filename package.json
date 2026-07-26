@@ -180,6 +180,10 @@
               "path": {
                 "type": "string",
                 "description": "URL path the window loads. Defaults to /."
+              },
+              "command": {
+                "type": "string",
+                "description": "Dev-server command the ▶ Run button types into a fresh Terminal (with the PreviewPort injected as env), e.g. `pnpm dev`."
               }
             },
             "required": [
@@ -219,6 +223,10 @@
                     "path": {
                       "type": "string",
                       "description": "URL path the window loads. Defaults to /."
+                    },
+                    "command": {
+                      "type": "string",
+                      "description": "Dev-server command the ▶ Run button types into a fresh Terminal (with the PreviewPort injected as env), e.g. `pnpm dev`."
                     }
                   },
                   "required": [
@@ -338,6 +346,11 @@
         "command": "deck.runLauncher",
         "title": "Run Terminal Launcher",
         "icon": "$(play)"
+      },
+      {
+        "command": "deck.runPreview",
+        "title": "Run Preview",
+        "icon": "$(run)"
       },
       {
         "command": "deck.openTerminal",
@@ -462,6 +475,11 @@
           "group": "inline@5"
         },
         {
+          "command": "deck.runPreview",
+          "when": "view == deck.repositories && (viewItem == deck.worktree || viewItem == deck.worktree.active || viewItem == deck.worktree.main) && deck.tmuxAvailable",
+          "group": "inline@6"
+        },
+        {
           "command": "deck.switchWorktree",
           "when": "view == deck.repositories && (viewItem == deck.worktree || viewItem == deck.worktree.main)",
           "group": "navigation@1"
@@ -498,17 +516,17 @@
         },
         {
           "command": "deck.closePreview",
-          "when": "view == deck.repositories && viewItem == deck.previewWindow.open",
+          "when": "view == deck.repositories && viewItem == deck.previewWindow",
           "group": "navigation@1"
         },
         {
           "command": "deck.reloadPreview",
-          "when": "view == deck.repositories && viewItem == deck.previewWindow.open",
+          "when": "view == deck.repositories && viewItem == deck.previewWindow",
           "group": "navigation@2"
         },
         {
           "command": "deck.copyPreviewUrl",
-          "when": "view == deck.repositories && (viewItem == deck.previewWindow || viewItem == deck.previewWindow.open)",
+          "when": "view == deck.repositories && viewItem == deck.previewWindow",
           "group": "navigation@3"
         }
       ],
@@ -556,6 +574,10 @@
         },
         {
           "command": "deck.runLauncher",
+          "when": "false"
+        },
+        {
+          "command": "deck.runPreview",
           "when": "false"
         },
         {

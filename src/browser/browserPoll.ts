@@ -1,6 +1,5 @@
 import type { PreviewDefinition } from './previewDefinition';
 import { previewPort } from './previewPort';
-import { targetPort, type CdpTarget } from './cdpClient';
 
 export interface Disposable {
   dispose(): void;
@@ -12,10 +11,9 @@ export interface BrowserPollScheduler {
 }
 
 export interface BrowserPollDeps {
-  // The launched Worktree instances to probe (from the BrowserStateStore).
-  worktrees(): Promise<{ worktreePath: string; debugPort: number }[]>;
-  previewsFor(worktreePath: string): readonly PreviewDefinition[];
-  liveTargets(debugPort: number): Promise<CdpTarget[]>;
+  // The (Worktree, previews) pairs to probe — the PreviewStore's resolved entries.
+  previewEntries(): { worktreePath: string; previews: readonly PreviewDefinition[] }[];
+  isPortListening(port: number): Promise<boolean>;
   isFocused(): boolean;
   onDidChangeFocus(listener: (focused: boolean) => void): Disposable;
   scheduler?: BrowserPollScheduler;
@@ -23,17 +21,19 @@ export interface BrowserPollDeps {
   onError?: (error: unknown) => void;
 }
 
-// Observes which PreviewWindows are live — the DeckBrowser's TerminalPoll. A
-// focus-gated ~2s tick lists each launched Worktree instance's CDP targets and
-// matches them to PreviewDefinitions by PreviewPort, maintaining the open set the
-// tree badges. A poll (not a CDP event client) for the same reason ADR-0052 chose
-// one for Terminals: the latency is sub-human and an event client is far heavier.
+// Observes which PreviewWindows are ON — a focus-gated ~2s tick that TCP-probes
+// each preview's deterministic PreviewPort. A preview is ON when its dev server
+// is serving that port; that is the signal the tree uses to decide whether to
+// show the preview's child row. A poll (not an event source) for the same reason
+// ADR-0052/0054 chose one: the latency is sub-human and the mechanism is trivial.
+// Its onDidChange is structural — the set of rows changes — so the tree does a
+// whole-subtree refresh.
 export class BrowserPoll implements Disposable {
   private readonly scheduler: BrowserPollScheduler;
   private readonly intervalMs: number;
   private readonly onError: (error: unknown) => void;
   private readonly listeners = new Set<() => void>();
-  private openKeys: ReadonlySet<string> = new Set();
+  private onKeys: ReadonlySet<string> = new Set();
   private focusSubscription: Disposable | undefined;
   private timer: unknown;
   private running = false;
@@ -48,8 +48,8 @@ export class BrowserPoll implements Disposable {
     this.onError = deps.onError ?? (() => undefined);
   }
 
-  isOpen(worktreePath: string, previewName: string): boolean {
-    return this.openKeys.has(openKey(worktreePath, previewName));
+  isOn(worktreePath: string, previewName: string): boolean {
+    return this.onKeys.has(onKey(worktreePath, previewName));
   }
 
   onDidChange(listener: () => void): Disposable {
@@ -99,26 +99,18 @@ export class BrowserPoll implements Disposable {
   }
 
   private async runOnce(): Promise<void> {
-    const worktrees = await this.deps.worktrees();
-    const nextOpenKeys = new Set<string>();
+    const nextOnKeys = new Set<string>();
 
-    for (const { worktreePath, debugPort } of worktrees) {
-      const previews = this.deps.previewsFor(worktreePath);
-      if (previews.length === 0) continue;
-      const livePorts = new Set(
-        (await this.deps.liveTargets(debugPort))
-          .map((target) => targetPort(target.url))
-          .filter((port): port is string => port !== undefined),
-      );
+    for (const { worktreePath, previews } of this.deps.previewEntries()) {
       for (const preview of previews) {
-        if (livePorts.has(String(previewPort(worktreePath, preview)))) {
-          nextOpenKeys.add(openKey(worktreePath, preview.name));
+        if (await this.deps.isPortListening(previewPort(worktreePath, preview))) {
+          nextOnKeys.add(onKey(worktreePath, preview.name));
         }
       }
     }
 
-    if (!sameKeys(this.openKeys, nextOpenKeys)) {
-      this.openKeys = nextOpenKeys;
+    if (!sameKeys(this.onKeys, nextOnKeys)) {
+      this.onKeys = nextOnKeys;
       for (const listener of this.listeners) listener();
     }
   }
@@ -130,7 +122,7 @@ export class BrowserPoll implements Disposable {
   }
 }
 
-function openKey(worktreePath: string, previewName: string): string {
+function onKey(worktreePath: string, previewName: string): string {
   return `${worktreePath}::${previewName}`;
 }
 

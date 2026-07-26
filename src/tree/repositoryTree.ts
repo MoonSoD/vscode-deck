@@ -88,10 +88,11 @@ interface PreviewLookup {
   onDidChange(listener: () => void): { dispose(): void };
 }
 
-// Which PreviewWindows are currently live (from BrowserPoll). Its onDidChange
-// only flips the open badge on existing rows, so it re-renders in place.
-interface PreviewOpenLookup {
-  isOpen(worktreePath: string, previewName: string): boolean;
+// Which previews are ON — their dev server is serving the PreviewPort (from
+// BrowserPoll). A preview has a child row only while ON, so onDidChange is
+// structural: the set of rows changes and the subtree is refreshed.
+interface PreviewOnLookup {
+  isOn(worktreePath: string, previewName: string): boolean;
   onDidChange(listener: () => void): { dispose(): void };
 }
 
@@ -247,17 +248,15 @@ class ChatSessionNode extends vscode.TreeItem {
   }
 }
 
-// A PreviewWindow row lives under a Worktree beside Terminals and ChatSessions.
-// It has no tmux session; clicking it asks the DeckBrowser to open-or-reveal the
-// worktree's Chrome window for this preview. Its rows come from config
-// (PreviewDefinitions), so the set changes structurally when config is edited.
+// A PreviewWindow row appears under a Worktree only while its preview is ON (dev
+// server serving the port). Clicking it asks the DeckBrowser to open-or-reveal
+// the worktree's Chrome window for this preview.
 class PreviewWindowNode extends vscode.TreeItem {
   private renderSignature = '';
 
   constructor(
     public def: PreviewDefinition,
     public worktreeNode: WorktreeNode,
-    open: boolean,
   ) {
     super('', vscode.TreeItemCollapsibleState.None);
     this.id = `preview::${worktreeNode.worktree.path}::${def.name}`;
@@ -266,11 +265,11 @@ class PreviewWindowNode extends vscode.TreeItem {
       title: 'Open Preview',
       arguments: [{ worktreePath: worktreeNode.worktree.path, previewName: def.name }],
     };
-    this.update(def, worktreeNode, open);
+    this.update(def, worktreeNode);
   }
 
-  update(def: PreviewDefinition, worktreeNode: WorktreeNode, open: boolean): boolean {
-    const item = describePreviewWindowTreeItem(def, worktreeNode.worktree.path, { open });
+  update(def: PreviewDefinition, worktreeNode: WorktreeNode): boolean {
+    const item = describePreviewWindowTreeItem(def, worktreeNode.worktree.path);
     const nextSignature = JSON.stringify([item.label, item.description, item.contextValue, item.iconId]);
     const changed = this.renderSignature !== '' && this.renderSignature !== nextSignature;
 
@@ -351,7 +350,7 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
     private readonly chatSessions?: ChatSessionLookup,
     private readonly chatStatuses?: AgentStatusLookup,
     private readonly previews?: PreviewLookup,
-    private readonly previewOpen?: PreviewOpenLookup,
+    private readonly previewOn?: PreviewOnLookup,
   ) {
     this.syncAgentStatusDecorations();
     this.agentStatuses?.onDidChange(() => {
@@ -371,7 +370,9 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
     // whole-subtree refresh; a PreviewWindow opening/closing only flips the open
     // badge on the affected rows.
     this.previews?.onDidChange(() => this._onDidChangeTreeData.fire(undefined));
-    this.previewOpen?.onDidChange(() => this.refreshRenderedPreviewWindows());
+    // A preview turning ON/OFF adds or removes its row — structural, so refresh
+    // the whole subtree (like the config-change path above).
+    this.previewOn?.onDidChange(() => this._onDidChangeTreeData.fire(undefined));
 
     if (typeof tmuxOrAvailable === 'boolean') {
       this.tmux = { listSessions: async () => [] };
@@ -815,21 +816,22 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
     }
   }
 
+  // Only ON previews (dev server serving the port) get a row; a configured-but-off
+  // preview is not a row — it is the worktree's inline ▶ Run button instead.
   private getPreviewWindowChildren(element: WorktreeNode): PreviewWindowNode[] {
-    const defs = this.previews?.forWorktree(element.worktree.path) ?? [];
-    if (defs.length === 0) return [];
-
     const worktreePath = element.worktree.path;
+    const defs = (this.previews?.forWorktree(worktreePath) ?? [])
+      .filter((def) => this.previewOn?.isOn(worktreePath, def.name) ?? false);
+
     const liveKeys = new Set(defs.map((def) => previewNodeKey(worktreePath, def.name)));
     const nodes = defs.map((def) => {
       const key = previewNodeKey(worktreePath, def.name);
-      const open = this.previewOpen?.isOpen(worktreePath, def.name) ?? false;
       const existing = this.renderedPreviewWindows.get(key);
       if (existing) {
-        existing.update(def, element, open);
+        existing.update(def, element);
         return existing;
       }
-      const node = new PreviewWindowNode(def, element, open);
+      const node = new PreviewWindowNode(def, element);
       this.renderedPreviewWindows.set(key, node);
       return node;
     });
@@ -840,15 +842,6 @@ export class RepositoryTreeProvider implements vscode.TreeDataProvider<Repositor
       }
     }
     return nodes;
-  }
-
-  private refreshRenderedPreviewWindows(): void {
-    for (const node of this.renderedPreviewWindows.values()) {
-      const open = this.previewOpen?.isOpen(node.worktreePath, node.def.name) ?? false;
-      if (node.update(node.def, node.worktreeNode, open)) {
-        this._onDidChangeTreeData.fire(node);
-      }
-    }
   }
 
   private isChatSessionOpen(session: ChatSession): boolean {

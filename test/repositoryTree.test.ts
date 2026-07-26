@@ -882,7 +882,7 @@ describe('RepositoryTreeProvider', () => {
     expect(chatLabels).toEqual(['Open elsewhere']);
   });
 
-  it('lists Chrome preview windows under the worktree, after terminals and chat sessions', async () => {
+  it('shows a preview row only for a preview whose port is listening, after terminals and chat sessions', async () => {
     const tmux = {
       listSessions: vi.fn(async () => [
         { sessionName: 'wt-_work_alpha-main__term-1', windowName: 'zsh' },
@@ -901,8 +901,9 @@ describe('RepositoryTreeProvider', () => {
           : [],
       onDidChange: () => ({ dispose: () => undefined }),
     };
-    const previewOpen = {
-      isOpen: (_worktreePath: string, name: string) => name === 'app',
+    // Only 'app' is ON (its dev server is serving); 'storybook' is off → no row.
+    const previewOn = {
+      isOn: (_worktreePath: string, name: string) => name === 'app',
       onDidChange: () => ({ dispose: () => undefined }),
     };
     const provider = new RepositoryTreeProvider(
@@ -920,7 +921,7 @@ describe('RepositoryTreeProvider', () => {
       chatSessions,
       undefined,
       previews,
-      previewOpen,
+      previewOn,
     );
     const repositories = provider.getChildren();
     if (!Array.isArray(repositories)) throw new Error('expected sync repository roots');
@@ -930,21 +931,17 @@ describe('RepositoryTreeProvider', () => {
     const rows = await provider.getChildren(worktrees[0]);
     if (!Array.isArray(rows)) throw new Error('expected worktree child rows');
 
-    expect(rows.map((row) => row.label)).toEqual(['zsh', 'Fix the bug', 'app', 'storybook']);
+    // storybook is off → only the running 'app' preview has a row.
+    expect(rows.map((row) => row.label)).toEqual(['zsh', 'Fix the bug', 'app']);
 
-    const openRow = rows.find((row) => row.label === 'app');
-    expect(openRow?.contextValue).toBe('deck.previewWindow.open');
-    expect(openRow?.description).toContain('open');
-    expect(openRow?.command).toEqual(
+    const appRow = rows.find((row) => row.label === 'app');
+    expect(appRow?.contextValue).toBe('deck.previewWindow');
+    expect(appRow?.command).toEqual(
       expect.objectContaining({
         command: 'deck.openPreview',
         arguments: [{ worktreePath: '/work/alpha-main', previewName: 'app' }],
       }),
     );
-
-    const closedRow = rows.find((row) => row.label === 'storybook');
-    expect(closedRow?.contextValue).toBe('deck.previewWindow');
-    expect(closedRow?.description).not.toContain('open');
   });
 
   it('renders Terminals in stored order with unknown live Terminals appended by term-N', async () => {

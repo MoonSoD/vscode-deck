@@ -28,6 +28,13 @@ export class PreviewStore {
     return [];
   }
 
+  // The worktrees resolved so far and their previews — how the BrowserPoll knows
+  // which (Worktree, preview) ports to probe. Only worktrees the tree has already
+  // rendered are cached; that is exactly the set worth probing.
+  entries(): { worktreePath: string; previews: readonly PreviewDefinition[] }[] {
+    return [...this.cache].map(([worktreePath, previews]) => ({ worktreePath, previews }));
+  }
+
   onDidChange(listener: () => void): Disposable {
     this.listeners.add(listener);
     return { dispose: () => this.listeners.delete(listener) };

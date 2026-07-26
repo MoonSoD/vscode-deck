@@ -242,30 +242,22 @@ export interface PreviewWindowTreeItemDescription {
   description: string;
   tooltip: string;
   iconId: PreviewWindowTreeIconId;
-  contextValue: 'deck.previewWindow' | 'deck.previewWindow.open';
+  contextValue: 'deck.previewWindow';
 }
 
-// A PreviewWindow row: labelled by the preview's name, described by its
-// PreviewPort (with an "open" marker once its Chrome window is live), carrying a
-// globe glyph. contextValue flips to `.open` so a Close action shows only while
-// the window is open — mirroring how a foreign Terminal exposes different actions.
+// A PreviewWindow row exists only while the preview is ON (its dev server is
+// serving the PreviewPort): labelled by the preview's name, described by its
+// port, carrying a globe glyph. Clicking it opens or reveals the Chrome window.
 export function describePreviewWindowTreeItem(
   def: PreviewDefinition,
   worktreePath: string,
-  options: { open?: boolean } = {},
 ): PreviewWindowTreeItemDescription {
   const port = previewPort(worktreePath, def);
   return {
     label: def.name,
-    description: options.open ? `:${port} · open` : `:${port}`,
-    tooltip: previewWindowTooltip(def, worktreePath, options.open === true),
+    description: `:${port}`,
+    tooltip: `${def.name}\n${previewUrl(worktreePath, def)}\nDev server running · click to open`,
     iconId: 'globe',
-    contextValue: options.open ? 'deck.previewWindow.open' : 'deck.previewWindow',
+    contextValue: 'deck.previewWindow',
   };
-}
-
-function previewWindowTooltip(def: PreviewDefinition, worktreePath: string, open: boolean): string {
-  const lines = [def.name, previewUrl(worktreePath, def)];
-  if (open) lines.push('Open');
-  return lines.join('\n');
 }

@@ -9,6 +9,10 @@ export interface PreviewDefinition {
   portBase: number;
   portEnv?: string;
   path?: string;
+  // The dev-server command the ▶ Run button types into a fresh Terminal (with the
+  // PreviewPort injected as env). Absent means the preview has no run action —
+  // its window can still be opened once something is serving the port.
+  command?: string;
 }
 
 export function parsePreviewDefinitions(raw: unknown): PreviewDefinition[] {
@@ -24,6 +28,7 @@ export function parsePreviewDefinitions(raw: unknown): PreviewDefinition[] {
     const def: PreviewDefinition = { name: entry.name.trim(), portBase: entry.portBase };
     if (typeof entry.portEnv === 'string' && entry.portEnv.trim() !== '') def.portEnv = entry.portEnv.trim();
     if (typeof entry.path === 'string' && entry.path.trim() !== '') def.path = entry.path.trim();
+    if (typeof entry.command === 'string' && entry.command.trim() !== '') def.command = entry.command.trim();
     return [def];
   });
 }

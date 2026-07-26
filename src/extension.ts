@@ -70,6 +70,8 @@ import { CdpClient } from './browser/cdpClient';
 import { DeckBrowserController } from './browser/deckBrowserController';
 import { BrowserPoll } from './browser/browserPoll';
 import { findFreePort } from './browser/freePort';
+import { isPortListening } from './browser/portProbe';
+import { RunPreviewCommand } from './browser/runPreviewCommand';
 import { previewEnv, previewUrl } from './browser/previewPort';
 import type { PreviewDefinition } from './browser/previewDefinition';
 import { PendingChatOpenStore } from './chat/pendingChatOpenStore';
@@ -251,21 +253,20 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   // each Worktree's debug port and profile-seeding under deckDir; BrowserPoll
   // observes which windows are live to drive the open badge.
   const deckConfig = () => vscode.workspace.getConfiguration('deck');
-  const cdpClient = new CdpClient();
-  const previewStore = new PreviewStore((worktreePath) =>
+  const resolvePreviewDefs = (worktreePath: string) =>
     resolvePreviews(
       worktreePath,
       deckConfig().get('previews'),
       deckConfig().get('repositoryPreviews'),
       { resolveCommonDir: (repositoryPath) => resolveCommonDirSafe(repositoryCommonDirCache, repositoryPath) },
-    ),
-  );
+    );
+  const previewStore = new PreviewStore(resolvePreviewDefs);
   const browserState = new BrowserStateStore(join(deckDir, 'browser', 'state.json'));
   const deckBrowser = new DeckBrowserController({
     launcher: new ChromeLauncher(
       deckConfig().get<string>('chromePath') || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     ),
-    cdp: cdpClient,
+    cdp: new CdpClient(),
     state: browserState,
     deckDir,
     allocatePort: findFreePort,
@@ -274,13 +275,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     removeDir: (dir) => rm(dir, { recursive: true, force: true }),
     killPid: (pid) => process.kill(pid),
   });
+  // A preview is ON when its dev server is serving its PreviewPort — a focus-gated
+  // TCP probe of the previews the tree has resolved so far.
   const browserPoll = new BrowserPoll({
-    worktrees: async () =>
-      Object.entries(await browserState.all()).flatMap(([worktreePath, entry]) =>
-        entry.debugPort !== undefined ? [{ worktreePath, debugPort: entry.debugPort }] : [],
-      ),
-    previewsFor: (worktreePath) => previewStore.forWorktree(worktreePath),
-    liveTargets: (debugPort) => cdpClient.listTargets(debugPort),
+    previewEntries: () => previewStore.entries(),
+    isPortListening: (port) => isPortListening(port),
     isFocused: () => vscode.window.state.focused,
     onDidChangeFocus: (listener) =>
       vscode.window.onDidChangeWindowState((state) => listener(state.focused)),
@@ -289,15 +288,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   // The PreviewPort env (e.g. PORT=3042) injected into every Terminal Deck creates
   // for a Worktree, so dev servers bind the port their PreviewWindow points at.
   const resolvePreviewEnv = async (worktreePath: string): Promise<Record<string, string>> =>
-    previewEnv(
-      worktreePath,
-      await resolvePreviews(
-        worktreePath,
-        deckConfig().get('previews'),
-        deckConfig().get('repositoryPreviews'),
-        { resolveCommonDir: (repositoryPath) => resolveCommonDirSafe(repositoryCommonDirCache, repositoryPath) },
-      ),
-    );
+    previewEnv(worktreePath, await resolvePreviewDefs(worktreePath));
 
   const tree = new RepositoryTreeProvider(
     repositoryRegistry,
@@ -377,6 +368,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     resolveCommonDir: (repositoryPath) =>
       resolveCommonDirSafe(repositoryCommonDirCache, repositoryPath),
     resolvePreviewEnv,
+  });
+  const runPreview = new RunPreviewCommand(tmux, {
+    resolvePreviews: resolvePreviewDefs,
+    resolvePreviewEnv,
+    refresh: refreshTree,
+    beforeCreate: ensureSnapshotRestored,
   });
   const terminalEditorProvider = new TerminalEditorProvider(
     context.extensionUri,
@@ -719,6 +716,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand('deck.copyPreviewUrl', (node: { worktreePath: string; def: PreviewDefinition }) =>
       vscode.env.clipboard.writeText(previewUrl(node.worktreePath, node.def)),
     ),
+    vscode.commands.registerCommand('deck.runPreview', (node) => runPreview.run(node)),
     vscode.commands.registerCommand('deck.openTerminalInNewWindow', (node) =>
       openTerminalInNewWindow.run(node),
     ),
